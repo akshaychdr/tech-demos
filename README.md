@@ -1,1 +1,18 @@
 # tech-demos
+
+A sticky monorepo of small daily tech demos. Each weekday, one technology bookmarked on X gets approved, and a cloud agent builds a small single-user MVP demo of it as a self-contained app under `apps/<kebab-slug>/`.
+
+## Running a demo
+
+Each app in `apps/` is fully self-contained (own `package.json`, own dependencies). To run one:
+
+```bash
+cd apps/<slug>
+bun install
+bun run dev
+```
+
+## Demo index
+
+| Slug | Tech | Date | PR |
+| ---- | ---- | ---- | -- |
