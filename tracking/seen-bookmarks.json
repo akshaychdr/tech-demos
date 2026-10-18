@@ -1,6 +1,20 @@
 {
   "proposed": [],
-  "approved": [],
+  "approved": [
+    {
+      "id": "2108983461230845978",
+      "title": "diagram-design",
+      "url": "https://x.com/i/status/2108983461230845978",
+      "date": "2026-10-18"
+    }
+  ],
   "skipped": [],
-  "built": []
+  "built": [
+    {
+      "id": "2108983461230845978",
+      "title": "diagram-design",
+      "url": "https://x.com/i/status/2108983461230845978",
+      "date": "2026-10-18"
+    }
+  ]
 }
