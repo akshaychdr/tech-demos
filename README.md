@@ -16,4 +16,4 @@ bun run dev
 
 | Slug | Tech | Date | PR |
 | ---- | ---- | ---- | -- |
-| diagram-design | diagram-design ([cathrynlavery](https://github.com/cathrynlavery/diagram-design)) | 2026-10-18 | TBD |
+| diagram-design | diagram-design ([cathrynlavery](https://github.com/cathrynlavery/diagram-design)) | 2026-10-18 | [#1](https://github.com/akshaychdr/tech-demos/pull/1) |
