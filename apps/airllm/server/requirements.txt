@@ -1,0 +1,8 @@
+accelerate==1.15.0
+airllm==4.0.0
+fastapi==0.146.0
+psutil==7.2.2
+sse-starlette==3.5.0
+torch==2.14.1+cpu
+transformers==5.20.1
+uvicorn[standard]==0.54.0
