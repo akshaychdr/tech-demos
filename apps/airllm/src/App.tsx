@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CartesianGrid,
   Legend,
@@ -30,12 +30,21 @@ type RunStats = {
   output?: string
   error?: string
   exitCode?: number
+  killedByCap?: boolean
 }
 
 type LayerCell = { index: number; label: string; phase: 'idle' | 'load' | 'run' | 'free' }
 
+type Health = {
+  model: string
+  model_weights_gb: number
+  default_memory_cap_mb: number
+  cap_method: string
+  cap_description: string
+}
+
 const DEFAULT_PROMPT = 'The capital of France is'
-const LAYER_COUNT = 27
+const LAYER_COUNT = 36
 
 function _layerLabel(layerName: string): string {
   if (layerName.includes('embed')) return 'embed'
@@ -53,21 +62,36 @@ function layerPhaseClass(phase: LayerCell['phase']) {
 }
 
 export default function App() {
+  const [health, setHealth] = useState<Health | null>(null)
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT)
-  const [memoryCapMb, setMemoryCapMb] = useState(3800)
+  const [memoryCapMb, setMemoryCapMb] = useState(2500)
   const [compression, setCompression] = useState('none')
   const [running, setRunning] = useState(false)
   const [memorySeries, setMemorySeries] = useState<MemoryPoint[]>([])
+  const [airllmBreakdown, setAirllmBreakdown] = useState<string | null>(null)
   const [layers, setLayers] = useState<LayerCell[]>(
     Array.from({ length: LAYER_COUNT }, (_, i) => ({
       index: i,
-      label: i === 0 ? 'embed' : i === LAYER_COUNT - 2 ? 'norm' : i === LAYER_COUNT - 1 ? 'head' : String(i - 1),
+      label: String(i),
       phase: 'idle' as const,
     })),
   )
   const [stats, setStats] = useState<Record<RunKind, RunStats>>({ baseline: {}, airllm: {} })
   const [activeRun, setActiveRun] = useState<RunKind | null>(null)
   const esRef = useRef<EventSource | null>(null)
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((h: Health) => {
+        setHealth(h)
+        setMemoryCapMb(h.default_memory_cap_mb)
+      })
+      .catch(() => undefined)
+  }, [])
+
+  const modelGb = health?.model_weights_gb ?? 6
+  const modelLabel = health?.model ?? 'Qwen/Qwen2.5-3B-Instruct'
 
   const compressionHelp = useMemo(
     () =>
@@ -77,11 +101,12 @@ export default function App() {
 
   const resetRunState = useCallback(() => {
     setMemorySeries([])
+    setAirllmBreakdown(null)
     setStats({ baseline: {}, airllm: {} })
     setLayers(
       Array.from({ length: LAYER_COUNT }, (_, i) => ({
         index: i,
-        label: i === 0 ? 'embed' : i === LAYER_COUNT - 2 ? 'norm' : i === LAYER_COUNT - 1 ? 'head' : String(i - 1),
+        label: String(i),
         phase: 'idle' as const,
       })),
     )
@@ -109,7 +134,7 @@ export default function App() {
     const params = new URLSearchParams({
       prompt,
       memory_cap_mb: String(memoryCapMb),
-      max_new_tokens: '24',
+      max_new_tokens: '10',
       compression,
     })
     const es = new EventSource(`/api/compare/stream?${params.toString()}`)
@@ -120,9 +145,7 @@ export default function App() {
       const type = data.type as string
       const run = data.run as RunKind | undefined
 
-      if (type === 'run_start' && run) {
-        setActiveRun(run)
-      }
+      if (type === 'run_start' && run) setActiveRun(run)
       if (type === 'memory' && run && typeof data.rss_mb === 'number' && typeof data.t_s === 'number') {
         appendMemory(run, data.t_s, data.rss_mb)
       }
@@ -145,6 +168,9 @@ export default function App() {
           prev.map((cell) => (cell.index === index ? { ...cell, label, phase } : cell)),
         )
       }
+      if (type === 'memory_breakdown' && run === 'airllm' && typeof data.summary === 'string') {
+        setAirllmBreakdown(data.summary)
+      }
       if (type === 'result' && run) {
         setStats((prev) => ({
           ...prev,
@@ -155,13 +181,18 @@ export default function App() {
             tokensPerSec: data.tokens_per_sec as number,
             totalS: data.total_s as number,
             error: data.error as string | undefined,
+            killedByCap: Boolean(data.killed_by_cap),
           },
         }))
       }
       if (type === 'done' && run) {
         setStats((prev) => ({
           ...prev,
-          [run]: { ...prev[run], peakRssMb: data.peak_rss_mb as number },
+          [run]: {
+            ...prev[run],
+            peakRssMb: data.peak_rss_mb as number,
+            killedByCap: prev[run].killedByCap || Boolean(data.killed_by_cap),
+          },
         }))
       }
       if (type === 'run_end' && run) {
@@ -185,21 +216,24 @@ export default function App() {
     }
   }, [appendMemory, compression, memoryCapMb, prompt, resetRunState, running])
 
+  const capHint = health?.cap_description ?? ''
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b px-6 py-5">
         <div className="mx-auto flex max-w-6xl flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">AirLLM memory budget demo</h1>
-            <Badge variant="secondary">CPU · layer-wise inference</Badge>
+            <Badge variant="secondary">CPU · physical RAM cap</Badge>
           </div>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            Same prompt and hard <code className="text-xs">RLIMIT_AS</code> cap: a full{' '}
-            <code className="text-xs">transformers</code> load usually dies while{' '}
+            Same prompt under a hard <strong>physical RAM</strong> limit (~{modelGb} GB model vs{' '}
+            {memoryCapMb} MB cap): a full <code className="text-xs">transformers</code> load exceeds RAM and is
+            killed;{' '}
             <a className="underline" href="https://github.com/lyogavin/airllm" rel="noreferrer" target="_blank">
               AirLLM
             </a>{' '}
-            streams one layer at a time.
+            streams one layer at a time and finishes.
           </p>
         </div>
       </header>
@@ -208,7 +242,7 @@ export default function App() {
         <Card>
           <CardHeader>
             <CardTitle>Controls</CardTitle>
-            <CardDescription>Model: Qwen2.5-0.5B-Instruct (ungated)</CardDescription>
+            <CardDescription className="text-xs leading-relaxed">{modelLabel}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
@@ -223,19 +257,22 @@ export default function App() {
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <Label>Memory cap (RLIMIT_AS)</Label>
+                <Label>RAM cap (physical, cgroup)</Label>
                 <span className="font-mono text-muted-foreground">{memoryCapMb} MB</span>
               </div>
+              <p className="text-xs font-medium text-foreground">
+                Model ~{modelGb} GB weights · cap {memoryCapMb / 1024} GB
+              </p>
               <Slider
-                min={2800}
-                max={5200}
+                min={2000}
+                max={4000}
                 step={100}
                 value={[memoryCapMb]}
-                onValueChange={(v) => setMemoryCapMb(v[0] ?? 3800)}
+                onValueChange={(v) => setMemoryCapMb(v[0] ?? 2500)}
                 disabled={running}
               />
               <p className="text-xs text-muted-foreground">
-                Try ~3800 MB: baseline fails while AirLLM completes on this machine.
+                Enforcement: {health?.cap_method ?? '…'} — {capHint}
               </p>
             </div>
             <div className="space-y-2">
@@ -247,12 +284,8 @@ export default function App() {
                 className="justify-start"
               >
                 <ToggleGroupItem value="none" disabled={running}>None</ToggleGroupItem>
-                <ToggleGroupItem value="8bit" disabled title={compressionHelp}>
-                  8-bit
-                </ToggleGroupItem>
-                <ToggleGroupItem value="4bit" disabled title={compressionHelp}>
-                  4-bit
-                </ToggleGroupItem>
+                <ToggleGroupItem value="8bit" disabled title={compressionHelp}>8-bit</ToggleGroupItem>
+                <ToggleGroupItem value="4bit" disabled title={compressionHelp}>4-bit</ToggleGroupItem>
               </ToggleGroup>
               <p className="text-xs text-muted-foreground">{compressionHelp}</p>
             </div>
@@ -265,7 +298,7 @@ export default function App() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Live RSS (worker process)</CardTitle>
+              <CardTitle>Live RSS (worker + children)</CardTitle>
               <CardDescription>
                 {activeRun ? `Active: ${activeRun}` : running ? 'Waiting…' : 'Idle'}
               </CardDescription>
@@ -275,7 +308,7 @@ export default function App() {
                 <LineChart data={memorySeries}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="t_s" tickFormatter={(v) => `${v}s`} />
-                  <YAxis unit=" MB" />
+                  <YAxis unit=" MB" domain={[0, 'auto']} />
                   <Tooltip />
                   <Legend />
                   <Line type="monotone" dataKey="baseline" stroke="var(--color-chart-1)" dot={false} strokeWidth={2} />
@@ -288,7 +321,12 @@ export default function App() {
           <Card>
             <CardHeader>
               <CardTitle>AirLLM layer strip</CardTitle>
-              <CardDescription>Load → run → free per streamed module</CardDescription>
+              <CardDescription>
+                Load → run → free per streamed module
+                {airllmBreakdown && (
+                  <span className="mt-1 block font-mono text-[11px] text-muted-foreground">{airllmBreakdown}</span>
+                )}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-9 gap-1 sm:grid-cols-12 md:grid-cols-14">
@@ -311,13 +349,17 @@ export default function App() {
             {(['baseline', 'airllm'] as RunKind[]).map((run) => {
               const s = stats[run]
               const ok = s.success
+              const killed = s.killedByCap
               return (
                 <Card key={run} className={run === 'baseline' ? 'border-destructive/30' : 'border-emerald-600/30'}>
                   <CardHeader>
                     <CardTitle className="capitalize">{run === 'baseline' ? 'Full transformers' : 'AirLLM'}</CardTitle>
-                    <CardDescription>
-                      {ok === true && <Badge className="mr-2">success</Badge>}
-                      {ok === false && <Badge variant="destructive">failed / OOM</Badge>}
+                    <CardDescription className="flex flex-wrap items-center gap-2">
+                      {ok === true && <Badge>success</Badge>}
+                      {killed && (
+                        <Badge variant="destructive">killed: exceeded {memoryCapMb} MB RAM</Badge>
+                      )}
+                      {ok === false && !killed && <Badge variant="destructive">failed</Badge>}
                       {s.peakRssMb != null && <span className="font-mono text-xs">peak {s.peakRssMb} MB</span>}
                     </CardDescription>
                   </CardHeader>
@@ -328,7 +370,7 @@ export default function App() {
                       <div>Total time</div>
                       <div className="font-mono text-foreground">{s.totalS != null ? `${s.totalS}s` : '—'}</div>
                     </div>
-                    {s.error && <p className="text-xs text-destructive">{s.error}</p>}
+                    {s.error && !killed && <p className="text-xs text-destructive">{s.error}</p>}
                     <pre className="max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
                       {s.output || (running && activeRun === run ? '…' : '—')}
                     </pre>

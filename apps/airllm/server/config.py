@@ -2,8 +2,11 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 HF_HOME = APP_ROOT / ".cache" / "huggingface"
-DEFAULT_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
-DEFAULT_MAX_NEW_TOKENS = 24
-DEFAULT_MEMORY_CAP_MB = 3800
-MIN_MEMORY_CAP_MB = 2800
-MAX_MEMORY_CAP_MB = 5200
+
+# ~3B params @ fp16/bf16 ≈ 6 GB weights in RAM when fully loaded.
+DEFAULT_MODEL = "Qwen/Qwen2.5-3B-Instruct"
+MODEL_WEIGHTS_GB = 6.0
+DEFAULT_MAX_NEW_TOKENS = 10
+DEFAULT_MEMORY_CAP_MB = 2500
+MIN_MEMORY_CAP_MB = 2000
+MAX_MEMORY_CAP_MB = 4000

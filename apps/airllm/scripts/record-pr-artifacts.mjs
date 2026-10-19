@@ -63,7 +63,7 @@ async function expectRunComplete(page, timeoutMs) {
         .locator('text=Full transformers')
         .locator('..')
         .locator('..')
-        .getByText(/failed|success/i)
+        .getByText(/killed: exceeded|failed|success/i)
         .first()
         .isVisible()
         .catch(() => false)

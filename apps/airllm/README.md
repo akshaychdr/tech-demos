@@ -1,24 +1,37 @@
 # AirLLM memory-budget demo
 
-Side-by-side comparison of a **full Hugging Face `transformers` load** vs **[AirLLM](https://github.com/lyogavin/airllm)** layer-wise inference under the same hard memory cap (`RLIMIT_AS`).
+Side-by-side comparison of a **full Hugging Face `transformers` load** vs **[AirLLM](https://github.com/lyogavin/airllm)** layer-wise inference under the same **physical RAM** cap.
 
-Upstream project: [lyogavin/airllm](https://github.com/lyogavin/airllm) — splits checkpoints into per-layer shards, loads/runs/frees each layer in turn so peak RAM stays near one layer plus activations.
+Upstream: [lyogavin/airllm](https://github.com/lyogavin/airllm) — per-layer shards loaded/run/freed so peak RAM stays near one layer plus activations (not the full ~6 GB weights).
 
 ## Stack exception
 
-The monorepo normally uses Bun-only apps. This demo adds a **Python FastAPI** backend under `server/` because AirLLM is a Python library. The UI is still Vite + React + TypeScript + shadcn/ui on Bun.
+The monorepo normally uses Bun-only apps. This demo adds a **Python FastAPI** backend under `server/` because AirLLM is a Python library. The UI is Vite + React + TypeScript + shadcn/ui on Bun.
 
 ## CPU caveat (default)
 
-This environment has **no GPU**. The demo uses:
+No GPU in the default environment:
 
-- Model: `Qwen/Qwen2.5-0.5B-Instruct` (ungated, no HF token)
-- Device: CPU (`device="cpu"` for AirLLM)
-- Default cap: **3800 MB** — full load fails; AirLLM completes
+| Setting | Value |
+| ------- | ----- |
+| Model | `Qwen/Qwen2.5-3B-Instruct` (ungated) |
+| Weights (fp16) | ~**6 GB** in RAM when fully loaded |
+| Default RAM cap | **2500 MB** — below full model size |
+| Device | CPU (`device="cpu"` for AirLLM) |
+| New tokens | ~10 (keeps CPU runs under a few minutes) |
 
-Block-wise **4-bit/8-bit compression** is shown in the UI but **disabled on CPU** (bitsandbytes kernels target GPU). Use **None** for compression here.
+### How the cap is enforced
 
-First run downloads weights and builds AirLLM layer shards under `.cache/huggingface` (not committed).
+1. **Preferred:** cgroup v2 `memory.max` + `memory.swap.max=0` on the worker process (or `systemd-run --user --scope -p MemoryMax=…` when user systemd is available).
+2. **Fallback:** parent process **RSS watchdog** — sums worker + child RSS and sends **SIGKILL** when RSS exceeds the cap (swap should be 0 on the host for a hard bind).
+
+This is **not** `RLIMIT_AS` (virtual address space). The UI labels the slider **RAM cap (physical, cgroup)** and shows **model ~6 GB vs cap 2.5 GB**.
+
+Baseline is expected to be **killed: exceeded N MB RAM** while loading the full checkpoint. AirLLM should **finish** under the same cap.
+
+Block-wise **4-bit/8-bit compression** is disabled on CPU (bitsandbytes GPU kernels). Use **None**.
+
+Weights and AirLLM layer shards live under `.cache/huggingface` (gitignored).
 
 ## Setup
 
@@ -28,32 +41,32 @@ chmod +x scripts/*.sh
 ./scripts/setup.sh
 ```
 
+First run downloads ~6 GB of weights and builds layer shards.
+
 ## Run
 
 ```bash
 ./scripts/dev.sh
 ```
 
-Open http://127.0.0.1:5173 — click **Run side-by-side** and watch RSS + the layer strip.
+Open http://127.0.0.1:5173 — **Run side-by-side**.
 
-Or run processes separately:
+## PR validation recording
 
 ```bash
-export HF_HOME="$(pwd)/.cache/huggingface"
-server/.venv/bin/python server/main.py   # :8765
-bun run dev                               # :5173, proxies /api
+# API :8765 + Vite :5173 running
+node scripts/record-pr-artifacts.mjs
 ```
 
-## GPU / larger models
+Fixed **1440×900** Playwright viewport (no desktop crop).
 
-On a machine with CUDA:
+## GPU / other models
 
-1. Install a CUDA build of PyTorch and `airllm` in `server/.venv`.
-2. Change `device="cuda:0"` in `server/workers/run_worker.py` for AirLLM.
-3. Point `DEFAULT_MODEL` in `server/config.py` at a larger HF repo (e.g. Llama/Qwen 7B+).
-4. Enable **4-bit/8-bit** compression in the UI once bitsandbytes is available on GPU.
-5. Adjust the memory cap slider to match your VRAM/RAM experiment.
+1. Install CUDA PyTorch + `airllm` in `server/.venv`.
+2. Set `device="cuda:0"` in `server/workers/run_worker.py`.
+3. Change `DEFAULT_MODEL` / `MODEL_WEIGHTS_GB` in `server/config.py`.
+4. Tune `DEFAULT_MEMORY_CAP_MB` so full load exceeds the cap but AirLLM still fits.
 
 ## Credit
 
-AirLLM by Gavin Li and contributors — see the [upstream repository](https://github.com/lyogavin/airllm) and [PyPI package](https://pypi.org/project/airllm/).
+AirLLM by Gavin Li — [GitHub](https://github.com/lyogavin/airllm) · [PyPI](https://pypi.org/project/airllm/).

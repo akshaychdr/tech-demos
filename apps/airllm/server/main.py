@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -19,12 +18,21 @@ from config import (
     HF_HOME,
     MAX_MEMORY_CAP_MB,
     MIN_MEMORY_CAP_MB,
+    MODEL_WEIGHTS_GB,
+)
+from workers.memory_cap import (
+    build_systemd_run_command,
+    detect_cap_method,
+    kill_process_tree,
+    tree_rss_bytes,
 )
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 SERVER_ROOT = Path(__file__).resolve().parent
 WORKER = SERVER_ROOT / "workers" / "run_worker.py"
 PYTHON = SERVER_ROOT / ".venv" / "bin" / "python"
+
+CAP_METHOD = detect_cap_method()
 
 app = FastAPI(title="AirLLM demo API")
 app.add_middleware(
@@ -38,7 +46,7 @@ app.add_middleware(
 class CompareRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=512)
     memory_cap_mb: int = Field(default=DEFAULT_MEMORY_CAP_MB, ge=MIN_MEMORY_CAP_MB, le=MAX_MEMORY_CAP_MB)
-    max_new_tokens: int = Field(default=DEFAULT_MAX_NEW_TOKENS, ge=4, le=64)
+    max_new_tokens: int = Field(default=DEFAULT_MAX_NEW_TOKENS, ge=4, le=32)
     compression: str = Field(default="none")
     model: str = Field(default=DEFAULT_MODEL)
 
@@ -48,8 +56,16 @@ def health() -> dict:
     return {
         "ok": True,
         "model": DEFAULT_MODEL,
+        "model_weights_gb": MODEL_WEIGHTS_GB,
+        "default_memory_cap_mb": DEFAULT_MEMORY_CAP_MB,
         "device": "cpu",
         "compression_cpu": False,
+        "cap_method": CAP_METHOD,
+        "cap_description": (
+            "cgroup v2 memory.max + memory.swap.max=0"
+            if CAP_METHOD in ("cgroup_v2", "systemd_run")
+            else "parent RSS watchdog (SIGKILL when tree RSS exceeds cap)"
+        ),
     }
 
 
@@ -59,11 +75,7 @@ async def _stream_worker(
 ) -> AsyncGenerator[dict, None]:
     if body.compression not in ("none", "4bit", "8bit"):
         raise HTTPException(status_code=400, detail="compression must be none, 4bit, or 8bit")
-    if body.compression != "none":
-        yield {"event": "message", "data": json.dumps({"type": "skip_compression", "reason": "cpu"})}
 
-    compression = "none" if body.compression != "none" else "none"
-    # On CPU we always run without block-wise compression (bitsandbytes is GPU-oriented).
     if body.compression != "none":
         yield {
             "event": "message",
@@ -94,18 +106,59 @@ async def _stream_worker(
         "--memory-cap-mb",
         str(body.memory_cap_mb),
         "--compression",
-        compression,
+        "none",
+        "--cap-method",
+        CAP_METHOD,
     ]
 
-    yield {"event": "message", "data": json.dumps({"type": "run_start", "run": mode})}
+    launch_cmd = (
+        build_systemd_run_command(cmd, body.memory_cap_mb) if CAP_METHOD == "systemd_run" else cmd
+    )
+
+    yield {
+        "event": "message",
+        "data": json.dumps(
+            {
+                "type": "run_start",
+                "run": mode,
+                "cap_method": CAP_METHOD,
+                "memory_cap_mb": body.memory_cap_mb,
+            }
+        ),
+    }
 
     proc = await asyncio.create_subprocess_exec(
-        *cmd,
+        *launch_cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=env,
         cwd=str(SERVER_ROOT),
+        start_new_session=True,
     )
+
+    cap_bytes = body.memory_cap_mb * 1024 * 1024
+    peak_rss_mb = 0.0
+    killed_by_cap = False
+    stop_watch = asyncio.Event()
+    saw_done = False
+
+    async def rss_watchdog() -> None:
+        nonlocal peak_rss_mb, killed_by_cap
+        while not stop_watch.is_set():
+            if proc.returncode is not None:
+                return
+            try:
+                rss = tree_rss_bytes(proc.pid)
+                peak_rss_mb = max(peak_rss_mb, rss / (1024 * 1024))
+                if CAP_METHOD == "rss_watchdog" and rss > cap_bytes:
+                    killed_by_cap = True
+                    kill_process_tree(proc.pid)
+                    return
+            except Exception:
+                return
+            await asyncio.sleep(0.05)
+
+    watchdog = asyncio.create_task(rss_watchdog())
 
     assert proc.stdout is not None
     while True:
@@ -119,10 +172,48 @@ async def _stream_worker(
             payload = json.loads(text)
         except json.JSONDecodeError:
             payload = {"type": "log", "message": text}
+        if payload.get("type") == "done":
+            saw_done = True
         payload["run"] = mode
         yield {"event": "message", "data": json.dumps(payload)}
 
     await proc.wait()
+    stop_watch.set()
+    await watchdog
+
+    if killed_by_cap or (proc.returncode in (-9, 137) and CAP_METHOD != "rss_watchdog"):
+        killed_by_cap = True
+
+    if killed_by_cap and not saw_done:
+        msg = f"killed: exceeded {body.memory_cap_mb} MB RAM"
+        yield {
+            "event": "message",
+            "data": json.dumps(
+                {
+                    "type": "result",
+                    "run": mode,
+                    "success": False,
+                    "output_text": "",
+                    "error": msg,
+                    "killed_by_cap": True,
+                }
+            ),
+        }
+        yield {
+            "event": "message",
+            "data": json.dumps(
+                {
+                    "type": "done",
+                    "run": mode,
+                    "success": False,
+                    "peak_rss_mb": round(peak_rss_mb, 1),
+                    "error": msg,
+                    "cap_method": CAP_METHOD,
+                    "killed_by_cap": True,
+                }
+            ),
+        }
+
     stderr = (await proc.stderr.read()).decode() if proc.stderr else ""
     yield {
         "event": "message",
@@ -131,6 +222,8 @@ async def _stream_worker(
                 "type": "run_end",
                 "run": mode,
                 "exit_code": proc.returncode,
+                "killed_by_cap": killed_by_cap,
+                "peak_rss_mb_parent": round(peak_rss_mb, 1),
                 "stderr_tail": stderr[-2000:] if stderr else "",
             }
         ),

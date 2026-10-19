@@ -19,4 +19,15 @@ fi
 uv pip install -p server/.venv/bin/python -r server/requirements.txt
 uv pip install -p server/.venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
 
-echo "Setup complete. First run downloads ~1GB model weights into apps/airllm/.cache/huggingface"
+export HF_HOME="$ROOT/.cache/huggingface"
+mkdir -p "$HF_HOME"
+echo "Downloading model weights and building AirLLM layer shards (one-time, ~6 GB)…"
+server/.venv/bin/python -c "
+import sys
+sys.path.insert(0, 'server')
+from airllm import AutoModel
+from config import DEFAULT_MODEL
+AutoModel.from_pretrained(DEFAULT_MODEL, device='cpu', prefetching=False)
+"
+
+echo "Setup complete. Weights and shards live under apps/airllm/.cache/huggingface"

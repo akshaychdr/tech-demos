@@ -1,4 +1,4 @@
-"""Isolated inference worker (stdout JSONL events). Run under RLIMIT_AS from the parent or here."""
+"""Isolated inference worker (stdout JSONL). Physical RAM cap applied at startup when configured."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ import time
 import traceback
 from pathlib import Path
 
-# Ensure app HF cache before heavy imports.
 APP_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from config import DEFAULT_MAX_NEW_TOKENS, DEFAULT_MODEL, HF_HOME  # noqa: E402
-from workers.common import apply_memory_cap, emit, start_memory_sampler  # noqa: E402
+from config import DEFAULT_MAX_NEW_TOKENS, DEFAULT_MODEL, HF_HOME, MODEL_WEIGHTS_GB  # noqa: E402
+from workers.common import emit, start_memory_sampler  # noqa: E402
+from workers.memory_cap import enter_cgroup_v2  # noqa: E402
 
 
 def _setup_env() -> None:
@@ -23,6 +23,15 @@ def _setup_env() -> None:
     os.environ.setdefault("HF_HOME", str(HF_HOME))
     os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def _apply_physical_cap(cap_mb: int, method: str) -> str:
+    if method == "cgroup_v2" and enter_cgroup_v2(cap_mb):
+        return "cgroup_v2"
+    if method == "systemd_run":
+        # Parent launched us under systemd-run MemoryMax.
+        return "systemd_run"
+    return "rss_watchdog"
 
 
 def _layer_label(layer_names: list[str], idx: int) -> str:
@@ -38,8 +47,7 @@ def _layer_label(layer_names: list[str], idx: int) -> str:
     return str(idx)
 
 
-def _instrument_airllm_hooks(model) -> None:
-    """Emit layer load/run/free events alongside AirLLM's already-registered hooks."""
+def _instrument_airllm_hooks(model, breakdown: dict) -> None:
     layer_names = model.layer_names
     total = len(layer_names)
     streamed = getattr(model, "_streamed_indices", list(range(len(layer_names))))
@@ -57,6 +65,10 @@ def _instrument_airllm_hooks(model) -> None:
                     "total": total,
                 }
             )
+            from workers.memory_cap import tree_rss_bytes
+
+            rss = tree_rss_bytes(os.getpid()) / (1024 * 1024)
+            breakdown["layer_peak_mb"] = max(breakdown.get("layer_peak_mb", 0), rss)
             emit(
                 {
                     "type": "layer",
@@ -80,6 +92,26 @@ def _instrument_airllm_hooks(model) -> None:
 
         module.register_forward_pre_hook(pre_hook)
         module.register_forward_hook(post_hook)
+
+
+def _emit_memory_breakdown(breakdown: dict, peak_rss_mb: float) -> None:
+    overhead = breakdown.get("overhead_mb", 0)
+    embed = breakdown.get("embed_mb", 0)
+    layer_peak = breakdown.get("layer_peak_mb", 0)
+    working = max(0, peak_rss_mb - overhead)
+    emit(
+        {
+            "type": "memory_breakdown",
+            "overhead_mb": round(overhead, 1),
+            "embed_mb": round(embed, 1),
+            "layer_peak_mb": round(layer_peak, 1),
+            "working_mb": round(working, 1),
+            "summary": (
+                f"overhead ~{overhead:.0f} MB · embed/head ~{embed:.0f} MB · "
+                f"layer peak ~{layer_peak:.0f} MB · working ~{working:.0f} MB"
+            ),
+        }
+    )
 
 
 def run_baseline(model_id: str, prompt: str, max_new_tokens: int) -> None:
@@ -113,16 +145,19 @@ def run_baseline(model_id: str, prompt: str, max_new_tokens: int) -> None:
     )
 
 
-def run_airllm(model_id: str, prompt: str, max_new_tokens: int, compression: str | None) -> None:
+def run_airllm(model_id: str, prompt: str, max_new_tokens: int, compression: str | None, breakdown: dict) -> None:
     from airllm import AutoModel
+    from workers.memory_cap import tree_rss_bytes
 
     kwargs = {"device": "cpu", "prefetching": False}
     if compression:
         kwargs["compression"] = compression
     emit({"type": "status", "message": "Initializing AirLLM (layer shards on disk)…"})
     model = AutoModel.from_pretrained(model_id, **kwargs)
+    breakdown["overhead_mb"] = tree_rss_bytes(os.getpid()) / (1024 * 1024)
+    breakdown["embed_mb"] = tree_rss_bytes(os.getpid()) / (1024 * 1024)
     emit({"type": "meta", "layer_count": len(model.layer_names), "layer_names": model.layer_names})
-    _instrument_airllm_hooks(model)
+    _instrument_airllm_hooks(model, breakdown)
     inputs = model.tokenizer(
         [prompt],
         return_tensors="pt",
@@ -162,18 +197,27 @@ def main() -> int:
     parser.add_argument("--max-new-tokens", type=int, default=DEFAULT_MAX_NEW_TOKENS)
     parser.add_argument("--memory-cap-mb", type=int, required=True)
     parser.add_argument("--compression", default="none")
+    parser.add_argument("--cap-method", default="rss_watchdog")
     args = parser.parse_args()
 
     _setup_env()
-    apply_memory_cap(args.memory_cap_mb)
+    cap_method = _apply_physical_cap(args.memory_cap_mb, args.cap_method)
     compression = None if args.compression in ("none", "", "null") else args.compression
 
     stop = threading.Event()
     _, mem_state = start_memory_sampler(stop)
+    breakdown: dict = {}
 
-    emit({"type": "start", "mode": args.mode, "memory_cap_mb": args.memory_cap_mb})
+    emit(
+        {
+            "type": "start",
+            "mode": args.mode,
+            "memory_cap_mb": args.memory_cap_mb,
+            "cap_method": cap_method,
+            "model_weights_gb": MODEL_WEIGHTS_GB,
+        }
+    )
     success = False
-    result: dict | None = None
     error: str | None = None
 
     try:
@@ -182,7 +226,7 @@ def main() -> int:
         else:
             if compression and compression not in ("4bit", "8bit"):
                 raise ValueError(f"Unsupported compression: {compression}")
-            run_airllm(args.model, args.prompt, args.max_new_tokens, compression)
+            run_airllm(args.model, args.prompt, args.max_new_tokens, compression, breakdown)
         success = True
     except Exception as exc:  # noqa: BLE001
         error = f"{type(exc).__name__}: {exc}"
@@ -191,12 +235,18 @@ def main() -> int:
     finally:
         stop.set()
         time.sleep(0.1)
+        peak = mem_state["peak_rss_mb"]
+        if args.mode == "airllm" and success:
+            samples = mem_state.get("samples") or [peak]
+            breakdown["overhead_mb"] = min(samples) if samples else peak
+            _emit_memory_breakdown(breakdown, peak)
         emit(
             {
                 "type": "done",
                 "success": success,
-                "peak_rss_mb": round(mem_state["peak_rss_mb"], 1),
+                "peak_rss_mb": round(peak, 1),
                 "error": error,
+                "cap_method": cap_method,
             }
         )
 
