@@ -17,3 +17,4 @@ bun run dev
 | Slug | Tech | Date | PR |
 | ---- | ---- | ---- | -- |
 | diagram-design | diagram-design ([cathrynlavery](https://github.com/cathrynlavery/diagram-design)) | 2026-10-18 | [#1](https://github.com/akshaychdr/tech-demos/pull/1) |
+| airllm | AirLLM ([lyogavin](https://github.com/lyogavin/airllm)) | 2026-10-19 | PR link |
