@@ -39,20 +39,20 @@ def _layer_label(layer_names: list[str], idx: int) -> str:
 
 
 def _instrument_airllm_hooks(model) -> None:
-    """Wrap AirLLM streaming hooks to emit layer load/run/free events."""
+    """Emit layer load/run/free events alongside AirLLM's already-registered hooks."""
     layer_names = model.layer_names
     total = len(layer_names)
-    orig_pre = model._pre_hook
-    orig_post = model._post_hook
+    streamed = getattr(model, "_streamed_indices", list(range(len(layer_names))))
 
-    def pre_hook(module, args):
-        idx = getattr(module, "_airllm_idx", None)
-        if idx is not None:
+    for idx in streamed:
+        module = model.layers[idx]
+
+        def pre_hook(_module, _args, layer_idx=idx):
             emit(
                 {
                     "type": "layer",
-                    "index": idx,
-                    "label": _layer_label(layer_names, idx),
+                    "index": layer_idx,
+                    "label": _layer_label(layer_names, layer_idx),
                     "phase": "load",
                     "total": total,
                 }
@@ -60,31 +60,26 @@ def _instrument_airllm_hooks(model) -> None:
             emit(
                 {
                     "type": "layer",
-                    "index": idx,
-                    "label": _layer_label(layer_names, idx),
+                    "index": layer_idx,
+                    "label": _layer_label(layer_names, layer_idx),
                     "phase": "run",
                     "total": total,
                 }
             )
-        return orig_pre(module, args)
 
-    def post_hook(module, args, output):
-        result = orig_post(module, args, output)
-        idx = getattr(module, "_airllm_idx", None)
-        if idx is not None:
+        def post_hook(_module, _args, _output, layer_idx=idx):
             emit(
                 {
                     "type": "layer",
-                    "index": idx,
-                    "label": _layer_label(layer_names, idx),
+                    "index": layer_idx,
+                    "label": _layer_label(layer_names, layer_idx),
                     "phase": "free",
                     "total": total,
                 }
             )
-        return result
 
-    model._pre_hook = pre_hook
-    model._post_hook = post_hook
+        module.register_forward_pre_hook(pre_hook)
+        module.register_forward_hook(post_hook)
 
 
 def run_baseline(model_id: str, prompt: str, max_new_tokens: int) -> None:

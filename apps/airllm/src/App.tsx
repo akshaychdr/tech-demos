@@ -37,6 +37,14 @@ type LayerCell = { index: number; label: string; phase: 'idle' | 'load' | 'run' 
 const DEFAULT_PROMPT = 'The capital of France is'
 const LAYER_COUNT = 27
 
+function _layerLabel(layerName: string): string {
+  if (layerName.includes('embed')) return 'embed'
+  if (layerName.endsWith('norm')) return 'norm'
+  if (layerName.includes('lm_head')) return 'head'
+  const m = layerName.match(/layers\.(\d+)/)
+  return m ? m[1] : layerName
+}
+
 function layerPhaseClass(phase: LayerCell['phase']) {
   if (phase === 'load') return 'bg-amber-400/80'
   if (phase === 'run') return 'bg-emerald-500'
@@ -117,6 +125,17 @@ export default function App() {
       }
       if (type === 'memory' && run && typeof data.rss_mb === 'number' && typeof data.t_s === 'number') {
         appendMemory(run, data.t_s, data.rss_mb)
+      }
+      if (type === 'meta' && run === 'airllm' && typeof data.layer_count === 'number') {
+        const count = data.layer_count as number
+        const names = (data.layer_names as string[]) ?? []
+        setLayers(
+          Array.from({ length: count }, (_, i) => ({
+            index: i,
+            label: _layerLabel(names[i] ?? String(i)),
+            phase: 'idle' as const,
+          })),
+        )
       }
       if (type === 'layer' && run === 'airllm') {
         const index = data.index as number
@@ -278,8 +297,9 @@ export default function App() {
                     key={layer.index}
                     title={`${layer.label} (${layer.phase})`}
                     className={cn(
-                      'h-6 rounded-sm border border-border/60 transition-colors',
+                      'h-6 min-w-[10px] rounded-sm border border-border/60 transition-colors duration-150',
                       layerPhaseClass(layer.phase),
+                      layer.phase === 'run' && 'ring-2 ring-emerald-700/50',
                     )}
                   />
                 ))}
