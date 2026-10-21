@@ -3,331 +3,108 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;600;700&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        width: 1920px;
-        height: 1080px;
-        overflow: hidden;
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px; height: 1080px; overflow: hidden;
         background: #040810;
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
       }
       #stage {
-        position: relative;
-        width: 1920px;
-        height: 1080px;
-        overflow: hidden;
-        background: radial-gradient(ellipse 90% 70% at 25% 50%, #0c1a33 0%, #040810 70%);
+        position: relative; width: 1920px; height: 1080px; overflow: hidden;
+        background: radial-gradient(ellipse 85% 75% at 22% 55%, #0c1a33 0%, #040810 72%);
       }
-      #camera {
-        position: absolute;
-        inset: 0;
-        transform-origin: 68% 50%;
-      }
-      #skyline {
-        position: absolute;
-        inset: 0;
-        background:
-          radial-gradient(circle at 12% 70%, rgba(34, 211, 238, 0.15), transparent 35%),
-          radial-gradient(circle at 8% 40%, rgba(232, 121, 249, 0.12), transparent 30%),
-          linear-gradient(180deg, #050a14 0%, #0a1428 100%);
-        mask-image: linear-gradient(90deg, black 0%, black 45%, transparent 75%);
-      }
-      .bokeh {
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(48px);
-        opacity: 0.5;
-        mix-blend-mode: screen;
-        pointer-events: none;
-      }
-      .bokeh-1 {
-        width: 320px;
-        height: 320px;
-        left: 48px;
-        top: 100px;
-        background: #22d3ee;
-      }
-      .bokeh-2 {
-        width: 240px;
-        height: 240px;
-        left: 160px;
-        top: 520px;
-        background: #e879f9;
-      }
-      .bokeh-3 {
-        width: 180px;
-        height: 180px;
-        left: 24px;
-        top: 760px;
-        background: #6366f1;
-      }
-      .skyline-bars {
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        width: 38%;
-        height: 45%;
-        opacity: 0.25;
-        background: repeating-linear-gradient(
-          90deg,
-          #1e3a5f 0,
-          #1e3a5f 6px,
-          transparent 6px,
-          transparent 18px
-        );
-        mask-image: linear-gradient(180deg, transparent, black 40%);
+      #camera { position: absolute; inset: 0; transform-origin: 68% 50%; }
+      .city-skyline {
+        position: absolute; left: 0; bottom: 0; width: 42%; height: 42%;
+        opacity: 0.55; pointer-events: none;
       }
       .left-panel {
-        position: absolute;
-        left: 96px;
-        top: 0;
-        width: 720px;
-        max-width: 42vw;
-        height: 100%;
-        z-index: 30;
-        pointer-events: none;
+        position: absolute; left: 96px; top: 0; width: 700px; height: 100%;
+        z-index: 30; pointer-events: none;
       }
-      #typography {
-        position: absolute;
-        top: 220px;
-        width: 100%;
-        color: #f8fafc;
-      }
+      #typography { position: absolute; top: 200px; color: #f8fafc; max-width: 620px; }
       #headline {
-        font-size: 92px;
-        font-weight: 600;
-        letter-spacing: -0.04em;
-        line-height: 1.02;
-        text-shadow: 0 0 80px rgba(34, 211, 238, 0.4);
+        font-size: 88px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.02;
+        text-shadow: 0 0 80px rgba(34, 211, 238, 0.35);
       }
-      #headline .word {
-        display: inline-block;
-        opacity: 0;
-      }
-      #subhead {
-        margin-top: 24px;
-        font-size: 34px;
-        font-weight: 300;
-        color: #cbd5e1;
-        opacity: 0;
-        max-width: 560px;
-      }
+      #headline .word { display: inline-block; opacity: 0; }
+      #subhead { margin-top: 22px; font-size: 32px; font-weight: 300; color: #cbd5e1; opacity: 0; }
       #scene-caption {
-        position: absolute;
-        bottom: 96px;
-        width: 100%;
-        max-width: 680px;
-        opacity: 0;
+        position: absolute; left: 0; bottom: 96px; width: 100%; max-width: 660px; opacity: 0;
+        padding: 0; /* stays inside 96px panel margin */
       }
       #scene-caption h2 {
-        font-size: 38px;
-        font-weight: 600;
-        color: #f1f5f9;
-        margin-bottom: 10px;
-        line-height: 1.15;
+        font-size: 36px; font-weight: 600; color: #f1f5f9; margin-bottom: 10px; line-height: 1.15;
       }
-      #scene-caption p {
-        font-size: 24px;
-        color: #94a3b8;
-        line-height: 1.45;
-        max-width: 620px;
-      }
+      #scene-caption p { font-size: 23px; color: #94a3b8; line-height: 1.45; max-width: 620px; }
       #building-wrap {
-        position: absolute;
-        left: 40%;
-        top: 36px;
-        width: 58%;
-        height: 1008px;
-        opacity: 0;
-        filter: drop-shadow(0 32px 100px rgba(0, 0, 0, 0.75));
-        transition: filter 0.3s;
+        position: absolute; left: 38%; top: 24px; width: 60%; height: 1020px;
+        opacity: 0; filter: drop-shadow(0 32px 100px rgba(0, 0, 0, 0.8));
       }
-      #building-wrap.dimmed {
-        opacity: 0.28 !important;
-        filter: drop-shadow(0 8px 40px rgba(0, 0, 0, 0.5)) saturate(0.5);
-      }
-      #building {
-        width: 100%;
-        height: 100%;
-      }
-      .glass-slab {
-        fill: rgba(12, 28, 52, 0.72);
-        stroke: rgba(100, 140, 180, 0.35);
-        stroke-width: 1;
-      }
-      .mullion {
-        stroke: rgba(120, 160, 200, 0.2);
-        stroke-width: 1;
-      }
-      .interior-glow {
-        fill: rgba(56, 189, 248, 0.06);
-      }
-      .desk {
-        fill: rgba(148, 163, 184, 0.18);
-      }
-      .plant {
-        fill: rgba(74, 222, 128, 0.15);
-      }
-      .side-face {
-        fill: rgba(8, 16, 32, 0.85);
-        stroke: rgba(80, 110, 150, 0.25);
-      }
-      .roof-cap {
-        fill: rgba(20, 40, 70, 0.9);
-      }
-      .shaft {
-        fill: rgba(6, 182, 212, 0.12);
-        stroke: rgba(34, 211, 238, 0.85);
-        stroke-width: 2.5;
-        filter: url(#cyanGlow);
-      }
-      .floor-label {
-        fill: #94a3b8;
-        font-size: 16px;
-        font-weight: 600;
-      }
-      .route-path {
-        fill: none;
-        stroke-width: 3;
-        stroke-dasharray: 6 8;
-        opacity: 0;
-      }
-      .route-fcfs {
-        stroke: #fb923c;
-        filter: url(#orangeGlow);
-      }
-      .route-scan {
-        stroke: #f472b6;
-        filter: url(#magentaGlow);
-      }
-      .call-path {
-        fill: none;
-        stroke: #f472b6;
-        stroke-width: 2.5;
-        stroke-dasharray: 4 6;
-        opacity: 0;
-        filter: url(#magentaGlow);
-      }
-      .call-badge {
-        opacity: 0;
-      }
-      .call-circle {
-        fill: #ec4899;
-        filter: url(#magentaGlow);
-      }
-      .call-arrow {
-        fill: #fdf2f8;
-      }
-      .call-num {
-        fill: #fff;
-        font-size: 15px;
-        font-weight: 700;
-        text-anchor: middle;
-      }
-      #car {
-        opacity: 0;
-        filter: url(#carGlow);
-      }
-      .car-body {
-        fill: rgba(6, 182, 212, 0.35);
-        stroke: #67e8f9;
-        stroke-width: 3;
-      }
-      .car-window {
-        fill: rgba(255, 255, 255, 0.35);
-      }
+      #building-wrap.dimmed { filter: saturate(0.45) brightness(0.55); }
+      #building { width: 100%; height: 100%; }
+      .glass-slab { fill: rgba(14, 32, 58, 0.78); stroke: rgba(120, 160, 200, 0.35); stroke-width: 1; }
+      .mullion { stroke: rgba(140, 180, 220, 0.15); stroke-width: 1; }
+      .desk { fill: rgba(148, 163, 184, 0.22); }
+      .plant { fill: rgba(74, 222, 128, 0.2); }
+      .interior-warm { fill: rgba(251, 191, 36, 0.12); }
+      .side-face { fill: rgba(6, 14, 28, 0.9); stroke: rgba(80, 110, 150, 0.3); }
+      .roof-cap { fill: rgba(18, 38, 68, 0.95); }
+      .machine { fill: #334155; stroke: #64748b; }
+      .sheave { fill: #475569; stroke: #cbd5e1; stroke-width: 2; }
+      .shaft { fill: rgba(6, 182, 212, 0.1); stroke: rgba(34, 211, 238, 0.9); stroke-width: 2.5; filter: url(#cyanGlow); }
+      .cw-shaft { fill: rgba(30, 41, 59, 0.5); stroke: rgba(100, 116, 139, 0.5); }
+      .cw-block { fill: #475569; stroke: #94a3b8; filter: url(#cwGlow); }
+      .rope { stroke: #94a3b8; stroke-width: 2; fill: none; opacity: 0.7; }
+      .floor-label { fill: #cbd5e1; font-size: 15px; font-weight: 600; }
+      .route-path { fill: none; stroke-width: 3; stroke-dasharray: 6 8; opacity: 0; }
+      .route-down { stroke: #fb923c; filter: url(#orangeGlow); }
+      .route-sel { stroke: #22d3ee; filter: url(#cyanGlow); }
+      .call-path { fill: none; stroke: #f472b6; stroke-width: 2.5; stroke-dasharray: 4 6; opacity: 0; filter: url(#magentaGlow); }
+      .call-circle { fill: #ec4899; filter: url(#magentaGlow); }
+      .call-num, .call-dir { fill: #fff; font-size: 14px; font-weight: 700; text-anchor: middle; }
+      .hall-btn { fill: #1e293b; stroke: #64748b; }
+      .hall-lantern { fill: #f472b6; filter: url(#magentaGlow); }
+      #car { opacity: 0; filter: url(#carGlow); }
+      .car-shell { fill: rgba(15, 23, 42, 0.85); stroke: #67e8f9; stroke-width: 3; }
+      .car-ceiling { fill: rgba(251, 191, 36, 0.35); }
+      .car-rail { stroke: #cbd5e1; stroke-width: 2; fill: none; }
+      .car-passenger { fill: rgba(15, 23, 42, 0.9); }
+      .door-panel { fill: rgba(30, 41, 59, 0.95); stroke: #94a3b8; stroke-width: 1.5; }
+      .floor-indicator { fill: #0f172a; stroke: #22d3ee; }
+      .indicator-arrow { fill: #67e8f9; font-size: 12px; text-anchor: middle; }
+      .crosshead { fill: #64748b; stroke: #94a3b8; }
+      .waiter { opacity: 0; }
+      .waiter-body { fill: rgba(15, 23, 42, 0.85); }
       #stats {
-        position: absolute;
-        left: 96px;
-        top: 200px;
-        width: 680px;
-        opacity: 0;
-        z-index: 40;
+        position: absolute; left: 0; top: 160px; width: 100%; max-width: 660px;
+        opacity: 0; z-index: 40;
+        background: rgba(8, 12, 22, 0.88); border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 16px; padding: 28px 32px;
       }
-      #stats h2 {
-        font-size: 36px;
-        font-weight: 600;
-        color: #f1f5f9;
-        margin-bottom: 8px;
-        line-height: 1.2;
-      }
-      #stats .lead {
-        font-size: 22px;
-        color: #94a3b8;
-        margin-bottom: 36px;
-        max-width: 620px;
-        line-height: 1.4;
-      }
-      .stat-block {
-        margin-bottom: 32px;
-      }
-      .stat-head {
-        font-size: 18px;
-        color: #94a3b8;
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-      }
-      .stat-value {
-        font-size: 72px;
-        font-weight: 700;
-        line-height: 1;
-        margin-bottom: 12px;
-      }
-      .stat-fcfs {
-        color: #fb923c;
-        text-shadow: 0 0 40px rgba(251, 146, 60, 0.35);
-      }
-      .stat-scan {
-        color: #22d3ee;
-        text-shadow: 0 0 40px rgba(34, 211, 238, 0.35);
-      }
-      .stat-bar-bg {
-        height: 12px;
-        background: rgba(15, 23, 42, 0.9);
-        border-radius: 6px;
-        overflow: hidden;
-        border: 1px solid rgba(148, 163, 184, 0.15);
-      }
-      .stat-bar {
-        height: 100%;
-        width: 0;
-        border-radius: 6px;
-      }
-      .bar-fcfs {
-        background: linear-gradient(90deg, #fb923c, #fdba74);
-      }
-      .bar-scan {
-        background: linear-gradient(90deg, #06b6d4, #67e8f9);
-      }
+      #stats h2 { font-size: 32px; color: #f1f5f9; margin-bottom: 8px; }
+      #stats .lead { font-size: 18px; color: #94a3b8; margin-bottom: 24px; }
+      .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+      .stat-head { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+      .stat-value { font-size: 48px; font-weight: 700; line-height: 1; margin-bottom: 8px; }
+      .stat-down { color: #fb923c; }
+      .stat-sel { color: #22d3ee; }
+      .stat-bar-bg { height: 8px; background: #0f172a; border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
+      .stat-bar { height: 100%; width: 0; border-radius: 4px; }
+      .bar-down { background: linear-gradient(90deg, #fb923c, #fdba74); }
+      .bar-sel { background: linear-gradient(90deg, #06b6d4, #67e8f9); }
       #wait-footnote {
-        margin-top: 28px;
-        font-size: 15px;
-        color: #64748b;
-        line-height: 1.5;
-        max-width: 620px;
+        margin-top: 16px; font-size: 14px; color: #94a3b8; line-height: 1.5;
+        background: rgba(2, 6, 14, 0.9); padding: 12px 14px; border-radius: 8px;
+        border: 1px solid rgba(71, 85, 105, 0.4);
       }
-      #logo-line {
-        position: absolute;
-        left: 96px;
-        bottom: 48px;
-        font-size: 17px;
-        color: #475569;
-        opacity: 0;
-        z-index: 35;
-      }
+      #logo-line { position: absolute; left: 0; bottom: 48px; font-size: 16px; color: #475569; opacity: 0; }
     </style>
   </head>
   <body>
@@ -341,336 +118,93 @@
       data-fps="60"
     >
       <div id="camera">
-        <div id="skyline"></div>
-        <div class="skyline-bars"></div>
-        <div class="bokeh bokeh-1"></div>
-        <div class="bokeh bokeh-2"></div>
-        <div class="bokeh bokeh-3"></div>
+        <svg id="city-skyline" class="city-skyline" viewBox="0 0 800 400" preserveAspectRatio="xMinYMax slice"></svg>
 
         <div class="left-panel">
           <div id="typography">
-            <h1 id="headline">
-              <span class="word">Going</span>
-              <span class="word">up?</span>
-            </h1>
+            <h1 id="headline"><span class="word">Going</span> <span class="word">up?</span></h1>
             <p id="subhead">I'll grab you on the way.</p>
           </div>
-
           <div id="scene-caption" class="clip" data-start="0" data-duration="38" data-track-index="1">
             <h2 id="cap-title"></h2>
             <p id="cap-body"></p>
           </div>
-
           <div id="stats">
-            <h2>Same calls · same speed · same dwell</h2>
-            <p class="lead">Mean passenger wait (arrival time, not door dwell)</p>
-            <div class="stat-block">
-              <div class="stat-head">FCFS — registration order 9 → 4 → 7</div>
-              <div id="val-fcfs" class="stat-value stat-fcfs">—</div>
-              <div class="stat-bar-bg">
-                <div id="bar-fcfs" class="stat-bar bar-fcfs"></div>
+            <h2>Same passengers · same physics</h2>
+            <p class="lead">Mean wait and mean journey from simulation</p>
+            <div class="stat-grid">
+              <div>
+                <div class="stat-head">Down collective — mean wait</div>
+                <div id="val-down-wait" class="stat-value stat-down">—</div>
+                <div class="stat-bar-bg"><div id="bar-down-wait" class="stat-bar bar-down"></div></div>
+                <div class="stat-head">Mean journey</div>
+                <div id="val-down-journey" class="stat-value stat-down" style="font-size:32px">—</div>
               </div>
-            </div>
-            <div class="stat-block">
-              <div class="stat-head">Selective collective (SCAN)</div>
-              <div id="val-scan" class="stat-value stat-scan">—</div>
-              <div class="stat-bar-bg">
-                <div id="bar-scan" class="stat-bar bar-scan"></div>
+              <div>
+                <div class="stat-head">Selective collective — mean wait</div>
+                <div id="val-sel-wait" class="stat-value stat-sel">—</div>
+                <div class="stat-bar-bg"><div id="bar-sel-wait" class="stat-bar bar-sel"></div></div>
+                <div class="stat-head">Mean journey</div>
+                <div id="val-sel-journey" class="stat-value stat-sel" style="font-size:32px">—</div>
               </div>
             </div>
             <p id="wait-footnote"></p>
           </div>
-
-          <div id="logo-line">HyperFrames · hall calls only</div>
+          <div id="logo-line">HyperFrames · Barney / Harris terminology</div>
         </div>
 
         <div id="building-wrap">
-          <svg id="building" viewBox="0 0 1000 900" xmlns="http://www.w3.org/2000/svg">
+          <svg id="building" viewBox="0 0 1100 920" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <filter id="cyanGlow" x="-60%" y="-60%" width="220%" height="220%">
-                <feGaussianBlur stdDeviation="5" result="b" />
-                <feMerge>
-                  <feMergeNode in="b" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              <filter id="magentaGlow" x="-60%" y="-60%" width="220%" height="220%">
-                <feGaussianBlur stdDeviation="4" result="b" />
-                <feMerge>
-                  <feMergeNode in="b" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              <filter id="orangeGlow" x="-60%" y="-60%" width="220%" height="220%">
-                <feGaussianBlur stdDeviation="3" result="b" />
-                <feMerge>
-                  <feMergeNode in="b" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              <filter id="carGlow" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="10" result="b" />
-                <feMerge>
-                  <feMergeNode in="b" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              <linearGradient id="glassGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="rgba(30,60,100,0.5)" />
-                <stop offset="100%" stop-color="rgba(15,35,65,0.65)" />
-              </linearGradient>
+              <filter id="cyanGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="magentaGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="orangeGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="carGlow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="cwGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
             </defs>
-
-            <!-- depth: side face -->
-            <polygon class="side-face" points="620,60 720,90 720,860 620,860" />
-            <polygon class="roof-cap" points="80,60 620,60 720,90 180,90" />
-
+            <polygon class="side-face" points="760,100 860,130 860,880 760,880"/>
+            <polygon class="roof-cap" points="180,100 760,100 860,130 260,130"/>
+            <rect class="machine" x="500" y="40" width="140" height="50" rx="4"/>
+            <circle class="sheave" cx="590" cy="65" r="22"/>
             <g id="floors"></g>
             <g id="mullions"></g>
-
-            <rect id="shaft" class="shaft" x="430" y="60" width="72" height="800" rx="4" />
-
-            <g id="call-paths"></g>
-            <path id="path-fcfs" class="route-path route-fcfs" />
-            <path id="path-scan" class="route-path route-scan" />
-
-            <g id="car">
-              <rect class="car-body" x="0" y="0" width="64" height="48" rx="10" />
-              <rect class="car-window" x="8" y="8" width="48" height="28" rx="4" />
+            <g id="landings"></g>
+            <rect class="shaft" x="548" y="100" width="84" height="780" rx="4"/>
+            <rect class="cw-shaft" x="860" y="100" width="48" height="780" rx="3"/>
+            <path id="ropes" class="rope" d=""/>
+            <g id="counterweight">
+              <rect class="cw-block" x="0" y="0" width="40" height="100" rx="3"/>
             </g>
-
+            <g id="call-paths"></g>
+            <path id="path-down" class="route-path route-down"/>
+            <path id="path-selective" class="route-path route-sel"/>
+            <g id="car">
+              <rect class="crosshead" x="18" y="-10" width="40" height="8" rx="2"/>
+              <rect class="car-shell" x="0" y="0" width="76" height="56" rx="8"/>
+              <rect class="car-ceiling" x="4" y="4" width="68" height="8" rx="2"/>
+              <line class="car-rail" x1="8" y1="40" x2="68" y2="40"/>
+              <ellipse class="car-passenger" cx="28" cy="32" rx="8" ry="12"/>
+              <ellipse class="car-passenger" cx="50" cy="30" rx="7" ry="11"/>
+              <rect class="floor-indicator" x="24" y="-22" width="28" height="16" rx="3"/>
+              <text class="indicator-arrow" x="38" y="-10">▲</text>
+              <rect class="door-panel" x="6" y="14" width="28" height="38" rx="2"/>
+              <rect class="door-panel" x="42" y="14" width="28" height="38" rx="2"/>
+            </g>
             <g id="calls"></g>
+            <g id="waiter-4" class="waiter" transform="translate(320, 0)">
+              <ellipse class="waiter-body" cx="0" cy="0" rx="10" ry="18"/>
+              <circle class="waiter-body" cx="0" cy="-20" r="9"/>
+            </g>
           </svg>
         </div>
       </div>
     </div>
-
     <script type="module">
-      import {
-        LAYOUT,
-        floorCenterY,
-        floorSlabBand,
-        carTranslateY,
-        carTranslateX,
-        callToShaftPath,
-        assertFloorAlignment,
-      } from './layout.js'
-      import {
-        simulate,
-        DEMO_CALLS,
-        formatSeconds,
-        SIM,
-        WAIT_DEFINITION,
-      } from './simulation.js'
-
-      const CALL_FLOORS = [4, 7, 9]
-
-      // Build glass floors + mullions
-      const floorsG = document.getElementById('floors')
-      const mullionsG = document.getElementById('mullions')
-      for (let f = LAYOUT.floors; f >= 1; f--) {
-        const { y, height, cy } = floorSlabBand(f)
-        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-        g.innerHTML = `
-          <rect x="${LAYOUT.frontLeft}" y="${y}" width="${LAYOUT.frontRight - LAYOUT.frontLeft}" height="${height}" class="glass-slab" fill="url(#glassGrad)"/>
-          <rect x="${LAYOUT.frontLeft + 24}" y="${cy - 6}" width="50" height="6" class="desk" rx="1"/>
-          <rect x="${LAYOUT.frontLeft + 90}" y="${cy - 6}" width="70" height="6" class="desk" rx="1"/>
-          <rect x="${LAYOUT.frontLeft + 180}" y="${cy - 10}" width="12" height="14" class="plant" rx="2"/>
-          <rect x="${LAYOUT.frontLeft + 260}" y="${cy - 4}" width="90" height="4" class="interior-glow" rx="1"/>
-          <text x="${LAYOUT.frontLeft - 12}" y="${cy + 6}" text-anchor="end" class="floor-label">${f}F</text>
-        `
-        floorsG.appendChild(g)
-      }
-      for (let x = LAYOUT.frontLeft + 40; x < LAYOUT.frontRight; x += 55) {
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
-        line.setAttribute('x1', x)
-        line.setAttribute('x2', x + 20)
-        line.setAttribute('y1', LAYOUT.frontTop)
-        line.setAttribute('y2', LAYOUT.frontBottom)
-        line.setAttribute('class', 'mullion')
-        mullionsG.appendChild(line)
-      }
-
-      // Calls + paths
-      const callsG = document.getElementById('calls')
-      const callPathsG = document.getElementById('call-paths')
-      const alignCheck = []
-      CALL_FLOORS.forEach((f) => {
-        const cy = floorCenterY(f)
-        alignCheck.push({ floor: f, cy })
-        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-        g.setAttribute('class', 'call-badge')
-        g.setAttribute('data-floor', String(f))
-        g.setAttribute('transform', `translate(${LAYOUT.callX}, ${cy})`)
-        g.innerHTML = `
-          <circle class="call-circle" cx="0" cy="0" r="24" />
-          <polygon class="call-arrow" points="-7,-16 7,-16 0,-26" />
-          <text class="call-num" x="0" y="7">${f}</text>
-        `
-        callsG.appendChild(g)
-        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-        p.setAttribute('class', 'call-path')
-        p.setAttribute('data-floor', String(f))
-        p.setAttribute('d', callToShaftPath(f))
-        callPathsG.appendChild(p)
-      })
-      assertFloorAlignment(alignCheck)
-
-      const fcfs = simulate(DEMO_CALLS, 'fcfs')
-      const scan = simulate(DEMO_CALLS, 'scan')
-      const maxMean = Math.max(fcfs.meanWait, scan.meanWait)
-
-      document.getElementById('val-fcfs').textContent = formatSeconds(fcfs.meanWait)
-      document.getElementById('val-scan').textContent = formatSeconds(scan.meanWait)
-      document.getElementById('wait-footnote').textContent =
-        `${WAIT_DEFINITION} Model: ${SIM.travelPerFloor}s/floor travel, ${SIM.dwell}s dwell after each stop, car starts 1F.`
-
-      const car = document.getElementById('car')
-      const calls = document.querySelectorAll('.call-badge')
-      const callPaths = document.querySelectorAll('.call-path')
-      const pathFcfs = document.getElementById('path-fcfs')
-      const pathScan = document.getElementById('path-scan')
-
-      const y1 = floorCenterY(1)
-      const shaftX = LAYOUT.shaftCenterX
-      pathFcfs.setAttribute(
-        'd',
-        `M ${shaftX} ${y1} L ${shaftX} ${floorCenterY(9)} L ${shaftX} ${floorCenterY(4)} L ${shaftX} ${floorCenterY(7)}`,
-      )
-      pathScan.setAttribute(
-        'd',
-        `M ${shaftX} ${y1} L ${shaftX} ${floorCenterY(4)} L ${shaftX} ${floorCenterY(7)} L ${shaftX} ${floorCenterY(9)}`,
-      )
-
-      const capTitle = document.getElementById('cap-title')
-      const capBody = document.getElementById('cap-body')
-      const sceneCaption = document.getElementById('scene-caption')
-      const headline = document.querySelectorAll('#headline .word')
-      const subhead = document.getElementById('subhead')
-      const camera = document.getElementById('camera')
-      const stats = document.getElementById('stats')
-      const logo = document.getElementById('logo-line')
-      const typography = document.getElementById('typography')
-      const buildingWrap = document.getElementById('building-wrap')
-
-      gsap.set(headline, { y: 28, opacity: 0 })
-
-      function setCarFloor(f, overshoot = 0) {
-        const x = carTranslateX()
-        const y = carTranslateY(f, overshoot)
-        car.setAttribute('transform', `translate(${x}, ${y})`)
-      }
-
-      const tl = gsap.timeline({ paused: true })
-
-      tl.to(headline, { opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: 'back.out(1.4)' }, 0.4)
-      tl.to(subhead, { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.1)
-      tl.fromTo(camera, { scale: 1 }, { scale: 1.03, duration: 5, ease: 'power1.inOut' }, 0)
-      tl.to(buildingWrap, { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.2)
-      tl.to(car, { opacity: 1, duration: 0.5 }, 1.5)
-      setCarFloor(1)
-      tl.to(typography, { opacity: 0, duration: 0.6 }, 5.2)
-
-      tl.add(() => {
-        capTitle.textContent = 'First-come-first-served'
-        capBody.textContent = 'Chases calls in arrival order — extra reversals.'
-      }, 6)
-      tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 6)
-      tl.to(calls, { opacity: 1, duration: 0.4, stagger: 0.15, ease: 'back.out(2)' }, 6.2)
-      tl.to(callPaths, { opacity: 0.85, duration: 0.5 }, 6.4)
-      tl.to(pathFcfs, { opacity: 0.9, duration: 0.6 }, 6.8)
-      tl.fromTo(
-        pathFcfs,
-        { strokeDashoffset: 500 },
-        { strokeDashoffset: 0, duration: 2.2, ease: 'power2.inOut' },
-        7,
-      )
-
-      const fcfsStops = [9, 4, 7]
-      let t = 7.2
-      let prev = 1
-      fcfsStops.forEach((f) => {
-        const dur = Math.abs(f - prev) * 0.35
-        tl.to(
-          {},
-          {
-            duration: dur,
-            onUpdate: function () {
-              const p = this.progress()
-              setCarFloor(prev + (f - prev) * p)
-            },
-            ease: 'power2.inOut',
-          },
-          t,
-        )
-        tl.to({}, { duration: 0.15, onComplete: () => setCarFloor(f, -4) }, t + dur)
-        tl.to({}, { duration: 0.15, onComplete: () => setCarFloor(f, 0) }, t + dur + 0.15)
-        t += dur + 0.35
-        prev = f
-      })
-
-      tl.to(sceneCaption, { opacity: 0, duration: 0.4 }, 13.5)
-      tl.to(pathFcfs, { opacity: 0, duration: 0.4 }, 13.5)
-
-      tl.add(() => {
-        capTitle.textContent = 'Selective collective (SCAN)'
-        capBody.textContent = 'Pick up every up call on the way up — then reverse.'
-        setCarFloor(1)
-      }, 14)
-      tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 14)
-      tl.to(pathScan, { opacity: 0.95, duration: 0.5 }, 14.2)
-      tl.to(callPaths, { opacity: 0.95, duration: 0.4 }, 14.2)
-      tl.fromTo(
-        pathScan,
-        { strokeDashoffset: 400 },
-        { strokeDashoffset: 0, duration: 3, ease: 'power2.inOut' },
-        14.5,
-      )
-      tl.fromTo(camera, { scale: 1.03 }, { scale: 1.06, duration: 4, ease: 'power2.inOut' }, 17)
-
-      const scanStops = [4, 7, 9]
-      t = 14.8
-      prev = 1
-      scanStops.forEach((f) => {
-        const dur = Math.abs(f - prev) * 0.72
-        tl.to(
-          {},
-          {
-            duration: dur,
-            onUpdate: function () {
-              const p = this.progress()
-              setCarFloor(prev + (f - prev) * p)
-            },
-            ease: 'power2.inOut',
-          },
-          t,
-        )
-        tl.to({}, { duration: 0.12, onComplete: () => setCarFloor(f, -5) }, t + dur)
-        tl.to({}, { duration: 0.18, onComplete: () => setCarFloor(f, 0), ease: 'back.out(2)' }, t + dur + 0.12)
-        t += dur + 0.35
-        prev = f
-      })
-
-      tl.to(sceneCaption, { opacity: 0, duration: 0.5 }, 27.5)
-      tl.to(pathScan, { opacity: 0, duration: 0.5 }, 27.5)
-      tl.to(calls, { opacity: 0.5, duration: 0.5 }, 27.5)
-
-      tl.add(() => {
-        capTitle.textContent = ''
-        capBody.textContent = ''
-      }, 28)
-      tl.to(sceneCaption, { opacity: 0, duration: 0.3 }, 28)
-      tl.add(() => buildingWrap.classList.add('dimmed'), 28)
-      tl.to(buildingWrap, { opacity: 0.26, duration: 0.8 }, 28)
-      tl.to(stats, { opacity: 1, duration: 0.6 }, 28.2)
-      tl.to('#bar-fcfs', { width: `${(fcfs.meanWait / maxMean) * 100}%`, duration: 1.2, ease: 'power2.out' }, 29)
-      tl.to('#bar-scan', { width: `${(scan.meanWait / maxMean) * 100}%`, duration: 1.2, ease: 'power2.out' }, 29.4)
-      tl.to(logo, { opacity: 1, duration: 0.8 }, 34)
-      tl.fromTo(camera, { scale: 1.06 }, { scale: 1, duration: 3, ease: 'power2.inOut' }, 28)
-
-      window.__timelines = window.__timelines || {}
-      window.__timelines['selective-collective'] = tl
-      tl.seek(0)
+      import { floorCenterY } from './layout.js'
+      import { initComposition } from './scene.js'
+      const w4 = document.getElementById('waiter-4')
+      w4.setAttribute('transform', `translate(320, ${floorCenterY(4)})`)
+      initComposition()
     </script>
   </body>
 </html>

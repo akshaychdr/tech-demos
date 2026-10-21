@@ -1,29 +1,26 @@
 /**
- * Shared floor → pixel mapping for the building SVG (viewBox coordinates).
- * Every label, slab, call bubble, and car Y must use these helpers.
+ * Shared floor → pixel mapping (SVG viewBox).
  */
 
 export const LAYOUT = {
   floors: 10,
-  /** SVG viewBox */
-  viewW: 1000,
-  viewH: 900,
-  /** Front face of tower */
-  frontLeft: 80,
-  frontRight: 620,
-  frontTop: 60,
-  frontBottom: 860,
-  /** Shaft inside front face */
-  shaftLeft: 430,
-  shaftWidth: 72,
-  /** Call bubbles sit left of glass */
-  callX: 200,
-  shaftCenterX: 430 + 36,
-  carWidth: 64,
-  carHeight: 48,
+  viewW: 1100,
+  viewH: 920,
+  frontLeft: 180,
+  frontRight: 760,
+  frontTop: 100,
+  frontBottom: 880,
+  shaftLeft: 548,
+  shaftWidth: 84,
+  cwLeft: 860,
+  cwWidth: 48,
+  callX: 120,
+  lanternX: 96,
+  carWidth: 76,
+  carHeight: 56,
+  machineY: 40,
 }
 
-/** Vertical center of floor N (1 = lobby at bottom). */
 export function floorCenterY(floor) {
   const f = Math.max(1, Math.min(LAYOUT.floors, floor))
   const t = (f - 1) / (LAYOUT.floors - 1)
@@ -36,28 +33,27 @@ export function floorSlabBand(floor) {
   return { y: cy - band / 2, height: band, cy }
 }
 
-/** Car group translate Y (top-left of car rect). */
 export function carTranslateY(floor, overshootPx = 0) {
-  const cy = floorCenterY(floor) + overshootPx
-  return cy - LAYOUT.carHeight / 2
+  return floorCenterY(floor) + overshootPx - LAYOUT.carHeight / 2
 }
 
 export function carTranslateX() {
   return LAYOUT.shaftLeft + (LAYOUT.shaftWidth - LAYOUT.carWidth) / 2
 }
 
-/** Curved magenta path from hall call to shaft at same floor. */
-export function callToShaftPath(floor) {
-  const y = floorCenterY(floor)
-  const x0 = LAYOUT.callX + 28
-  const x1 = LAYOUT.shaftCenterX
-  const cx = (x0 + x1) / 2
-  return `M ${x0} ${y} Q ${cx} ${y - 36} ${x1} ${y}`
+export function counterweightY(floor, overshootPx = 0) {
+  const h = 120
+  return floorCenterY(floor) + overshootPx - h / 2
 }
 
-/**
- * @param {{ floor: number, cy: number }[]} placements
- */
+export function callToShaftPath(floor) {
+  const y = floorCenterY(floor)
+  const x0 = LAYOUT.callX + 32
+  const x1 = LAYOUT.shaftLeft + 8
+  const cx = (x0 + x1) / 2
+  return `M ${x0} ${y} Q ${cx} ${y - 40} ${x1} ${y}`
+}
+
 export function assertFloorAlignment(placements) {
   for (const { floor, cy } of placements) {
     const expected = floorCenterY(floor)

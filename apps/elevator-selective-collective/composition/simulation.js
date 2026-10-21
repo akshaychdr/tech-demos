@@ -1,9 +1,7 @@
 /**
- * Discrete-event elevator simulation — hall calls only, one car.
+ * Elevator traffic simulation — down collective vs selective collective (LOOK).
+ * Gina Barney, "The History of Lift Traffic Control"; Harris terminology.
  */
-
-/** @typedef {{ floor: number, direction: 'up' | 'down', registeredAt: number }} HallCall */
-/** @typedef {{ floor: number, direction: string, registeredAt: number, arrivalTime: number, wait: number }} PassengerResult */
 
 export const SIM = {
   floors: 10,
@@ -11,79 +9,154 @@ export const SIM = {
   dwell: 1.5,
 }
 
-/** Wait = seconds from call registration until the car arrives at that floor (before door dwell). */
 export const WAIT_DEFINITION =
-  'Wait = time from call registration until the car reaches that floor (excludes the 1.5 s door-open dwell after arrival).'
+  'Wait = registration → car arrives at your floor (excludes dwell). Journey = registration → you reach your destination floor (includes dwell at intervening stops).'
 
-export const DEMO_CALLS = [
-  { floor: 9, direction: 'up', registeredAt: 0 },
-  { floor: 4, direction: 'up', registeredAt: 0 },
-  { floor: 7, direction: 'up', registeredAt: 0 },
+/** @typedef {{ id: string, label: string, origin: number, destination: number, registeredAt: number }} PassengerSpec */
+
+export const DEMO_PASSENGERS = [
+  { id: 'p1', label: 'Lobby → 9F', origin: 1, destination: 9, registeredAt: 0 },
+  { id: 'p2', label: '4F → 7F (up)', origin: 4, destination: 7, registeredAt: 0 },
+  { id: 'p3', label: '8F → 1F (down)', origin: 8, destination: 1, registeredAt: 0 },
 ]
 
 /**
- * @param {HallCall[]} calls
- * @param {'fcfs' | 'scan'} policy
+ * @param {'down-collective' | 'selective-collective'} mode
  */
-export function simulate(calls, policy) {
+export function simulatePassengers(mode) {
+  const passengers = DEMO_PASSENGERS.map((p) => ({
+    ...p,
+    pickedUpAt: null,
+    deliveredAt: null,
+    wait: null,
+    journey: null,
+  }))
+
   let time = 0
   let floor = 1
   let direction = 'up'
-  const pending = calls.map((c) => ({ ...c, served: false }))
-  /** @type {PassengerResult[]} */
-  const passengers = []
 
-  const travel = (to) => {
-    time += Math.abs(to - floor) * SIM.travelPerFloor
-    floor = to
-  }
+  /** @type {typeof passengers} */
+  let inCar = []
+  /** @type {typeof passengers} */
+  let waiting = [...passengers]
 
-  const arriveAt = (call) => {
-    travel(call.floor)
-    const arrivalTime = time
-    const wait = arrivalTime - call.registeredAt
-    passengers.push({
-      floor: call.floor,
-      direction: call.direction,
-      registeredAt: call.registeredAt,
-      arrivalTime,
-      wait,
-    })
-    time += SIM.dwell
-    call.served = true
-  }
+  /** @type {Set<number>} */
+  const carCalls = new Set()
 
-  if (policy === 'fcfs') {
-    for (const call of pending) {
-      arriveAt(call)
-    }
-  } else {
-    while (pending.some((c) => !c.served)) {
-      const active = pending.filter((c) => !c.served)
-      const ahead = active.filter((c) =>
-        direction === 'up' ? c.floor >= floor : c.floor <= floor,
-      )
-      const inDirection = ahead.filter((c) => c.direction === direction)
-
-      if (inDirection.length === 0) {
-        direction = direction === 'up' ? 'down' : 'up'
-        continue
+  const landingCalls = () => {
+    /** @type {{ floor: number, dir: 'up' | 'down' }[]} */
+    const list = []
+    for (const p of waiting) {
+      if (mode === 'selective-collective') {
+        list.push({
+          floor: p.origin,
+          dir: p.destination > p.origin ? 'up' : 'down',
+        })
+      } else if (p.origin > 1) {
+        list.push({ floor: p.origin, dir: 'down' })
       }
-
-      const next =
-        direction === 'up'
-          ? inDirection.reduce((a, b) => (a.floor < b.floor ? a : b))
-          : inDirection.reduce((a, b) => (a.floor > b.floor ? a : b))
-
-      arriveAt(next)
     }
+    return list
   }
 
-  const waits = passengers.map((p) => p.wait)
+  const stopAt = (f) => {
+    const land = landingCalls()
+
+    for (const p of [...inCar]) {
+      if (p.destination === f) {
+        inCar = inCar.filter((x) => x !== p)
+        p.deliveredAt = time
+        p.journey = time - p.registeredAt
+        carCalls.delete(p.destination)
+      }
+    }
+
+    const toBoard = waiting.filter((p) => p.origin === f)
+    const mayBoard =
+      f === 1 ||
+      (mode === 'selective-collective' &&
+        land.some((lc) => lc.floor === f && lc.dir === direction)) ||
+      (mode === 'down-collective' && direction === 'down' && f > 1)
+
+    if (mayBoard || f === 1) {
+      for (const p of toBoard) {
+        if (f === 1 || mayBoard) {
+          waiting = waiting.filter((x) => x !== p)
+          inCar.push(p)
+          p.pickedUpAt = time
+          p.wait = p.origin === 1 && time === 0 ? 0 : time - p.registeredAt
+          carCalls.add(p.destination)
+        }
+      }
+    }
+
+    time += SIM.dwell
+  }
+
+  const nextStop = () => {
+    const land = landingCalls()
+    const stops = new Set()
+
+    if (direction === 'up') {
+      if (mode === 'selective-collective') {
+        for (const lc of land) {
+          if (lc.dir === 'up' && lc.floor > floor) stops.add(lc.floor)
+        }
+      }
+      for (const d of carCalls) {
+        if (d > floor) stops.add(d)
+      }
+      if (stops.size) return Math.min(...stops)
+      direction = 'down'
+    }
+
+    if (direction === 'down') {
+      if (mode === 'selective-collective') {
+        for (const lc of land) {
+          if (lc.dir === 'down' && lc.floor < floor) stops.add(lc.floor)
+        }
+      } else {
+        for (const lc of land) {
+          if (lc.floor < floor) stops.add(lc.floor)
+        }
+      }
+      for (const d of carCalls) {
+        if (d < floor) stops.add(d)
+      }
+      if (stops.size) return Math.max(...stops)
+      direction = 'up'
+    }
+
+    if (direction === 'up') {
+      for (const d of carCalls) {
+        if (d > floor) stops.add(d)
+      }
+      if (stops.size) return Math.min(...stops)
+    }
+
+    return null
+  }
+
+  stopAt(1)
+
+  let guard = 0
+  while (passengers.some((p) => p.deliveredAt === null) && guard++ < 100) {
+    const target = nextStop()
+    if (target === null) break
+    time += Math.abs(target - floor) * SIM.travelPerFloor
+    floor = target
+    stopAt(floor)
+  }
+
+  const waits = passengers.map((p) => p.wait ?? 0)
+  const journeys = passengers.map((p) => p.journey ?? 0)
+
   return {
-    meanWait: mean(waits),
-    waits,
+    mode,
     passengers,
+    meanWait: mean(waits),
+    meanJourney: mean(journeys),
     finishTime: time,
   }
 }

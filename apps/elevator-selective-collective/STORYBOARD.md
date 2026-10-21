@@ -1,90 +1,40 @@
-# Selective collective (SCAN) — storyboard
+# Selective collective (LOOK) vs down collective — storyboard
 
-Target reel: **~38 s** @ **1920×1080**, **60 fps**, HyperFrames + GSAP.  
-Mood: night glass tower, navy + cyan shaft/car, magenta hall calls, city bokeh, kinetic sans type.
+Target reel: **~38 s** @ **1920×1080**, **60 fps**.  
+Terminology: Gina Barney, *The History of Lift Traffic Control*; Harris elevator terms.
 
-Fixed scenario (same call list for both policies):
+## Scenario (identical for both controls)
 
-| # | Floor | Direction | Registered at (s) |
-|---|-------|-----------|-------------------|
-| 1 | 9     | up        | 0                 |
-| 2 | 4     | up        | 0                 |
-| 3 | 7     | up        | 0                 |
+| Passenger | Request @ t=0 | Notes |
+|-----------|---------------|--------|
+| Lobby rider | 1F → 9F | Boards at start |
+| Interfloor rider | 4F → 7F (up) | Waiting at 4F |
+| Down rider | 8F → 1F | Down request at 8F |
 
-(FCFS serves registration order 9 → 4 → 7; SCAN serves 4 → 7 → 9 while ascending.)
+Physics: **1.0 s/floor**, **1.5 s dwell** after each stop, car starts **1F**.
 
-Car starts at **1F**, idle, doors closed. **No destination dispatch.**  
-Simulation: **1.0 s** per floor travel, **1.5 s** dwell after each stop (doors).
+**Wait** = registration → car arrives at your floor (excludes dwell).  
+**Journey** = registration → arrival at destination (includes dwell at stops).
 
-**Wait definition:** time from call registration until the **car arrives** at that floor (dwell **not** included in wait).
+### Simulation results (from `composition/simulation.js`)
 
-### Per-passenger arrivals (seconds)
+| Passenger | Down collective wait | Down journey | Selective wait | Selective journey |
+|-----------|---------------------|--------------|----------------|-------------------|
+| Lobby → 9F | 0.0 s | 9.5 s | 0.0 s | 12.5 s |
+| 4F → 7F (up) | 17.5 s | 29.5 s | 4.5 s | 9.0 s |
+| 8F → 1F (down) | 12.0 s | 22.0 s | 15.0 s | 23.5 s |
+| **Mean** | **9.8 s** | **20.3 s** | **6.5 s** | **15.0 s** |
 
-| Floor | FCFS (9→4→7) | SCAN (4→7→9) |
-|-------|--------------|--------------|
-| 4     | 14.5         | 3.0          |
-| 7     | 19.0         | 7.5          |
-| 9     | 8.0          | 11.0         |
-| **Mean wait** | **13.8 s** | **7.2 s** |
+Down collective: while travelling **up**, only **car calls** stop the car — 4F rider is **passed**.  
+Selective collective (LOOK): **up** landing call at 4F is served on the ascent.
 
----
+## Scenes
 
-## Scene 1 — Hook (0:00–0:06, 6 s)
+| # | Time | Copy | Still |
+|---|------|------|-------|
+| 1 Hook | 0–6 s | “Going up?” / “I'll grab you on the way.” | @ 3 s |
+| 2 Down collective | 6–14 s | Explains up-distributive / down-collective | @ 10 s |
+| 3 Selective collective | 14–28 s | LOOK / directional collective | @ 20 s |
+| 4 Stats | 28–38 s | Mean wait + mean journey bars | @ 34 s |
 
-**Idea:** Establish premium night tower; kinetic headline sells the product story.
-
-| | |
-|---|---|
-| **On-screen text** | “Going up?” (large) → “I'll grab you on the way.” (sub, staggered) |
-| **Motion** | Bokeh drift; tower cross-section fades up with slight camera push (scale 1 → 1.04); headline words stagger in with `back.out(1.4)`; cyan shaft pulses once |
-| **Duration** | 6 s |
-
-**Still frame A @ 3.0 s** — headline fully visible, tower lit, no call paths yet.
-
----
-
-## Scene 2 — Naive FCFS (0:06–0:14, 8 s)
-
-**Idea:** Same three up-calls; car chases registration order (**9 → 4 → 7**) with wasteful reversals.
-
-| | |
-|---|---|
-| **On-screen text** | “First-come-first-served” + “Chases calls in arrival order — extra reversals.” |
-| **Motion** | Magenta call badges pop on 4F, 7F, 9F; orange dashed path shows actual FCFS route; car moves with ease-in-out + slight overshoot at each stop; floor labels tick |
-| **Duration** | 8 s |
-
-**Still frame B @ 10.0 s** — car at 7F mid-FCFS, orange path visible, caption legible.
-
----
-
-## Scene 3 — Selective collective / SCAN (0:14–0:28, 14 s)
-
-**Idea:** Directional collective serves all **up** calls while ascending, then reverses only when the shaft is clear ahead.
-
-| | |
-|---|---|
-| **On-screen text** | “Selective collective (SCAN)” + “Every up call on the way up — then reverse.” |
-| **Motion** | Reset car to 1F; magenta calls re-ignite; cyan dotted path animates 1→4→7→9 in one sweep; car follows with glow trail; micro push-in as car passes 7F |
-| **Duration** | 14 s |
-
-**Still frame C @ 20.0 s** — car between 7F–8F, cyan stop-order path, three magenta calls, subhead visible.
-
----
-
-## Scene 4 — Honest simulation (0:28–0:38, 10 s)
-
-**Idea:** Bar comparison of **mean wait time** from the same discrete-event simulation (not hand-waved).
-
-| | |
-|---|---|
-| **On-screen text** | “Same calls · same speed · same dwell” + numeric means + “Simplified model — one car, hall calls only.” |
-| **Motion** | Bars grow with stagger; FCFS vs SCAN labels; subtle camera settle; fade to logo line “HyperFrames × selective collective” |
-| **Duration** | 10 s |
-
-**Still frame D @ 34.0 s** — both bars visible with final wait-time values.
-
----
-
-## Phase 1 deliverable
-
-Four PNG stills from `hyperframes snapshot` at **3.0, 10.0, 20.0, 34.0 s** stored in `storyboard-stills/`.
+Stills: `bun run snapshot:stills` → `storyboard-stills/frame-00-at-3s.png` … `frame-03-at-34s.png`.
