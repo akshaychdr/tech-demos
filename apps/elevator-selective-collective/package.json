@@ -1,5 +1,5 @@
 {
-  "name": "elevator-hyperframes",
+  "name": "elevator-selective-collective",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "render:sample": "npx hyperframes@0.8.181 render composition -o samples/elevator-sample.mp4 --variables '{\"floors\":10,\"speedMps\":2,\"loadKg\":150}' --quality draft -f 24",
+    "snapshot:stills": "npx hyperframes@0.8.181 snapshot composition --at 3,10,20,34 -o storyboard-stills",
     "record:artifacts": "node scripts/record-pr-artifacts.mjs"
   },
   "dependencies": {

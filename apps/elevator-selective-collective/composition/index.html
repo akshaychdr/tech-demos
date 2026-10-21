@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #050a14;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      #stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: radial-gradient(ellipse 120% 80% at 70% 40%, #0f1f3d 0%, #050a14 55%, #020508 100%);
+      }
+      #camera {
+        position: absolute;
+        inset: 0;
+        transform-origin: 62% 52%;
+      }
+      .bokeh {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(40px);
+        opacity: 0.55;
+        mix-blend-mode: screen;
+      }
+      .bokeh-1 {
+        width: 280px;
+        height: 280px;
+        left: 80px;
+        top: 120px;
+        background: #22d3ee;
+      }
+      .bokeh-2 {
+        width: 200px;
+        height: 200px;
+        left: 220px;
+        top: 480px;
+        background: #e879f9;
+      }
+      .bokeh-3 {
+        width: 160px;
+        height: 160px;
+        left: 40px;
+        top: 720px;
+        background: #818cf8;
+      }
+      .city {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 45%;
+        height: 55%;
+        opacity: 0.35;
+        background: linear-gradient(180deg, transparent 0%, #0a1628 40%),
+          repeating-linear-gradient(
+            90deg,
+            #1e293b 0,
+            #1e293b 8px,
+            transparent 8px,
+            transparent 24px
+          );
+        mask-image: linear-gradient(90deg, black 0%, transparent 100%);
+      }
+      #typography {
+        position: absolute;
+        left: 72px;
+        top: 200px;
+        z-index: 20;
+        max-width: 520px;
+        color: #f8fafc;
+      }
+      #headline {
+        font-size: 88px;
+        font-weight: 600;
+        letter-spacing: -0.04em;
+        line-height: 1.05;
+        text-shadow: 0 0 60px rgba(34, 211, 238, 0.35);
+      }
+      #headline .word {
+        display: inline-block;
+        opacity: 0;
+        transform: translateY(28px);
+      }
+      #subhead {
+        margin-top: 20px;
+        font-size: 32px;
+        font-weight: 300;
+        color: #cbd5e1;
+        opacity: 0;
+      }
+      #scene-caption {
+        position: absolute;
+        left: 72px;
+        bottom: 72px;
+        z-index: 25;
+        max-width: 640px;
+        opacity: 0;
+      }
+      #scene-caption h2 {
+        font-size: 36px;
+        font-weight: 600;
+        color: #f1f5f9;
+        margin-bottom: 8px;
+      }
+      #scene-caption p {
+        font-size: 22px;
+        color: #94a3b8;
+        line-height: 1.4;
+      }
+      #tower-wrap {
+        position: absolute;
+        right: 100px;
+        top: 80px;
+        width: 720px;
+        height: 880px;
+        opacity: 0;
+        filter: drop-shadow(0 24px 80px rgba(0, 0, 0, 0.65));
+      }
+      #tower {
+        width: 100%;
+        height: 100%;
+      }
+      .glass-panel {
+        fill: rgba(15, 30, 55, 0.55);
+        stroke: rgba(148, 163, 184, 0.25);
+        stroke-width: 1;
+      }
+      .shaft-glow {
+        fill: rgba(6, 182, 212, 0.08);
+        stroke: rgba(34, 211, 238, 0.65);
+        stroke-width: 2;
+        filter: url(#cyanGlow);
+      }
+      .floor-label {
+        fill: #64748b;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .office-hint {
+        fill: rgba(148, 163, 184, 0.12);
+      }
+      #path-fcfs {
+        fill: none;
+        stroke: #fb923c;
+        stroke-width: 3;
+        stroke-dasharray: 8 10;
+        opacity: 0;
+        filter: url(#magentaGlow);
+      }
+      #path-scan {
+        fill: none;
+        stroke: #22d3ee;
+        stroke-width: 4;
+        stroke-dasharray: 6 8;
+        opacity: 0;
+        filter: url(#cyanGlow);
+      }
+      #car {
+        opacity: 0;
+        filter: url(#carGlow);
+      }
+      .call {
+        opacity: 0;
+      }
+      .call-circle {
+        fill: #f472b6;
+        filter: url(#magentaGlow);
+      }
+      .call-arrow {
+        fill: #fce7f3;
+      }
+      .call-num {
+        fill: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        text-anchor: middle;
+      }
+      #stats {
+        position: absolute;
+        right: 120px;
+        bottom: 100px;
+        width: 520px;
+        opacity: 0;
+        z-index: 30;
+      }
+      .stat-row {
+        margin-bottom: 28px;
+      }
+      .stat-label {
+        font-size: 20px;
+        color: #94a3b8;
+        margin-bottom: 8px;
+      }
+      .stat-bar-bg {
+        height: 36px;
+        background: rgba(15, 23, 42, 0.8);
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      .stat-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        padding-left: 12px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .bar-fcfs {
+        background: linear-gradient(90deg, #fb923c, #fdba74);
+      }
+      .bar-scan {
+        background: linear-gradient(90deg, #22d3ee, #67e8f9);
+      }
+      #fine-print {
+        font-size: 16px;
+        color: #64748b;
+        margin-top: 12px;
+      }
+      #logo-line {
+        position: absolute;
+        right: 72px;
+        bottom: 48px;
+        font-size: 18px;
+        color: #475569;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="stage"
+      data-composition-id="selective-collective"
+      data-start="0"
+      data-duration="38"
+      data-width="1920"
+      data-height="1080"
+      data-fps="60"
+    >
+      <div id="camera">
+        <div class="bokeh bokeh-1"></div>
+        <div class="bokeh bokeh-2"></div>
+        <div class="bokeh bokeh-3"></div>
+        <div class="city"></div>
+
+        <div id="typography">
+          <h1 id="headline">
+            <span class="word">Going</span>
+            <span class="word">up?</span>
+          </h1>
+          <p id="subhead">I'll grab you on the way.</p>
+        </div>
+
+        <div id="scene-caption" class="clip" data-start="0" data-duration="38" data-track-index="1">
+          <h2 id="cap-title"></h2>
+          <p id="cap-body"></p>
+        </div>
+
+        <div id="tower-wrap">
+          <svg id="tower" viewBox="0 0 400 880" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="cyanGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="4" result="b" />
+                <feMerge>
+                  <feMergeNode in="b" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="magentaGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="5" result="b" />
+                <feMerge>
+                  <feMergeNode in="b" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="carGlow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="8" result="b" />
+                <feMerge>
+                  <feMergeNode in="b" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <linearGradient id="carGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#67e8f9" />
+                <stop offset="100%" stop-color="#06b6d4" />
+              </linearGradient>
+            </defs>
+
+            <!-- shaft -->
+            <rect x="248" y="40" width="64" height="800" class="shaft-glow" rx="4" />
+
+            <!-- floors 10 → 1 -->
+            <g id="floors"></g>
+
+            <path id="path-fcfs" d="" />
+            <path id="path-scan" d="" />
+
+            <g id="car" transform="translate(252, 752)">
+              <rect x="0" y="0" width="56" height="44" rx="8" fill="url(#carGrad)" />
+              <rect x="6" y="6" width="44" height="32" rx="4" fill="rgba(255,255,255,0.25)" />
+            </g>
+
+            <g class="call" data-floor="4" transform="translate(120, 560)">
+              <circle class="call-circle" cx="0" cy="0" r="22" />
+              <polygon class="call-arrow" points="-6,-14 6,-14 0,-22" />
+              <text class="call-num" x="0" y="6">4</text>
+            </g>
+            <g class="call" data-floor="7" transform="translate(120, 320)">
+              <circle class="call-circle" cx="0" cy="0" r="22" />
+              <polygon class="call-arrow" points="-6,-14 6,-14 0,-22" />
+              <text class="call-num" x="0" y="6">7</text>
+            </g>
+            <g class="call" data-floor="9" transform="translate(120, 200)">
+              <circle class="call-circle" cx="0" cy="0" r="22" />
+              <polygon class="call-arrow" points="-6,-14 6,-14 0,-22" />
+              <text class="call-num" x="0" y="6">9</text>
+            </g>
+          </svg>
+        </div>
+
+        <div id="stats">
+          <div class="stat-row">
+            <div class="stat-label">FCFS — mean wait</div>
+            <div class="stat-bar-bg">
+              <div id="bar-fcfs" class="stat-bar bar-fcfs">—</div>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label">Selective collective (SCAN) — mean wait</div>
+            <div class="stat-bar-bg">
+              <div id="bar-scan" class="stat-bar bar-scan">—</div>
+            </div>
+          </div>
+          <p id="fine-print"></p>
+        </div>
+        <div id="logo-line">HyperFrames · hall calls only · no destination dispatch</div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { simulate, DEMO_CALLS, formatSeconds, SIM } from './simulation.js'
+
+      const FLOOR_COUNT = SIM.floors
+      const floorY = (f) => 800 - (f - 1) * (760 / (FLOOR_COUNT - 1))
+
+      const floorsG = document.getElementById('floors')
+      for (let f = FLOOR_COUNT; f >= 1; f--) {
+        const y = floorY(f) - 28
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+        g.innerHTML = `
+          <rect x="40" y="${y}" width="200" height="56" class="glass-panel" rx="3"/>
+          <rect x="52" y="${y + 20}" width="40" height="8" class="office-hint" rx="1"/>
+          <rect x="100" y="${y + 20}" width="60" height="8" class="office-hint" rx="1"/>
+          <text x="24" y="${y + 36}" class="floor-label">${f}F</text>
+        `
+        floorsG.appendChild(g)
+      }
+
+      const fcfs = simulate(DEMO_CALLS, 'fcfs')
+      const scan = simulate(DEMO_CALLS, 'scan')
+      const maxMean = Math.max(fcfs.meanWait, scan.meanWait)
+
+      document.getElementById('bar-fcfs').textContent = formatSeconds(fcfs.meanWait)
+      document.getElementById('bar-scan').textContent = formatSeconds(scan.meanWait)
+      document.getElementById('fine-print').textContent =
+        `Same ${DEMO_CALLS.length} hall calls · ${SIM.travelPerFloor}s/floor · ${SIM.dwell}s dwell · car starts 1F`
+
+      const car = document.getElementById('car')
+      const calls = document.querySelectorAll('.call')
+      const pathFcfs = document.getElementById('path-fcfs')
+      const pathScan = document.getElementById('path-scan')
+      const y1 = floorY(1)
+      pathFcfs.setAttribute(
+        'd',
+        `M 280 ${y1} L 280 ${floorY(9)} L 280 ${floorY(4)} L 280 ${floorY(7)}`,
+      )
+      pathScan.setAttribute(
+        'd',
+        `M 280 ${y1} L 280 ${floorY(4)} L 280 ${floorY(7)} L 280 ${floorY(9)}`,
+      )
+      const capTitle = document.getElementById('cap-title')
+      const capBody = document.getElementById('cap-body')
+      const sceneCaption = document.getElementById('scene-caption')
+      const headline = document.querySelectorAll('#headline .word')
+      const subhead = document.getElementById('subhead')
+      const camera = document.getElementById('camera')
+      const stats = document.getElementById('stats')
+      const logo = document.getElementById('logo-line')
+      const typography = document.getElementById('typography')
+
+      function setCarFloor(f, overshoot = 0) {
+        const y = floorY(f) - 36 + overshoot
+        car.setAttribute('transform', `translate(252, ${y})`)
+      }
+
+      const tl = gsap.timeline({ paused: true })
+
+      // Scene 1 — hook
+      tl.to(headline, { opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: 'back.out(1.4)' }, 0.4)
+      tl.to(subhead, { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.1)
+      tl.fromTo(camera, { scale: 1 }, { scale: 1.04, duration: 5, ease: 'power1.inOut' }, 0)
+      tl.to('#tower-wrap', { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.2)
+      tl.to(car, { opacity: 1, duration: 0.5 }, 1.5)
+      setCarFloor(1)
+      tl.to(typography, { opacity: 0, duration: 0.6 }, 5.2)
+
+      // Scene 2 — FCFS
+      tl.add(() => {
+        capTitle.textContent = 'First-come-first-served'
+        capBody.textContent = 'Chases calls in arrival order — extra reversals.'
+      }, 6)
+      tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 6)
+      tl.to(calls, { opacity: 1, duration: 0.4, stagger: 0.15, ease: 'back.out(2)' }, 6.2)
+      tl.to(pathFcfs, { opacity: 0.9, duration: 0.6 }, 6.8)
+      tl.fromTo(
+        pathFcfs,
+        { strokeDashoffset: 400 },
+        { strokeDashoffset: 0, duration: 2.2, ease: 'power2.inOut' },
+        7,
+      )
+
+      const fcfsStops = [9, 4, 7]
+      let t = 7.2
+      let prev = 1
+      fcfsStops.forEach((f) => {
+        tl.to(
+          {},
+          {
+            duration: Math.abs(f - prev) * 0.35,
+            onUpdate: function () {
+              const p = this.progress()
+              const fl = prev + (f - prev) * p
+              setCarFloor(fl)
+            },
+            ease: 'power2.inOut',
+          },
+          t,
+        )
+        tl.to({}, { duration: 0.15, onComplete: () => setCarFloor(f, -4) }, t + Math.abs(f - prev) * 0.35)
+        tl.to({}, { duration: 0.15, onComplete: () => setCarFloor(f, 0) }, t + Math.abs(f - prev) * 0.35 + 0.15)
+        t += Math.abs(f - prev) * 0.35 + 0.35
+        prev = f
+      })
+
+      tl.to(sceneCaption, { opacity: 0, duration: 0.4 }, 13.5)
+      tl.to(pathFcfs, { opacity: 0, duration: 0.4 }, 13.5)
+
+      // Scene 3 — SCAN
+      tl.add(() => {
+        capTitle.textContent = 'Selective collective (SCAN)'
+        capBody.textContent = 'Every up call on the way up — then reverse.'
+        setCarFloor(1)
+      }, 14)
+      tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 14)
+      tl.to(pathScan, { opacity: 0.95, duration: 0.5 }, 14.2)
+      tl.fromTo(
+        pathScan,
+        { strokeDashoffset: 300 },
+        { strokeDashoffset: 0, duration: 3, ease: 'power2.inOut' },
+        14.5,
+      )
+      tl.fromTo(camera, { scale: 1.04 }, { scale: 1.08, duration: 4, ease: 'power2.inOut' }, 17)
+
+      const scanStops = [4, 7, 9]
+      t = 14.8
+      prev = 1
+      scanStops.forEach((f) => {
+        const dur = Math.abs(f - prev) * 0.45
+        tl.to(
+          {},
+          {
+            duration: dur,
+            onUpdate: function () {
+              const p = this.progress()
+              setCarFloor(prev + (f - prev) * p)
+            },
+            ease: 'power2.inOut',
+          },
+          t,
+        )
+        tl.to({}, { duration: 0.12, onComplete: () => setCarFloor(f, -5) }, t + dur)
+        tl.to({}, { duration: 0.18, onComplete: () => setCarFloor(f, 0), ease: 'back.out(2)' }, t + dur + 0.12)
+        t += dur + 0.35
+        prev = f
+      })
+
+      tl.to(sceneCaption, { opacity: 0, duration: 0.5 }, 27.5)
+      tl.to(pathScan, { opacity: 0, duration: 0.5 }, 27.5)
+      tl.to(calls, { opacity: 0.35, duration: 0.5 }, 27.5)
+
+      // Scene 4 — stats
+      tl.add(() => {
+        capTitle.textContent = 'Same calls · same speed · same dwell'
+        capBody.textContent = 'Mean passenger wait from discrete-event simulation.'
+      }, 28)
+      tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 28)
+      tl.to(stats, { opacity: 1, duration: 0.6 }, 28.3)
+      tl.to('#bar-fcfs', { width: `${(fcfs.meanWait / maxMean) * 100}%`, duration: 1.2, ease: 'power2.out' }, 29)
+      tl.to('#bar-scan', { width: `${(scan.meanWait / maxMean) * 100}%`, duration: 1.2, ease: 'power2.out' }, 29.4)
+      tl.to(logo, { opacity: 1, duration: 0.8 }, 34)
+      tl.fromTo(camera, { scale: 1.08 }, { scale: 1.02, duration: 3, ease: 'power2.inOut' }, 28)
+
+      window.__timelines = window.__timelines || {}
+      window.__timelines['selective-collective'] = tl
+      tl.seek(0)
+    </script>
+  </body>
+</html>
