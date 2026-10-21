@@ -63,11 +63,11 @@ export function initComposition() {
   }
 
   function setDoors(open, amount = 1) {
-    const spread = open ? 46 * amount : 0
+    const spread = open ? 92 * amount : 0
     doorL.style.transform = `translateX(${-spread}%)`
     doorR.style.transform = `translateX(${spread}%)`
-    doorL.style.opacity = open ? Math.max(0, 1 - amount * 0.85) : 1
-    doorR.style.opacity = open ? Math.max(0, 1 - amount * 0.85) : 1
+    doorL.style.opacity = open ? Math.max(0.15, 1 - amount * 0.9) : 1
+    doorR.style.opacity = open ? Math.max(0.15, 1 - amount * 0.9) : 1
   }
 
   function setCarFloor(f, overshoot = 0, doorsOpen = false, doorAmt = 1) {
@@ -208,18 +208,15 @@ export function initComposition() {
 
 export function validateCabPlacement(floor) {
   const car = document.getElementById('car')
-  const img = car?.querySelector('.cab-layer')
-  if (!car || !img) return { ok: false, error: 'missing #car or cab image' }
-  if (!img.complete || img.naturalWidth === 0) {
-    return { ok: false, error: 'cab PNG not loaded' }
-  }
+  const shell = car?.querySelector('.neon-cab-body')
+  if (!car || !shell) return { ok: false, error: 'missing #car or neon cab body' }
   const rect = car.getBoundingClientRect()
-  const imgRect = img.getBoundingClientRect()
+  const shellRect = shell.getBoundingClientRect()
   if (rect.width < 48 || rect.height < 48) {
     return { ok: false, error: `cab box too small: ${rect.width.toFixed(1)}×${rect.height.toFixed(1)}` }
   }
-  if (imgRect.width < 24 || imgRect.height < 24) {
-    return { ok: false, error: `cab image render too small: ${imgRect.width.toFixed(1)}×${imgRect.height.toFixed(1)}` }
+  if (shellRect.width < 40 || shellRect.height < 40) {
+    return { ok: false, error: `neon cab shell too small: ${shellRect.width.toFixed(1)}×${shellRect.height.toFixed(1)}` }
   }
   const cx = rect.left + rect.width / 2
   if (cx < LAYOUT.shaftLeft - 12 || cx > LAYOUT.shaftRight + 12) {
