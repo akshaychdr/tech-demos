@@ -1,6 +1,6 @@
 # elevator-selective-collective
 
-HyperFrames motion reel explaining **selective collective** elevator control (SCAN / LOOK): serve every hall call in the current direction, then reverse — contrasted with naive FCFS and closed with **simulated mean wait times** on the same call list.
+HyperFrames motion reel contrasting **down collective** (up-distributive / one hall button per landing) with **selective collective** (directional collective / LOOK): same passengers, same physics, with **simulated wait and journey times** from `composition/simulation.js`.
 
 Built on [HeyGen HyperFrames](https://github.com/heygen-com/hyperframes). Bookmark: [2112609040962359354](https://x.com/i/status/2112609040962359354).
 

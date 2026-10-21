@@ -2,7 +2,7 @@
 
 ## Goal
 
-Premium HyperFrames explainer on **selective collective** (directional collective / SCAN) hall-call dispatch vs naive FCFS, ending with honest mean-wait times from a discrete-event simulation.
+Premium HyperFrames explainer on **selective collective** (directional collective / LOOK) vs **down collective** (Barney / Harris), with car-call passengers and honest wait + journey times from `composition/simulation.js`.
 
 ## Phase 1 (current — owner review)
 
