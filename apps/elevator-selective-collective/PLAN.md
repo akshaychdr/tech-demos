@@ -13,11 +13,11 @@ Premium HyperFrames explainer on **selective collective** (directional collectiv
 - [x] Remove old traction cutaway visuals
 - [ ] **Wait** — no full 60&nbsp;fps render or Playwright app recording until stills approved
 
-## Phase 2 (after approval)
+## Phase 2 (done)
 
-- Final render 1920×1080 @ 60&nbsp;fps, ~38&nbsp;s, `looks` quality
-- Vite UI: call editor, re-run simulation, trigger render
-- PR validation video @ 1440×900
+- [x] HyperFrames render `out/elevator-selective-collective.mp4` (1920×1080 @ 60&nbsp;fps, ~38&nbsp;s)
+- [x] Vite viewer — full-frame iframe of `composition/`
+- [x] `bun run record:viewer` — 1920×1080 Playwright capture
 
 ## Stack
 
