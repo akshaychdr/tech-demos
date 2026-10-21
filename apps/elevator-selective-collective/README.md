@@ -4,21 +4,28 @@ HyperFrames motion reel contrasting **down collective** (up-distributive / one h
 
 Built on [HeyGen HyperFrames](https://github.com/heygen-com/hyperframes). Bookmark: [2112609040962359354](https://x.com/i/status/2112609040962359354).
 
-## Phase 1
-
-- Read **`STORYBOARD.md`** for scene timing and copy.
-- Composition: **`composition/index.html`** (art plate + masked cab PNGs, `composition/simulation.js`).
-- Art prep: **`bun run process:art`** (sources in `composition/art/source/`).
-- Key-frame stills: **`storyboard-stills/`** (1920×1080 PNGs from `hyperframes snapshot`).
+## Run
 
 ```bash
 cd apps/elevator-selective-collective
 bun install
 bun run test
-bun run snapshot:stills   # regenerate storyboard PNGs
-npx hyperframes preview composition
 ```
 
-## Phase 2 (not yet)
+| Task | Command |
+|------|---------|
+| Storyboard stills (with cab preflight) | `bun run snapshot:stills` |
+| Full reel MP4 (1920×1080 @ 60fps) | `bun run render:mp4` → `out/elevator-selective-collective.mp4` |
+| Vite viewer (iframe of composition) | `bun run dev` → http://localhost:5173 |
+| Record viewer window (1920×1080) | `bun run record:viewer` |
+| Art prep (plate / passengers) | `bun run process:art` |
+| Preview composition only | `npx hyperframes preview composition` |
 
-Full 60&nbsp;fps MP4 render + interactive app (see `PLAN.md`).
+See **`STORYBOARD.md`** for scene timing and simulation table.
+
+## Layout
+
+- **`composition/`** — HyperFrames HTML reel (art plate + neon CSS cab + GSAP timeline)
+- **`public/composition/`** — symlink for the Vite iframe viewer
+- **`storyboard-stills/`** — Phase 1 PNG keyframes
+- **`out/`** — rendered MP4 and PR recordings (gitignored)

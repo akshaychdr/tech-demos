@@ -12,6 +12,8 @@
     "test": "vitest run",
     "process:art": "python3 scripts/process-artwork.py",
     "snapshot:stills": "node scripts/snapshot-stills.mjs",
+    "render:mp4": "mkdir -p out public && npx hyperframes@0.8.181 render composition -o out/elevator-selective-collective.mp4 -f 60 -q looks && cp out/elevator-selective-collective.mp4 public/elevator-selective-collective.mp4",
+    "record:viewer": "node scripts/record-viewer.mjs",
     "record:artifacts": "node scripts/record-pr-artifacts.mjs"
   },
   "dependencies": {

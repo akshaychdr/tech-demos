@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 renders
+out
 .artifacts
 composition/.hyperframes
 dist
