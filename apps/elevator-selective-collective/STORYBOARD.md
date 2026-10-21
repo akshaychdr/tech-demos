@@ -14,7 +14,18 @@ Fixed scenario (same call list for both policies):
 (FCFS serves registration order 9 → 4 → 7; SCAN serves 4 → 7 → 9 while ascending.)
 
 Car starts at **1F**, idle, doors closed. **No destination dispatch.**  
-Simulation: 1.0 s per floor travel, 1.5 s dwell per stop (labeled on-screen).
+Simulation: **1.0 s** per floor travel, **1.5 s** dwell after each stop (doors).
+
+**Wait definition:** time from call registration until the **car arrives** at that floor (dwell **not** included in wait).
+
+### Per-passenger arrivals (seconds)
+
+| Floor | FCFS (9→4→7) | SCAN (4→7→9) |
+|-------|--------------|--------------|
+| 4     | 14.5         | 3.0          |
+| 7     | 19.0         | 7.5          |
+| 9     | 8.0          | 11.0         |
+| **Mean wait** | **13.8 s** | **7.2 s** |
 
 ---
 
@@ -34,7 +45,7 @@ Simulation: 1.0 s per floor travel, 1.5 s dwell per stop (labeled on-screen).
 
 ## Scene 2 — Naive FCFS (0:06–0:14, 8 s)
 
-**Idea:** Same three up-calls; car chases registration order (4 → 7 → 9) with wasteful reversals.
+**Idea:** Same three up-calls; car chases registration order (**9 → 4 → 7**) with wasteful reversals.
 
 | | |
 |---|---|
