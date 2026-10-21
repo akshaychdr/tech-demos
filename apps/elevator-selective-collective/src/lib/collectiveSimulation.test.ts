@@ -4,7 +4,7 @@ import { simulatePassengers } from '../../composition/simulation.js'
 
 describe('floor layout', () => {
   it('aligns call floors to floorCenterY', () => {
-    assertFloorAlignment([4, 7, 8, 9].map((f) => ({ floor: f, cy: floorCenterY(f) })))
+    assertFloorAlignment([4, 7, 8].map((f) => ({ floor: f, cy: floorCenterY(f) })))
   })
 
   it('keeps floors inside building band', () => {

@@ -4,7 +4,7 @@
  */
 
 export const SIM = {
-  floors: 10,
+  floors: 9,
   travelPerFloor: 1.0,
   dwell: 1.5,
 }

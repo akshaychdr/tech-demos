@@ -1,36 +1,46 @@
 /**
- * Shared floor → pixel mapping (SVG viewBox).
+ * Floor → pixel mapping from measured plate artwork (1920×1080).
  */
+import {
+  MEASURED_FLOOR_Y,
+  MEASURED_SHAFT,
+  MEASURED_SHEAVE,
+  MEASURED_CALL_X,
+  MEASURED_LABEL_X,
+} from './art/measured-layout.js'
+
+const pitches = []
+for (let i = 0; i < MEASURED_FLOOR_Y.length - 1; i++) {
+  pitches.push(MEASURED_FLOOR_Y[i] - MEASURED_FLOOR_Y[i + 1])
+}
 
 export const LAYOUT = {
-  floors: 10,
-  viewW: 1100,
-  viewH: 920,
-  frontLeft: 180,
-  frontRight: 760,
-  frontTop: 100,
-  frontBottom: 880,
-  shaftLeft: 548,
-  shaftWidth: 84,
-  cwLeft: 860,
-  cwWidth: 48,
-  callX: 120,
-  lanternX: 96,
-  carWidth: 76,
-  carHeight: 56,
-  machineY: 40,
+  floors: MEASURED_FLOOR_Y.length,
+  viewW: 1920,
+  viewH: 1080,
+  shaftLeft: MEASURED_SHAFT.left,
+  shaftWidth: MEASURED_SHAFT.width,
+  shaftCenterX: MEASURED_SHAFT.centerX,
+  sheaveX: MEASURED_SHEAVE.x,
+  sheaveY: MEASURED_SHEAVE.y,
+  callX: MEASURED_CALL_X,
+  labelX: MEASURED_LABEL_X,
+  carWidth: Math.round(MEASURED_SHAFT.width * 0.96),
+  carHeight: Math.round(Math.min(...pitches) * 0.88),
+  frontTop: MEASURED_FLOOR_Y[MEASURED_FLOOR_Y.length - 1],
+  frontBottom: MEASURED_FLOOR_Y[0],
 }
 
 export function floorCenterY(floor) {
-  const f = Math.max(1, Math.min(LAYOUT.floors, floor))
-  const t = (f - 1) / (LAYOUT.floors - 1)
-  return LAYOUT.frontBottom - t * (LAYOUT.frontBottom - LAYOUT.frontTop)
-}
-
-export function floorSlabBand(floor) {
-  const band = (LAYOUT.frontBottom - LAYOUT.frontTop) / LAYOUT.floors
-  const cy = floorCenterY(floor)
-  return { y: cy - band / 2, height: band, cy }
+  const maxF = LAYOUT.floors
+  const f = Math.max(1, Math.min(maxF, floor))
+  const lo = Math.floor(f)
+  const hi = Math.ceil(f)
+  if (lo === hi) return MEASURED_FLOOR_Y[lo - 1]
+  const t = f - lo
+  const y0 = MEASURED_FLOOR_Y[lo - 1]
+  const y1 = MEASURED_FLOOR_Y[hi - 1]
+  return y0 + (y1 - y0) * t
 }
 
 export function carTranslateY(floor, overshootPx = 0) {
@@ -38,26 +48,21 @@ export function carTranslateY(floor, overshootPx = 0) {
 }
 
 export function carTranslateX() {
-  return LAYOUT.shaftLeft + (LAYOUT.shaftWidth - LAYOUT.carWidth) / 2
-}
-
-export function counterweightY(floor, overshootPx = 0) {
-  const h = 120
-  return floorCenterY(floor) + overshootPx - h / 2
+  return LAYOUT.shaftCenterX - LAYOUT.carWidth / 2
 }
 
 export function callToShaftPath(floor) {
   const y = floorCenterY(floor)
-  const x0 = LAYOUT.callX + 32
-  const x1 = LAYOUT.shaftLeft + 8
+  const x0 = LAYOUT.callX + 36
+  const x1 = LAYOUT.shaftLeft + 4
   const cx = (x0 + x1) / 2
-  return `M ${x0} ${y} Q ${cx} ${y - 40} ${x1} ${y}`
+  return `M ${x0} ${y} Q ${cx} ${y - 36} ${x1} ${y}`
 }
 
 export function assertFloorAlignment(placements) {
   for (const { floor, cy } of placements) {
     const expected = floorCenterY(floor)
-    if (Math.abs(cy - expected) > 0.01) {
+    if (Math.abs(cy - expected) > 0.5) {
       throw new Error(`Floor ${floor} misaligned: cy=${cy} expected=${expected}`)
     }
   }

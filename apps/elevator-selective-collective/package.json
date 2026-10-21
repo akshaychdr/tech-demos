@@ -10,6 +10,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
+    "process:art": "python3 scripts/process-artwork.py",
     "snapshot:stills": "npx hyperframes@0.8.181 snapshot composition --at 3,10,20,34 -o storyboard-stills",
     "record:artifacts": "node scripts/record-pr-artifacts.mjs"
   },

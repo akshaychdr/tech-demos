@@ -7,7 +7,8 @@ Built on [HeyGen HyperFrames](https://github.com/heygen-com/hyperframes). Bookma
 ## Phase 1
 
 - Read **`STORYBOARD.md`** for scene timing and copy.
-- Composition: **`composition/index.html`** (+ `composition/simulation.js`).
+- Composition: **`composition/index.html`** (art plate + masked cab PNGs, `composition/simulation.js`).
+- Art prep: **`bun run process:art`** (sources in `composition/art/source/`).
 - Key-frame stills: **`storyboard-stills/`** (1920×1080 PNGs from `hyperframes snapshot`).
 
 ```bash

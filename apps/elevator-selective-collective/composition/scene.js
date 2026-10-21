@@ -1,10 +1,8 @@
 import {
   LAYOUT,
   floorCenterY,
-  floorSlabBand,
   carTranslateY,
   carTranslateX,
-  counterweightY,
   callToShaftPath,
   assertFloorAlignment,
 } from './layout.js'
@@ -13,11 +11,19 @@ import { simulatePassengers, formatSeconds, SIM, WAIT_DEFINITION } from './simul
 const CALL_FLOORS = [4, 7, 8]
 
 export function initComposition() {
-  const shaftX = LAYOUT.shaftLeft + LAYOUT.shaftWidth / 2
+  const car = document.getElementById('car')
+  const doorL = car.querySelector('.door-left')
+  const doorR = car.querySelector('.door-right')
+  const indicator = document.getElementById('car-indicator')
+  const riderLobby = document.getElementById('rider-lobby')
 
-  buildSkyline()
-  buildBuilding()
+  car.style.width = `${LAYOUT.carWidth}px`
+  car.style.height = `${LAYOUT.carHeight}px`
+
+  buildFloorLabels()
+  buildLandings()
   buildCalls()
+  placeLandingWaiters()
 
   const down = simulatePassengers('down-collective')
   const sel = simulatePassengers('selective-collective')
@@ -29,45 +35,52 @@ export function initComposition() {
   document.getElementById('val-sel-journey').textContent = formatSeconds(sel.meanJourney)
   document.getElementById('wait-footnote').textContent = `${WAIT_DEFINITION} ${SIM.travelPerFloor}s/floor, ${SIM.dwell}s dwell, car starts 1F.`
 
-  const car = document.getElementById('car')
-  const counterweight = document.getElementById('counterweight')
-  const doors = document.querySelectorAll('.door-panel')
-  const waiter4 = document.getElementById('waiter-4')
-  const callPaths = document.querySelectorAll('.call-path')
-  const lanterns = document.querySelectorAll('.hall-lantern')
+  const shaftX = LAYOUT.shaftCenterX
   const pathDown = document.getElementById('path-down')
   const pathSel = document.getElementById('path-selective')
-
-  pathDown.setAttribute(
-    'd',
-    `M ${shaftX} ${floorCenterY(1)} L ${shaftX} ${floorCenterY(9)}`,
-  )
+  pathDown.setAttribute('d', `M ${shaftX} ${floorCenterY(1)} L ${shaftX} ${floorCenterY(9)}`)
   pathSel.setAttribute(
     'd',
     `M ${shaftX} ${floorCenterY(1)} L ${shaftX} ${floorCenterY(4)} L ${shaftX} ${floorCenterY(7)} L ${shaftX} ${floorCenterY(9)} L ${shaftX} ${floorCenterY(8)} L ${shaftX} ${floorCenterY(1)}`,
   )
 
+  const waiter4 = document.getElementById('waiter-4')
+  const callPaths = document.querySelectorAll('.call-path')
+  const callBadges = document.querySelectorAll('.call-badge')
+  const lanterns = document.querySelectorAll('.hall-lantern')
+
+  let prevF = 1
+
   function setRopes(carFloor) {
     const cy = floorCenterY(carFloor)
-    const rope = document.getElementById('ropes')
+    const carTop = carTranslateY(carFloor)
+    const rope = document.getElementById('rope')
     rope.setAttribute(
       'd',
-      `M ${shaftX} ${LAYOUT.machineY + 30} L ${shaftX} ${cy} M ${shaftX} ${LAYOUT.machineY + 30} L ${LAYOUT.cwLeft + 24} ${cy}`,
+      `M ${LAYOUT.sheaveX} ${LAYOUT.sheaveY + 28} L ${LAYOUT.sheaveX} ${carTop + 6}`,
     )
   }
 
-  function setCarFloor(f, overshoot = 0, doorsOpen = false) {
+  function setDoors(open, amount = 1) {
+    const spread = open ? 46 * amount : 0
+    doorL.style.transform = `translateX(${-spread}%)`
+    doorR.style.transform = `translateX(${spread}%)`
+    doorL.style.opacity = open ? Math.max(0, 1 - amount * 0.85) : 1
+    doorR.style.opacity = open ? Math.max(0, 1 - amount * 0.85) : 1
+  }
+
+  function setCarFloor(f, overshoot = 0, doorsOpen = false, doorAmt = 1) {
     const x = carTranslateX()
     const y = carTranslateY(f, overshoot)
-    car.setAttribute('transform', `translate(${x}, ${y})`)
-    counterweight.setAttribute(
-      'transform',
-      `translate(${LAYOUT.cwLeft}, ${counterweightY(11 - f, -overshoot)})`,
-    )
+    car.style.transform = `translate(${x}px, ${y}px)`
     setRopes(f)
-    const spread = doorsOpen ? 14 : 0
-    doors[0].setAttribute('transform', `translate(${spread}, 0)`)
-    doors[1].setAttribute('transform', `translate(${-spread}, 0)`)
+    setDoors(doorsOpen, doorAmt)
+
+    const rounded = Math.max(1, Math.min(LAYOUT.floors, Math.round(f)))
+    const dir = f >= prevF ? 'up' : 'down'
+    prevF = f
+    const arrow = dir === 'up' ? '▲' : '▼'
+    indicator.textContent = `${arrow} ${rounded}`
   }
 
   const capTitle = document.getElementById('cap-title')
@@ -79,39 +92,41 @@ export function initComposition() {
   const stats = document.getElementById('stats')
   const logo = document.getElementById('logo-line')
   const typography = document.getElementById('typography')
-  const buildingWrap = document.getElementById('building-wrap')
+  const plateWrap = document.getElementById('plate-wrap')
 
   gsap.set(headline, { y: 28, opacity: 0 })
-  setCarFloor(1)
+  gsap.set(riderLobby, { opacity: 1 })
+  setCarFloor(1, 0, true, 1)
 
   const tl = gsap.timeline({ paused: true })
 
   tl.to(headline, { opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: 'back.out(1.4)' }, 0.4)
   tl.to(subhead, { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.1)
-  tl.fromTo(camera, { scale: 1 }, { scale: 1.03, duration: 5, ease: 'power1.inOut' }, 0)
-  tl.to(buildingWrap, { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.2)
+  tl.fromTo(camera, { scale: 1, x: 0, y: 0 }, { scale: 1.04, x: -12, y: 6, duration: 5, ease: 'power1.inOut' }, 0)
+  tl.to(plateWrap, { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.2)
   tl.to(car, { opacity: 1, duration: 0.5 }, 1.5)
+  tl.to(callBadges, { opacity: 1, duration: 0.6, stagger: 0.08 }, 2)
+  tl.to(['#waiter-4', '#waiter-7', '#waiter-8'], { opacity: 1, duration: 0.5, stagger: 0.06 }, 2.2)
   tl.to(typography, { opacity: 0, duration: 0.6 }, 5.2)
 
-  // Scene 2 — down collective
   tl.add(() => {
     capTitle.textContent = 'Down collective'
     capBody.textContent =
       'One hall button per landing — up travel serves car calls only. The 4F rider is passed on the way up.'
-    setCarFloor(1)
+    setCarFloor(1, 0, true, 1)
     gsap.set(waiter4, { opacity: 1 })
   }, 6)
   tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 6)
-  tl.to(callPaths, { opacity: 0.9, duration: 0.5 }, 6.2)
+  tl.to(callPaths, { opacity: 0.92, duration: 0.5 }, 6.2)
   tl.to(lanterns, { opacity: 1, duration: 0.4 }, 6.2)
-  tl.to(pathDown, { opacity: 0.85, duration: 0.5 }, 6.5)
+  tl.to(pathDown, { opacity: 0.88, duration: 0.5 }, 6.5)
   tl.to(
     {},
     {
       duration: 2.8,
       onUpdate() {
         const f = 1 + this.progress() * 8
-        setCarFloor(f)
+        setCarFloor(f, 0, false, 0)
       },
       ease: 'power2.inOut',
     },
@@ -120,12 +135,11 @@ export function initComposition() {
   tl.to(sceneCaption, { opacity: 0, duration: 0.4 }, 13.5)
   tl.to(pathDown, { opacity: 0, duration: 0.4 }, 13.5)
 
-  // Scene 3 — selective collective (LOOK)
   tl.add(() => {
     capTitle.textContent = 'Selective collective (LOOK)'
     capBody.textContent =
       'Up and down hall buttons — landing calls in the direction of travel, then reverse.'
-    setCarFloor(1, 0, false)
+    setCarFloor(1, 0, true, 1)
   }, 14)
   tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 14)
   tl.to(pathSel, { opacity: 0.9, duration: 0.5 }, 14.2)
@@ -135,13 +149,13 @@ export function initComposition() {
       duration: 1.6,
       onUpdate() {
         const f = 1 + this.progress() * 3
-        setCarFloor(f)
+        setCarFloor(f, 0, false, 0)
       },
       ease: 'power2.inOut',
     },
     14.8,
   )
-  tl.add(() => setCarFloor(4, 0, true), 16.4)
+  tl.add(() => setCarFloor(4, 0, true, 1), 16.4)
   tl.to(waiter4, { opacity: 0, duration: 0.4 }, 16.4)
   tl.to(
     {},
@@ -149,79 +163,70 @@ export function initComposition() {
       duration: 2.2,
       onUpdate() {
         const f = 4 + this.progress() * 4.5
-        setCarFloor(f, 0, false)
+        setCarFloor(f, 0, false, 0)
       },
       ease: 'power2.inOut',
     },
     17.2,
   )
-  tl.fromTo(camera, { scale: 1.03 }, { scale: 1.05, duration: 4, ease: 'power2.inOut' }, 17)
+  tl.fromTo(camera, { scale: 1.04 }, { scale: 1.06, x: -18, y: 8, duration: 4, ease: 'power2.inOut' }, 17)
 
   tl.to(sceneCaption, { opacity: 0, duration: 0.5 }, 27.5)
   tl.to(pathSel, { opacity: 0, duration: 0.5 }, 27.5)
 
-  // Scene 4 — stats
   tl.add(() => {
     capTitle.textContent = ''
     capBody.textContent = ''
   }, 28)
   tl.to(sceneCaption, { opacity: 0, duration: 0.3 }, 28)
-  tl.add(() => buildingWrap.classList.add('dimmed'), 28)
-  tl.to(buildingWrap, { opacity: 0.22, duration: 0.8 }, 28)
+  tl.add(() => plateWrap.classList.add('dimmed'), 28)
+  tl.to(plateWrap, { opacity: 0.35, duration: 0.8 }, 28)
   tl.to(stats, { opacity: 1, duration: 0.6 }, 28.2)
   tl.to('#bar-down-wait', { width: `${(down.meanWait / maxWait) * 100}%`, duration: 1 }, 29)
   tl.to('#bar-sel-wait', { width: `${(sel.meanWait / maxWait) * 100}%`, duration: 1 }, 29.3)
   tl.to(logo, { opacity: 1, duration: 0.8 }, 34)
-  tl.fromTo(camera, { scale: 1.05 }, { scale: 1, duration: 3, ease: 'power2.inOut' }, 28)
+  tl.fromTo(camera, { scale: 1.06 }, { scale: 1, x: 0, y: 0, duration: 3, ease: 'power2.inOut' }, 28)
 
   window.__timelines = window.__timelines || {}
   window.__timelines['selective-collective'] = tl
   tl.seek(0)
 }
 
-function buildSkyline() {
-  const svg = document.getElementById('city-skyline')
-  svg.innerHTML = `
-    <path fill="#0f1e36" d="M0 400 L0 280 L40 200 L70 260 L110 180 L150 240 L190 160 L230 220 L280 140 L320 210 L360 170 L400 230 L450 150 L500 200 L560 120 L620 190 L680 130 L740 200 L800 160 L800 400 Z"/>
-    <path fill="#142a4a" opacity="0.6" d="M0 400 L0 300 L60 250 L120 300 L200 240 L280 310 L360 260 L440 320 L520 250 L600 300 L700 270 L800 310 L800 400 Z"/>
-  `
+function placeLandingWaiters() {
+  for (const el of document.querySelectorAll('.landing-waiter')) {
+    const f = Number(el.dataset.floor)
+    const x = LAYOUT.shaftLeft - 36
+    const y = floorCenterY(f)
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+  }
 }
 
-function buildBuilding() {
-  const floorsG = document.getElementById('floors')
-  const landingsG = document.getElementById('landings')
-  for (let f = LAYOUT.floors; f >= 1; f--) {
-    const { y, height, cy } = floorSlabBand(f)
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-    g.innerHTML = `
-      <rect x="${LAYOUT.frontLeft}" y="${y}" width="${LAYOUT.frontRight - LAYOUT.frontLeft}" height="${height}" class="glass-slab"/>
-      <rect x="${LAYOUT.frontLeft + 20}" y="${cy - 8}" width="55" height="5" class="desk"/>
-      <rect x="${LAYOUT.frontLeft + 90}" y="${cy - 8}" width="80" height="5" class="desk"/>
-      <rect x="${LAYOUT.frontLeft + 200}" y="${cy - 12}" width="14" height="16" class="plant"/>
-      <rect x="${LAYOUT.frontLeft + 280}" y="${cy - 3}" width="120" height="6" class="interior-warm"/>
-      <rect x="${LAYOUT.frontLeft + 420}" y="${cy - 5}" width="40" height="8" class="interior-warm"/>
-      <text x="${LAYOUT.frontLeft - 16}" y="${cy + 5}" text-anchor="end" class="floor-label">${f}F</text>
-    `
-    floorsG.appendChild(g)
+function buildFloorLabels() {
+  const g = document.getElementById('floor-labels')
+  for (let f = 1; f <= LAYOUT.floors; f++) {
+    const cy = floorCenterY(f)
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    t.setAttribute('x', LAYOUT.labelX)
+    t.setAttribute('y', cy + 5)
+    t.setAttribute('text-anchor', 'end')
+    t.setAttribute('class', 'floor-label')
+    t.textContent = `${f}F`
+    g.appendChild(t)
+  }
+}
 
+function buildLandings() {
+  const landingsG = document.getElementById('landings')
+  for (let f = 1; f <= LAYOUT.floors; f++) {
+    const cy = floorCenterY(f)
     const lg = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-    lg.setAttribute('class', 'landing-fixtures')
-    lg.setAttribute('transform', `translate(${LAYOUT.lanternX}, ${cy})`)
+    lg.setAttribute('transform', `translate(${LAYOUT.shaftLeft - 18}, ${cy})`)
     lg.innerHTML = `
-      <rect class="hall-btn" x="0" y="-8" width="10" height="16" rx="2"/>
-      <circle class="hall-lantern" cx="18" cy="0" r="6" opacity="0"/>
+      <rect class="hall-btn" x="-6" y="-7" width="10" height="14" rx="2"/>
+      <circle class="hall-lantern" cx="10" cy="0" r="5" opacity="0"/>
     `
     landingsG.appendChild(lg)
-  }
-
-  for (let x = LAYOUT.frontLeft + 30; x < LAYOUT.frontRight; x += 48) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
-    line.setAttribute('x1', x)
-    line.setAttribute('x2', x)
-    line.setAttribute('y1', LAYOUT.frontTop)
-    line.setAttribute('y2', LAYOUT.frontBottom)
-    line.setAttribute('class', 'mullion')
-    document.getElementById('mullions').appendChild(line)
   }
 }
 

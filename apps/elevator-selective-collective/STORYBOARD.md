@@ -11,7 +11,8 @@ Terminology: Gina Barney, *The History of Lift Traffic Control*; Harris elevator
 | Interfloor rider | 4F → 7F (up) | Waiting at 4F |
 | Down rider | 8F → 1F | Down request at 8F |
 
-Physics: **1.0 s/floor**, **1.5 s dwell** after each stop, car starts **1F**.
+Physics: **1.0 s/floor**, **1.5 s dwell** after each stop, car starts **1F**.  
+**9 visible floors** on the art plate (`composition/art/measured-layout.js`); cab/passenger PNGs from `bun run process:art`.
 
 **Wait** = registration → car arrives at your floor (excludes dwell).  
 **Journey** = registration → arrival at destination (includes dwell at stops).

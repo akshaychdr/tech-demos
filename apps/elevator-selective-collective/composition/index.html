@@ -17,13 +17,74 @@
       }
       #stage {
         position: relative; width: 1920px; height: 1080px; overflow: hidden;
-        background: radial-gradient(ellipse 85% 75% at 22% 55%, #0c1a33 0%, #040810 72%);
       }
-      #camera { position: absolute; inset: 0; transform-origin: 68% 50%; }
-      .city-skyline {
-        position: absolute; left: 0; bottom: 0; width: 42%; height: 42%;
-        opacity: 0.55; pointer-events: none;
+      #camera { position: absolute; inset: 0; transform-origin: 57% 48%; }
+      #plate-wrap {
+        position: absolute; inset: 0;
+        opacity: 0;
+        transition: filter 0.6s ease;
       }
+      #plate-wrap.dimmed { filter: saturate(0.4) brightness(0.5); }
+      #plate {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+      }
+      #overlay {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        pointer-events: none;
+      }
+      .route-path { fill: none; stroke-width: 3; stroke-dasharray: 6 8; opacity: 0; }
+      .route-down { stroke: #fb923c; filter: url(#orangeGlow); }
+      .route-sel { stroke: #22d3ee; filter: url(#cyanGlow); }
+      .call-path { fill: none; stroke: #f472b6; stroke-width: 2.5; stroke-dasharray: 4 6; opacity: 0; filter: url(#magentaGlow); }
+      .call-circle { fill: #ec4899; filter: url(#magentaGlow); }
+      .call-num, .call-dir { fill: #fff; font-size: 14px; font-weight: 700; text-anchor: middle; }
+      .floor-label { fill: #e2e8f0; font-size: 15px; font-weight: 600; text-shadow: 0 0 12px rgba(0,0,0,0.9); }
+      .hall-btn { fill: #1e293b; stroke: #94a3b8; stroke-width: 1; }
+      .hall-lantern { fill: #f472b6; filter: url(#magentaGlow); }
+      .rope { stroke: #cbd5e1; stroke-width: 2.2; fill: none; opacity: 0.85; filter: url(#ropeGlow); }
+      #car {
+        position: absolute; left: 0; top: 0;
+        opacity: 0;
+        filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.45));
+        overflow: hidden;
+      }
+      #car .cab-layer {
+        position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+        object-fit: cover; object-position: center 62%;
+        pointer-events: none;
+      }
+      #car .door {
+        position: absolute; top: 0; height: 100%; width: 50%;
+        object-fit: cover; object-position: center 62%;
+        transition: transform 0.05s linear;
+      }
+      #car .door-left { left: 0; transform-origin: left center; }
+      #car .door-right { right: 0; left: auto; transform-origin: right center; }
+      #car-indicator {
+        position: absolute; left: 50%; top: 8%;
+        transform: translateX(-50%);
+        min-width: 42px; padding: 3px 8px;
+        background: rgba(2, 8, 18, 0.92);
+        border: 1px solid rgba(34, 211, 238, 0.85);
+        border-radius: 4px;
+        color: #67e8f9; font-size: 13px; font-weight: 700;
+        text-align: center; letter-spacing: 0.04em;
+        box-shadow: 0 0 14px rgba(34, 211, 238, 0.35);
+        z-index: 5;
+      }
+      .landing-waiter {
+        position: absolute;
+        opacity: 0;
+        filter: drop-shadow(0 0 10px rgba(244, 114, 182, 0.55));
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .landing-waiter img { height: 72px; width: auto; display: block; }
+      .in-car-rider {
+        position: absolute; bottom: 18%; opacity: 0;
+        filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.4));
+      }
+      .in-car-rider img { height: 52px; width: auto; }
       .left-panel {
         position: absolute; left: 96px; top: 0; width: 700px; height: 100%;
         z-index: 30; pointer-events: none;
@@ -37,56 +98,21 @@
       #subhead { margin-top: 22px; font-size: 32px; font-weight: 300; color: #cbd5e1; opacity: 0; }
       #scene-caption {
         position: absolute; left: 0; bottom: 96px; width: 100%; max-width: 660px; opacity: 0;
-        padding: 0; /* stays inside 96px panel margin */
       }
       #scene-caption h2 {
         font-size: 36px; font-weight: 600; color: #f1f5f9; margin-bottom: 10px; line-height: 1.15;
+        text-shadow: 0 2px 24px rgba(0,0,0,0.85);
       }
-      #scene-caption p { font-size: 23px; color: #94a3b8; line-height: 1.45; max-width: 620px; }
-      #building-wrap {
-        position: absolute; left: 38%; top: 24px; width: 60%; height: 1020px;
-        opacity: 0; filter: drop-shadow(0 32px 100px rgba(0, 0, 0, 0.8));
+      #scene-caption p {
+        font-size: 23px; color: #cbd5e1; line-height: 1.45; max-width: 620px;
+        text-shadow: 0 2px 20px rgba(0,0,0,0.9);
       }
-      #building-wrap.dimmed { filter: saturate(0.45) brightness(0.55); }
-      #building { width: 100%; height: 100%; }
-      .glass-slab { fill: rgba(14, 32, 58, 0.78); stroke: rgba(120, 160, 200, 0.35); stroke-width: 1; }
-      .mullion { stroke: rgba(140, 180, 220, 0.15); stroke-width: 1; }
-      .desk { fill: rgba(148, 163, 184, 0.22); }
-      .plant { fill: rgba(74, 222, 128, 0.2); }
-      .interior-warm { fill: rgba(251, 191, 36, 0.12); }
-      .side-face { fill: rgba(6, 14, 28, 0.9); stroke: rgba(80, 110, 150, 0.3); }
-      .roof-cap { fill: rgba(18, 38, 68, 0.95); }
-      .machine { fill: #334155; stroke: #64748b; }
-      .sheave { fill: #475569; stroke: #cbd5e1; stroke-width: 2; }
-      .shaft { fill: rgba(6, 182, 212, 0.1); stroke: rgba(34, 211, 238, 0.9); stroke-width: 2.5; filter: url(#cyanGlow); }
-      .cw-shaft { fill: rgba(30, 41, 59, 0.5); stroke: rgba(100, 116, 139, 0.5); }
-      .cw-block { fill: #475569; stroke: #94a3b8; filter: url(#cwGlow); }
-      .rope { stroke: #94a3b8; stroke-width: 2; fill: none; opacity: 0.7; }
-      .floor-label { fill: #cbd5e1; font-size: 15px; font-weight: 600; }
-      .route-path { fill: none; stroke-width: 3; stroke-dasharray: 6 8; opacity: 0; }
-      .route-down { stroke: #fb923c; filter: url(#orangeGlow); }
-      .route-sel { stroke: #22d3ee; filter: url(#cyanGlow); }
-      .call-path { fill: none; stroke: #f472b6; stroke-width: 2.5; stroke-dasharray: 4 6; opacity: 0; filter: url(#magentaGlow); }
-      .call-circle { fill: #ec4899; filter: url(#magentaGlow); }
-      .call-num, .call-dir { fill: #fff; font-size: 14px; font-weight: 700; text-anchor: middle; }
-      .hall-btn { fill: #1e293b; stroke: #64748b; }
-      .hall-lantern { fill: #f472b6; filter: url(#magentaGlow); }
-      #car { opacity: 0; filter: url(#carGlow); }
-      .car-shell { fill: rgba(15, 23, 42, 0.85); stroke: #67e8f9; stroke-width: 3; }
-      .car-ceiling { fill: rgba(251, 191, 36, 0.35); }
-      .car-rail { stroke: #cbd5e1; stroke-width: 2; fill: none; }
-      .car-passenger { fill: rgba(15, 23, 42, 0.9); }
-      .door-panel { fill: rgba(30, 41, 59, 0.95); stroke: #94a3b8; stroke-width: 1.5; }
-      .floor-indicator { fill: #0f172a; stroke: #22d3ee; }
-      .indicator-arrow { fill: #67e8f9; font-size: 12px; text-anchor: middle; }
-      .crosshead { fill: #64748b; stroke: #94a3b8; }
-      .waiter { opacity: 0; }
-      .waiter-body { fill: rgba(15, 23, 42, 0.85); }
       #stats {
         position: absolute; left: 0; top: 160px; width: 100%; max-width: 660px;
         opacity: 0; z-index: 40;
-        background: rgba(8, 12, 22, 0.88); border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(8, 12, 22, 0.9); border: 1px solid rgba(148, 163, 184, 0.25);
         border-radius: 16px; padding: 28px 32px;
+        box-shadow: 0 24px 80px rgba(0,0,0,0.55);
       }
       #stats h2 { font-size: 32px; color: #f1f5f9; margin-bottom: 8px; }
       #stats .lead { font-size: 18px; color: #94a3b8; margin-bottom: 24px; }
@@ -101,10 +127,12 @@
       .bar-sel { background: linear-gradient(90deg, #06b6d4, #67e8f9); }
       #wait-footnote {
         margin-top: 16px; font-size: 14px; color: #94a3b8; line-height: 1.5;
-        background: rgba(2, 6, 14, 0.9); padding: 12px 14px; border-radius: 8px;
-        border: 1px solid rgba(71, 85, 105, 0.4);
+        background: rgba(2, 6, 14, 0.95); padding: 12px 14px; border-radius: 8px;
+        border: 1px solid rgba(71, 85, 105, 0.45);
       }
-      #logo-line { position: absolute; left: 0; bottom: 48px; font-size: 16px; color: #475569; opacity: 0; }
+      #logo-line { position: absolute; left: 0; bottom: 48px; font-size: 16px; color: #64748b; opacity: 0; }
+      .call-badge { opacity: 0; }
+      .call-badge.lit { opacity: 1; }
     </style>
   </head>
   <body>
@@ -118,7 +146,45 @@
       data-fps="60"
     >
       <div id="camera">
-        <svg id="city-skyline" class="city-skyline" viewBox="0 0 800 400" preserveAspectRatio="xMinYMax slice"></svg>
+        <div id="plate-wrap">
+          <img id="plate" src="art/processed/plate-tower-1080p.jpg" alt="" width="1920" height="1080" />
+        </div>
+
+        <svg id="overlay" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="cyanGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="magentaGlow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="orangeGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="ropeGlow"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <path id="rope" class="rope" d=""/>
+          <g id="floor-labels"></g>
+          <g id="landings"></g>
+          <g id="call-paths"></g>
+          <path id="path-down" class="route-path route-down"/>
+          <path id="path-selective" class="route-path route-sel"/>
+          <g id="calls"></g>
+        </svg>
+
+        <div id="car">
+          <img class="cab-layer" src="art/processed/cab-open.png" alt="" />
+          <img class="door door-left" src="art/processed/door-left.png" alt="" />
+          <img class="door door-right" src="art/processed/door-right.png" alt="" />
+          <div id="car-indicator">▲ 1</div>
+          <div class="in-car-rider" id="rider-lobby" style="left: 22%">
+            <img src="art/processed/passenger-1.png" alt="" />
+          </div>
+        </div>
+
+        <div class="landing-waiter" id="waiter-4" data-floor="4">
+          <img src="art/processed/passenger-2.png" alt="" />
+        </div>
+        <div class="landing-waiter" id="waiter-7" data-floor="7">
+          <img src="art/processed/passenger-3.png" alt="" />
+        </div>
+        <div class="landing-waiter" id="waiter-8" data-floor="8">
+          <img src="art/processed/passenger-4.png" alt="" />
+        </div>
 
         <div class="left-panel">
           <div id="typography">
@@ -152,58 +218,10 @@
           </div>
           <div id="logo-line">HyperFrames · Barney / Harris terminology</div>
         </div>
-
-        <div id="building-wrap">
-          <svg id="building" viewBox="0 0 1100 920" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <filter id="cyanGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-              <filter id="magentaGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-              <filter id="orangeGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-              <filter id="carGlow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-              <filter id="cwGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            </defs>
-            <polygon class="side-face" points="760,100 860,130 860,880 760,880"/>
-            <polygon class="roof-cap" points="180,100 760,100 860,130 260,130"/>
-            <rect class="machine" x="500" y="40" width="140" height="50" rx="4"/>
-            <circle class="sheave" cx="590" cy="65" r="22"/>
-            <g id="floors"></g>
-            <g id="mullions"></g>
-            <g id="landings"></g>
-            <rect class="shaft" x="548" y="100" width="84" height="780" rx="4"/>
-            <rect class="cw-shaft" x="860" y="100" width="48" height="780" rx="3"/>
-            <path id="ropes" class="rope" d=""/>
-            <g id="counterweight">
-              <rect class="cw-block" x="0" y="0" width="40" height="100" rx="3"/>
-            </g>
-            <g id="call-paths"></g>
-            <path id="path-down" class="route-path route-down"/>
-            <path id="path-selective" class="route-path route-sel"/>
-            <g id="car">
-              <rect class="crosshead" x="18" y="-10" width="40" height="8" rx="2"/>
-              <rect class="car-shell" x="0" y="0" width="76" height="56" rx="8"/>
-              <rect class="car-ceiling" x="4" y="4" width="68" height="8" rx="2"/>
-              <line class="car-rail" x1="8" y1="40" x2="68" y2="40"/>
-              <ellipse class="car-passenger" cx="28" cy="32" rx="8" ry="12"/>
-              <ellipse class="car-passenger" cx="50" cy="30" rx="7" ry="11"/>
-              <rect class="floor-indicator" x="24" y="-22" width="28" height="16" rx="3"/>
-              <text class="indicator-arrow" x="38" y="-10">▲</text>
-              <rect class="door-panel" x="6" y="14" width="28" height="38" rx="2"/>
-              <rect class="door-panel" x="42" y="14" width="28" height="38" rx="2"/>
-            </g>
-            <g id="calls"></g>
-            <g id="waiter-4" class="waiter" transform="translate(320, 0)">
-              <ellipse class="waiter-body" cx="0" cy="0" rx="10" ry="18"/>
-              <circle class="waiter-body" cx="0" cy="-20" r="9"/>
-            </g>
-          </svg>
-        </div>
       </div>
     </div>
     <script type="module">
-      import { floorCenterY } from './layout.js'
       import { initComposition } from './scene.js'
-      const w4 = document.getElementById('waiter-4')
-      w4.setAttribute('transform', `translate(320, ${floorCenterY(4)})`)
       initComposition()
     </script>
   </body>
