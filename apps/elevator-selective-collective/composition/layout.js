@@ -5,6 +5,7 @@ import {
   MEASURED_FLOOR_Y,
   MEASURED_SHAFT,
   MEASURED_SHEAVE,
+  MEASURED_HALL_X,
   MEASURED_CALL_X,
   MEASURED_LABEL_X,
 } from './art/measured-layout.js'
@@ -13,20 +14,23 @@ const pitches = []
 for (let i = 0; i < MEASURED_FLOOR_Y.length - 1; i++) {
   pitches.push(MEASURED_FLOOR_Y[i] - MEASURED_FLOOR_Y[i + 1])
 }
+const medianPitch = pitches.sort((a, b) => a - b)[Math.floor(pitches.length / 2)]
 
 export const LAYOUT = {
   floors: MEASURED_FLOOR_Y.length,
   viewW: 1920,
   viewH: 1080,
   shaftLeft: MEASURED_SHAFT.left,
+  shaftRight: MEASURED_SHAFT.right,
   shaftWidth: MEASURED_SHAFT.width,
   shaftCenterX: MEASURED_SHAFT.centerX,
   sheaveX: MEASURED_SHEAVE.x,
   sheaveY: MEASURED_SHEAVE.y,
+  hallPanelX: MEASURED_HALL_X,
   callX: MEASURED_CALL_X,
   labelX: MEASURED_LABEL_X,
-  carWidth: Math.round(MEASURED_SHAFT.width * 0.96),
-  carHeight: Math.round(Math.min(...pitches) * 0.88),
+  carWidth: Math.round(MEASURED_SHAFT.width * 0.94),
+  carHeight: Math.round(medianPitch * 0.92),
   frontTop: MEASURED_FLOOR_Y[MEASURED_FLOOR_Y.length - 1],
   frontBottom: MEASURED_FLOOR_Y[0],
 }
@@ -53,10 +57,10 @@ export function carTranslateX() {
 
 export function callToShaftPath(floor) {
   const y = floorCenterY(floor)
-  const x0 = LAYOUT.callX + 36
-  const x1 = LAYOUT.shaftLeft + 4
+  const x0 = LAYOUT.callX + 34
+  const x1 = LAYOUT.shaftLeft + 6
   const cx = (x0 + x1) / 2
-  return `M ${x0} ${y} Q ${cx} ${y - 36} ${x1} ${y}`
+  return `M ${x0} ${y} Q ${cx} ${y - 32} ${x1} ${y}`
 }
 
 export function assertFloorAlignment(placements) {

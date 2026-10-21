@@ -11,6 +11,7 @@ import { simulatePassengers, formatSeconds, SIM, WAIT_DEFINITION } from './simul
 const CALL_FLOORS = [4, 7, 8]
 
 export function initComposition() {
+  window.__timelines = window.__timelines || {}
   const car = document.getElementById('car')
   const doorL = car.querySelector('.door-left')
   const doorR = car.querySelector('.door-right')
@@ -94,11 +95,53 @@ export function initComposition() {
   const typography = document.getElementById('typography')
   const plateWrap = document.getElementById('plate-wrap')
 
+  function applyCarStateAtTime(t) {
+    if (t < 7) {
+      setCarFloor(1, 0, true, 1)
+      return
+    }
+    if (t < 9.8) {
+      const p = Math.min(1, (t - 7) / 2.8)
+      setCarFloor(1 + p * 8, 0, false, 0)
+      return
+    }
+    if (t < 14) {
+      setCarFloor(9, 0, false, 0)
+      return
+    }
+    if (t < 14.8) {
+      setCarFloor(1, 0, true, 1)
+      return
+    }
+    if (t < 16.4) {
+      const p = Math.min(1, (t - 14.8) / 1.6)
+      setCarFloor(1 + p * 3, 0, false, 0)
+      return
+    }
+    if (t < 17.2) {
+      setCarFloor(4, 0, true, 1)
+      return
+    }
+    if (t < 19.4) {
+      const p = Math.min(1, (t - 17.2) / 2.2)
+      setCarFloor(4 + p * 4.5, 0, false, 0)
+      return
+    }
+    if (t < 28) {
+      setCarFloor(8.5, 0, false, 0)
+      return
+    }
+    setCarFloor(9, 0, false, 0)
+  }
+
   gsap.set(headline, { y: 28, opacity: 0 })
   gsap.set(riderLobby, { opacity: 1 })
-  setCarFloor(1, 0, true, 1)
+  applyCarStateAtTime(0)
 
-  const tl = gsap.timeline({ paused: true })
+  const tl = gsap.timeline({
+    paused: true,
+    onUpdate: () => applyCarStateAtTime(tl.time()),
+  })
 
   tl.to(headline, { opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: 'back.out(1.4)' }, 0.4)
   tl.to(subhead, { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.1)
@@ -113,25 +156,13 @@ export function initComposition() {
     capTitle.textContent = 'Down collective'
     capBody.textContent =
       'One hall button per landing — up travel serves car calls only. The 4F rider is passed on the way up.'
-    setCarFloor(1, 0, true, 1)
     gsap.set(waiter4, { opacity: 1 })
   }, 6)
   tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 6)
   tl.to(callPaths, { opacity: 0.92, duration: 0.5 }, 6.2)
   tl.to(lanterns, { opacity: 1, duration: 0.4 }, 6.2)
   tl.to(pathDown, { opacity: 0.88, duration: 0.5 }, 6.5)
-  tl.to(
-    {},
-    {
-      duration: 2.8,
-      onUpdate() {
-        const f = 1 + this.progress() * 8
-        setCarFloor(f, 0, false, 0)
-      },
-      ease: 'power2.inOut',
-    },
-    7,
-  )
+  tl.to({}, { duration: 2.8, ease: 'power2.inOut' }, 7)
   tl.to(sceneCaption, { opacity: 0, duration: 0.4 }, 13.5)
   tl.to(pathDown, { opacity: 0, duration: 0.4 }, 13.5)
 
@@ -139,36 +170,13 @@ export function initComposition() {
     capTitle.textContent = 'Selective collective (LOOK)'
     capBody.textContent =
       'Up and down hall buttons — landing calls in the direction of travel, then reverse.'
-    setCarFloor(1, 0, true, 1)
   }, 14)
   tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 14)
   tl.to(pathSel, { opacity: 0.9, duration: 0.5 }, 14.2)
-  tl.to(
-    {},
-    {
-      duration: 1.6,
-      onUpdate() {
-        const f = 1 + this.progress() * 3
-        setCarFloor(f, 0, false, 0)
-      },
-      ease: 'power2.inOut',
-    },
-    14.8,
-  )
-  tl.add(() => setCarFloor(4, 0, true, 1), 16.4)
+  tl.to({}, { duration: 1.6, ease: 'power2.inOut' }, 14.8)
+  tl.add(() => {}, 16.4)
   tl.to(waiter4, { opacity: 0, duration: 0.4 }, 16.4)
-  tl.to(
-    {},
-    {
-      duration: 2.2,
-      onUpdate() {
-        const f = 4 + this.progress() * 4.5
-        setCarFloor(f, 0, false, 0)
-      },
-      ease: 'power2.inOut',
-    },
-    17.2,
-  )
+  tl.to({}, { duration: 2.2, ease: 'power2.inOut' }, 17.2)
   tl.fromTo(camera, { scale: 1.04 }, { scale: 1.06, x: -18, y: 8, duration: 4, ease: 'power2.inOut' }, 17)
 
   tl.to(sceneCaption, { opacity: 0, duration: 0.5 }, 27.5)
@@ -187,15 +195,53 @@ export function initComposition() {
   tl.to(logo, { opacity: 1, duration: 0.8 }, 34)
   tl.fromTo(camera, { scale: 1.06 }, { scale: 1, x: 0, y: 0, duration: 3, ease: 'power2.inOut' }, 28)
 
-  window.__timelines = window.__timelines || {}
   window.__timelines['selective-collective'] = tl
+
+  window.__validateCab = (floor) => {
+    applyCarStateAtTime(tl.time())
+    return validateCabPlacement(floor)
+  }
+
   tl.seek(0)
+  applyCarStateAtTime(0)
+}
+
+export function validateCabPlacement(floor) {
+  const car = document.getElementById('car')
+  const img = car?.querySelector('.cab-layer')
+  if (!car || !img) return { ok: false, error: 'missing #car or cab image' }
+  if (!img.complete || img.naturalWidth === 0) {
+    return { ok: false, error: 'cab PNG not loaded' }
+  }
+  const rect = car.getBoundingClientRect()
+  const imgRect = img.getBoundingClientRect()
+  if (rect.width < 48 || rect.height < 48) {
+    return { ok: false, error: `cab box too small: ${rect.width.toFixed(1)}×${rect.height.toFixed(1)}` }
+  }
+  if (imgRect.width < 24 || imgRect.height < 24) {
+    return { ok: false, error: `cab image render too small: ${imgRect.width.toFixed(1)}×${imgRect.height.toFixed(1)}` }
+  }
+  const cx = rect.left + rect.width / 2
+  if (cx < LAYOUT.shaftLeft - 12 || cx > LAYOUT.shaftRight + 12) {
+    return {
+      ok: false,
+      error: `cab center x=${cx.toFixed(1)} outside shaft [${LAYOUT.shaftLeft}, ${LAYOUT.shaftRight}]`,
+    }
+  }
+  const fy = floorCenterY(floor)
+  if (fy < rect.top - 24 || fy > rect.bottom + 24) {
+    return {
+      ok: false,
+      error: `floor ${floor} y=${fy.toFixed(1)} outside cab vertical span [${rect.top.toFixed(1)}, ${rect.bottom.toFixed(1)}]`,
+    }
+  }
+  return { ok: true, cx, fy, width: rect.width, height: rect.height }
 }
 
 function placeLandingWaiters() {
   for (const el of document.querySelectorAll('.landing-waiter')) {
     const f = Number(el.dataset.floor)
-    const x = LAYOUT.shaftLeft - 36
+    const x = LAYOUT.shaftLeft - 92
     const y = floorCenterY(f)
     el.style.left = `${x}px`
     el.style.top = `${y}px`
@@ -221,7 +267,7 @@ function buildLandings() {
   for (let f = 1; f <= LAYOUT.floors; f++) {
     const cy = floorCenterY(f)
     const lg = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-    lg.setAttribute('transform', `translate(${LAYOUT.shaftLeft - 18}, ${cy})`)
+    lg.setAttribute('transform', `translate(${LAYOUT.hallPanelX}, ${cy})`)
     lg.innerHTML = `
       <rect class="hall-btn" x="-6" y="-7" width="10" height="14" rx="2"/>
       <circle class="hall-lantern" cx="10" cy="0" r="5" opacity="0"/>

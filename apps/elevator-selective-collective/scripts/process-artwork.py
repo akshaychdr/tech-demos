@@ -47,29 +47,43 @@ def fit_cover(img: Image.Image, w: int, h: int) -> tuple[Image.Image, float, int
     return resized.crop((left, top, left + w, top + h)), scale, left, top
 
 
+def detect_shaft_x(arr: np.ndarray) -> tuple[int, int]:
+    """Cyan glow column of the elevator shaft (stage coordinates)."""
+    h, w, _ = arr.shape
+    cyan = arr[:, :, 2] - arr[:, :, 0]
+    col_score = cyan.mean(axis=0)
+    x_start = int(w * 0.55)
+    region = col_score[x_start:]
+    thresh = np.percentile(region, 98.5)
+    xs = np.where(region > thresh)[0] + x_start
+    if len(xs) < 10:
+        return int(w * 0.68), int(w * 0.75)
+    return int(xs.min()), int(xs.max())
+
+
 def detect_floors(plate: Image.Image) -> dict:
-    """Find floor center Y (1F = bottom) from shaft horizontal banding."""
+    """Floor center Y (1F = bottom) from evenly spaced lit bands in the shaft."""
     from scipy.signal import find_peaks
 
     arr = np.array(plate.convert("RGB")).astype(np.float32)
     h, w, _ = arr.shape
-    x0, x1 = int(w * 0.545), int(w * 0.595)
-    cyan = arr[:, x0:x1, 2] - arr[:, x0:x1, 0]
-    row = cyan.mean(axis=1)
-    row_s = np.convolve(row, np.ones(15) / 15, mode="same")
-    y0, y1 = int(h * 0.12), int(h * 0.96)
+    shaft_left, shaft_right = detect_shaft_x(arr)
+    cx0 = shaft_left + int((shaft_right - shaft_left) * 0.15)
+    cx1 = shaft_right - int((shaft_right - shaft_left) * 0.15)
+    bright = arr[:, cx0:cx1].mean(axis=1).mean(axis=1)
+    row_s = np.convolve(bright, np.ones(11) / 11, mode="same")
+    y0, y1 = int(h * 0.14), int(h * 0.94)
     seg = row_s[y0:y1]
-    peaks, _ = find_peaks(seg, distance=48, prominence=2.5)
-    slab_ys = sorted([y0 + int(p) for p in peaks])
+    peaks, _ = find_peaks(seg, distance=65, prominence=3.0)
+    band_ys = sorted([y0 + int(p) for p in peaks])
 
     centers_asc = [
-        int((slab_ys[i] + slab_ys[i + 1]) / 2) for i in range(len(slab_ys) - 1)
+        int((band_ys[i] + band_ys[i + 1]) / 2) for i in range(len(band_ys) - 1)
     ]
     if len(centers_asc) >= 2:
-        step_top = centers_asc[1] - centers_asc[0]
-        step_bot = centers_asc[-1] - centers_asc[-2]
-        top = int(centers_asc[0] - step_top * 0.42)
-        bottom = int(centers_asc[-1] + step_bot * 0.42)
+        step = float(np.median(np.diff(centers_asc)))
+        top = int(centers_asc[0] - step * 0.5)
+        bottom = int(centers_asc[-1] + step * 0.5)
         chain_asc = [top] + centers_asc + [bottom]
     else:
         chain_asc = centers_asc
@@ -77,21 +91,19 @@ def detect_floors(plate: Image.Image) -> dict:
     while len(chain_asc) > 9:
         chain_asc.pop(1)
     while len(chain_asc) < 9:
-        chain_asc.append(int(chain_asc[-1] + 85))
+        chain_asc.append(int(chain_asc[-1] + 90))
 
     ys_sorted = sorted(chain_asc)
-    floors = {str(f): int(ys_sorted[9 - f]) for f in range(1, 10)}
+    y_bottom = int(ys_sorted[-1])
+    y_top = int(ys_sorted[0])
+    even_ys = [int(round(y_bottom - (y_bottom - y_top) * i / 8)) for i in range(9)]
+    floors = {str(f): even_ys[f - 1] for f in range(1, 10)}
 
-    col = arr[:, x0:x1, 2] - arr[:, x0:x1, 0]
-    mask = col > 12
-    rows = np.where(mask.any(axis=1))[0]
-    cols = np.where(mask.any(axis=0))[0]
-    shaft_left = x0 + int(cols.min()) if len(cols) else int(w * 0.52)
-    shaft_right = x0 + int(cols.max()) if len(cols) else int(w * 0.61)
-    shaft_top = int(rows.min()) + 120 if len(rows) else int(h * 0.14)
-    shaft_bottom = int(rows.max()) if len(rows) else int(h * 0.92)
-    sheave_y = shaft_top
     sheave_x = (shaft_left + shaft_right) // 2
+    sheave_y = int(h * 0.11)
+    hall_x = shaft_left - 32
+    label_x = shaft_left - 175
+    call_x = shaft_left - 66
 
     return {
         "stage": {"width": STAGE_W, "height": STAGE_H},
@@ -100,14 +112,15 @@ def detect_floors(plate: Image.Image) -> dict:
         "shaft": {
             "left": shaft_left,
             "right": shaft_right,
-            "top": shaft_top,
-            "bottom": shaft_bottom,
+            "top": sheave_y,
+            "bottom": int(h * 0.93),
             "centerX": sheave_x,
             "width": shaft_right - shaft_left,
         },
         "sheave": {"x": sheave_x, "y": sheave_y},
-        "callZoneX": int(w * 0.36),
-        "labelX": int(w * 0.34),
+        "hallPanelX": hall_x,
+        "callZoneX": call_x,
+        "labelX": label_x,
     }
 
 
@@ -172,6 +185,7 @@ def main() -> None:
 export const MEASURED_FLOOR_Y = {json.dumps(floor_ys)};
 export const MEASURED_SHAFT = {json.dumps(layout["shaft"])};
 export const MEASURED_SHEAVE = {json.dumps(layout["sheave"])};
+export const MEASURED_HALL_X = {layout["hallPanelX"]};
 export const MEASURED_CALL_X = {layout["callZoneX"]};
 export const MEASURED_LABEL_X = {layout["labelX"]};
 """
