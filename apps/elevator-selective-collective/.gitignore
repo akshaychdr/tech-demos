@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 renders
 out
+public/elevator-selective-collective.mp4
 .artifacts
 composition/.hyperframes
 dist
