@@ -51,17 +51,18 @@ function startCompositionServer() {
   })
 }
 
-/** Presentation times (80s storyboard) and approximate car floor for cab checks */
+/** Presentation times (84s storyboard, +4s title card) and approximate car floor for cab checks */
 const CHECKS = [
-  { time: 5, floor: 1, label: 'terms' },
-  { time: 14.2, floor: 4.5, label: 'down-going-up-passing-4-7' },
-  { time: 19.2, floor: 9, label: 'down-top-turn' },
-  { time: 26.1, floor: 4, label: 'down-4F-board-B' },
-  { time: 34.6, floor: 5.5, label: 'down-second-trip-up' },
-  { time: 44, floor: 4, label: 'selective-4F-board-B' },
-  { time: 48.6, floor: 7, label: 'selective-7F-B-off-C-on' },
-  { time: 53.2, floor: 8, label: 'selective-8F-D-board' },
-  { time: 70, floor: 1, label: 'stats' },
+  { time: 2, floor: 1, label: 'title-card-mid' },
+  { time: 9, floor: 1, label: 'terms' },
+  { time: 18.2, floor: 4.5, label: 'down-going-up-passing-4-7' },
+  { time: 23.2, floor: 9, label: 'down-top-turn' },
+  { time: 30.1, floor: 4, label: 'down-4F-board-B' },
+  { time: 38.6, floor: 5.5, label: 'down-second-trip-up' },
+  { time: 48, floor: 4, label: 'selective-4F-board-B' },
+  { time: 52.6, floor: 7, label: 'selective-7F-B-off-C-on' },
+  { time: 57.2, floor: 8, label: 'selective-8F-D-board' },
+  { time: 74, floor: 1, label: 'stats' },
 ]
 
 const SNAPSHOT_AT = CHECKS.map((c) => c.time).join(',')

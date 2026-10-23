@@ -9,11 +9,13 @@ const mp4 = path.join(root, 'out/elevator-selective-collective.mp4')
 const outDir = path.join(root, 'out/qa-frames')
 mkdirSync(outDir, { recursive: true })
 
+const DURATION = 84
 const times = []
-for (let t = 0; t <= 80; t += 4) times.push(t)
+for (let t = 0; t <= DURATION; t += 4) times.push(t)
 const stops = [
-  5, 14.2, 19.2, 26.1, 34.6, 44, 48.6, 53.2, 62, 70,
-  12, 15, 18, 25, 33, 40, 42, 47, 50, 55, 58,
+  1, 2, 3.5, 4, 9, 14, 18.2, 23.2, 30.1, 38.6, 44, 48, 52.6, 57.2, 66, 74,
+  16, 19, 22, 29, 37, 46, 50, 55, 59, 62,
+  17.5, 18, 18.25, 18.5,
 ]
 for (const s of stops) if (!times.includes(s)) times.push(s)
 times.sort((a, b) => a - b)

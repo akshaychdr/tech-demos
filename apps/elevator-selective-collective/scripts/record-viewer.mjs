@@ -83,7 +83,7 @@ async function main() {
       tl.seek(0)
       tl.play(0)
     })
-    await page.waitForTimeout(86000)
+    await page.waitForTimeout(90000)
     await context.close()
     await browser.close()
 

@@ -24,13 +24,15 @@ import { injectRiderSvg } from './rider-silhouettes.js'
 const CALL_FLOORS = [4, 7, 8]
 
 export const STORYBOARD = {
-  totalDuration: 80,
-  termsEnd: 10,
-  downStart: 10,
+  titleCardDuration: 4,
+  totalDuration: 84,
+  termsStart: 4,
+  termsEnd: 14,
+  downStart: 14,
   downDuration: 30,
-  selectiveStart: 40,
+  selectiveStart: 44,
   selectiveDuration: 22,
-  statsStart: 62,
+  statsStart: 66,
 }
 
 export function initComposition() {
@@ -80,7 +82,8 @@ export function initComposition() {
   const termsPanel = document.getElementById('terms-panel')
   const sceneTag = document.getElementById('scene-tag')
   const stats = document.getElementById('stats')
-  const typography = document.getElementById('typography')
+  const titleCard = document.getElementById('title-card')
+  const modePersist = document.getElementById('mode-persist')
   const plateWrap = document.getElementById('plate-wrap')
   const camera = document.getElementById('camera')
   const logo = document.getElementById('logo-line')
@@ -124,7 +127,30 @@ export function initComposition() {
     indicator.textContent = `${arrow} ${rounded}F`
   }
 
+  const SCENE_FADE = 0.5
+
+  function modePersistOpacity(t, phase) {
+    if (phase === 'down') {
+      const start = STORYBOARD.downStart
+      const end = STORYBOARD.selectiveStart
+      if (t < start) return 0
+      if (t < start + SCENE_FADE) return (t - start) / SCENE_FADE
+      if (t > end - SCENE_FADE) return Math.max(0, (end - t) / SCENE_FADE)
+      return 1
+    }
+    if (phase === 'selective') {
+      const start = STORYBOARD.selectiveStart
+      const end = STORYBOARD.statsStart
+      if (t < start) return 0
+      if (t < start + SCENE_FADE) return (t - start) / SCENE_FADE
+      if (t > end - SCENE_FADE) return Math.max(0, (end - t) / SCENE_FADE)
+      return 1
+    }
+    return 0
+  }
+
   function presentationToSim(t) {
+    if (t < STORYBOARD.titleCardDuration) return { phase: 'title', mode: null, simTime: 0 }
     if (t < STORYBOARD.downStart) return { phase: 'terms', mode: null, simTime: 0 }
     if (t < STORYBOARD.selectiveStart) {
       const p = (t - STORYBOARD.downStart) / STORYBOARD.downDuration
@@ -211,14 +237,56 @@ export function initComposition() {
 
     termsPanel.style.opacity = phase === 'terms' ? '1' : '0'
     stats.style.opacity = phase === 'stats' ? '1' : '0'
-    typography.style.opacity = '0'
-    liveExplainer.style.opacity = phase === 'stats' ? '0' : '1'
+    liveExplainer.style.opacity = phase === 'terms' || phase === 'down' || phase === 'selective' ? '1' : '0'
     plateWrap.classList.toggle('dimmed', phase === 'stats')
+    plateWrap.classList.toggle('title-dim', phase === 'title')
     if (phase === 'stats') plateWrap.style.opacity = '0.35'
     else plateWrap.style.opacity = '1'
 
+    if (titleCard) {
+      titleCard.style.pointerEvents = 'none'
+      if (phase !== 'title') titleCard.style.opacity = '0'
+    }
+
+    if (modePersist) {
+      if (phase === 'down') {
+        modePersist.textContent = 'Down collective'
+        modePersist.className = 'mode-down'
+        modePersist.setAttribute('aria-hidden', 'false')
+      } else if (phase === 'selective') {
+        modePersist.textContent = 'Selective Collective'
+        modePersist.className = 'mode-sel'
+        modePersist.setAttribute('aria-hidden', 'false')
+      } else {
+        modePersist.setAttribute('aria-hidden', 'true')
+      }
+      modePersist.style.opacity = String(modePersistOpacity(t, phase))
+    }
+
     pathDown.style.opacity = phase === 'down' ? '0.85' : '0'
     pathSel.style.opacity = phase === 'selective' ? '0.88' : '0'
+    if (phase === 'title') {
+      sceneTag.textContent = ''
+      setCarFloor(1, false, 0)
+      car.style.opacity = '0.55'
+      if (callsRoot) callsRoot.style.opacity = '0'
+      const callPaths = document.getElementById('call-paths')
+      if (callPaths) callPaths.style.opacity = '0'
+      document.querySelectorAll('.call-badge').forEach((g) => {
+        g.style.opacity = '0'
+      })
+      document.querySelectorAll('.landing-rider').forEach((el) => {
+        el.style.opacity = '0'
+      })
+      document.querySelectorAll('.cab-rider').forEach((el) => {
+        el.style.opacity = '0'
+      })
+      riderCount.style.opacity = '0'
+      return
+    }
+    if (callsRoot) callsRoot.style.opacity = '1'
+    const callPaths = document.getElementById('call-paths')
+    if (callPaths) callPaths.style.opacity = '1'
     if (phase === 'terms') {
       sceneTag.textContent = 'Scene 0 · Terms'
       setCallBadgeStyle('selective-collective')
@@ -275,7 +343,7 @@ export function initComposition() {
     car.style.opacity = '1'
     updateRiders(state, state.floor, state.doorsOpen)
     updateCallBadges(state.waiting)
-    if (phase === 'selective' && t >= 48.2 && t <= 49.5) {
+    if (phase === 'selective' && t >= 52.2 && t <= 53.5) {
       expSubtitle.textContent = 'B exits at 7F while C boards — same dwell, two riders.'
       const bLand = document.getElementById('rider-b-landing')
       const cLand = document.getElementById('rider-c-landing')
@@ -293,7 +361,7 @@ export function initComposition() {
       }
       riderCount.textContent = '1 in car'
     }
-    if (phase === 'selective' && t >= 52.8 && t <= 54.2) {
+    if (phase === 'selective' && t >= 56.8 && t <= 58.2) {
       const dLand = document.getElementById('rider-d-landing')
       if (dLand) {
         positionLandingRider(dLand, 8, 0)
@@ -303,8 +371,10 @@ export function initComposition() {
     }
   }
 
-  gsap.set('#headline .word', { y: 28, opacity: 0 })
-  gsap.set('#subhead', { opacity: 0 })
+  gsap.set('#title-card', { opacity: 0 })
+  gsap.set('#title-card-headline .tc-part', { y: 36, opacity: 0 })
+  gsap.set('#title-card-headline .tc-vs', { opacity: 0, scale: 0.92 })
+  gsap.set('#title-card-sub', { y: 22, opacity: 0 })
   applyPresentationTime(0)
 
   const tl = gsap.timeline({
@@ -312,13 +382,22 @@ export function initComposition() {
     onUpdate: () => applyPresentationTime(tl.time()),
   })
 
-  tl.to('#headline .word', { opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: 'back.out(1.4)' }, 0.4)
-  tl.to('#subhead', { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.1)
+  const termsIntro = STORYBOARD.termsStart
+  tl.to('#title-card', { opacity: 1, duration: 0.35, ease: 'power2.out' }, 0.08)
+  tl.to(
+    '#title-card-headline .tc-part',
+    { opacity: 1, y: 0, duration: 0.78, stagger: 0.14, ease: 'power3.out' },
+    0.32,
+  )
+  tl.to('#title-card-headline .tc-vs', { opacity: 1, scale: 1, duration: 0.45, ease: 'power2.out' }, 0.72)
+  tl.to('#title-card-sub', { opacity: 1, y: 0, duration: 0.7, ease: 'power2.out' }, 1.02)
+  tl.to('#title-card', { opacity: 0, duration: 0.72, ease: 'power2.in' }, 3.18)
   tl.fromTo(camera, { scale: 1, x: 0, y: 0 }, { scale: 1.03, x: -10, y: 4, duration: STORYBOARD.totalDuration, ease: 'none' }, 0)
-  tl.to(plateWrap, { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.2)
-  tl.to(car, { opacity: 1, duration: 0.5 }, 1.2)
-  tl.to('.call-badge', { opacity: 1, duration: 0.6, stagger: 0.08 }, 2)
-  tl.to('.landing-rider', { opacity: 1, duration: 0.5, stagger: 0.06 }, 2.2)
+  tl.to(plateWrap, { opacity: 1, duration: 0.9, ease: 'power2.out' }, 0.12)
+  tl.to(car, { opacity: 0.55, duration: 0.6, ease: 'power2.out' }, 0.35)
+  tl.to(car, { opacity: 1, duration: 0.5 }, termsIntro + 1.2)
+  tl.to('.call-badge', { opacity: 1, duration: 0.6, stagger: 0.08 }, termsIntro + 2)
+  tl.to('.landing-rider', { opacity: 1, duration: 0.5, stagger: 0.06 }, termsIntro + 2.2)
   tl.to(logo, { opacity: 1, duration: 0.8 }, STORYBOARD.statsStart + 2)
   tl.to({}, { duration: STORYBOARD.totalDuration - 0.01 })
 

@@ -53,7 +53,7 @@ const samples = await page.evaluate(() => {
   const tl = window.__timelines['selective-collective']
   const car = document.getElementById('car')
   const out = []
-  for (let t = 13.5; t <= 16; t += 0.25) {
+  for (let t = 17.5; t <= 20; t += 0.25) {
     tl.seek(t)
     const y = car.getBoundingClientRect().top
     out.push({ t, y })
