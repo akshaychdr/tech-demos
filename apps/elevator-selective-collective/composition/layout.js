@@ -39,7 +39,10 @@ export const LAYOUT = {
   medianPitch,
   landingRiderMaxHeight: Math.round(medianPitch * 0.85),
   cabRiderHeight: Math.round(medianPitch * 0.38),
-  landingX: MEASURED_HALL_X - 8,
+  /** Landing figure — just left of shaft, clear of call bubble. */
+  landingX: MEASURED_SHAFT.left - 18,
+  /** Pink call bubble — well left of the waiting figure. */
+  callBubbleX: 1055,
   frontTop: MEASURED_FLOOR_Y[MEASURED_FLOOR_Y.length - 1],
   frontBottom: MEASURED_FLOOR_Y[0],
 }
@@ -65,11 +68,7 @@ export function carTranslateX() {
 }
 
 export function callToShaftPath(floor) {
-  const y = floorCenterY(floor)
-  const x0 = LAYOUT.callX + 34
-  const x1 = LAYOUT.shaftLeft + 6
-  const cx = (x0 + x1) / 2
-  return `M ${x0} ${y} Q ${cx} ${y - 32} ${x1} ${y}`
+  return callToShaftPathFromBubble(floor)
 }
 
 /** @returns {{ top: number, bottom: number, center: number, pitch: number }} */
@@ -90,7 +89,15 @@ export function landingSlabY(floor) {
 }
 
 export function landingRiderHeightPx(floor) {
-  return Math.floor(floorBand(floor).pitch * 0.82)
+  return Math.floor(floorBand(floor).pitch * 0.86)
+}
+
+export function callToShaftPathFromBubble(floor) {
+  const y = floorCenterY(floor)
+  const x0 = LAYOUT.callBubbleX + 26
+  const x1 = LAYOUT.shaftLeft + 6
+  const cx = (x0 + x1) / 2
+  return `M ${x0} ${y} Q ${cx} ${y - 28} ${x1} ${y}`
 }
 
 export function assertFloorAlignment(placements) {

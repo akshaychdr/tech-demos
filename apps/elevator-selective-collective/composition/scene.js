@@ -19,6 +19,7 @@ import {
   DEMO_PASSENGERS,
   getStateAtSimTime,
 } from './simulation.js'
+import { injectRiderSvg } from './rider-silhouettes.js'
 
 const CALL_FLOORS = [4, 7, 8]
 
@@ -46,6 +47,7 @@ export function initComposition() {
   buildFloorLabels()
   buildLandings()
   buildCalls()
+  initRiderArt()
   placeLandingRiders()
   populateStatsRiders()
 
@@ -152,14 +154,14 @@ export function initComposition() {
     })
   }
 
-  function positionLandingRider(el, floor) {
+  function positionLandingRider(el, floor, offsetPx = 0) {
     const h = landingRiderHeightPx(floor)
-    const img = el.querySelector('img')
-    if (img) img.style.height = `${h}px`
+    const fig = el.querySelector('.figure-wrap')
+    if (fig) fig.style.height = `${h}px`
     el.dataset.floor = String(floor)
-    el.style.left = `${LAYOUT.landingX}px`
+    el.style.left = `${LAYOUT.landingX + offsetPx}px`
     el.style.top = `${landingSlabY(floor)}px`
-    el.style.transform = 'translate(-58%, -100%)'
+    el.style.transform = 'translate(-50%, -100%)'
   }
 
   function updateCallBadges(waitingIds) {
@@ -273,13 +275,31 @@ export function initComposition() {
     car.style.opacity = '1'
     updateRiders(state, state.floor, state.doorsOpen)
     updateCallBadges(state.waiting)
-    if (
-      mode === 'selective-collective' &&
-      state.doorsOpen &&
-      Math.abs(state.floor - 7) < 0.2 &&
-      state.simTime >= 9.2
-    ) {
+    if (phase === 'selective' && t >= 48.2 && t <= 49.5) {
       expSubtitle.textContent = 'B exits at 7F while C boards — same dwell, two riders.'
+      const bLand = document.getElementById('rider-b-landing')
+      const cLand = document.getElementById('rider-c-landing')
+      for (const id of ['a', 'b', 'c', 'd']) {
+        const cab = document.getElementById(`rider-${id}-cab`)
+        if (cab) cab.style.opacity = id === 'a' ? '1' : '0'
+      }
+      if (bLand) {
+        positionLandingRider(bLand, 7, -26)
+        bLand.style.opacity = '1'
+      }
+      if (cLand) {
+        positionLandingRider(cLand, 7, 22)
+        cLand.style.opacity = '1'
+      }
+      riderCount.textContent = '1 in car'
+    }
+    if (phase === 'selective' && t >= 52.8 && t <= 54.2) {
+      const dLand = document.getElementById('rider-d-landing')
+      if (dLand) {
+        positionLandingRider(dLand, 8, 0)
+        dLand.style.opacity = '1'
+        document.getElementById('rider-d-cab').style.opacity = '0'
+      }
     }
   }
 
@@ -321,9 +341,11 @@ export function initComposition() {
     const cab = validateCabPlacement(floor)
     const riders = validateVisibleLandingRiders()
     const cabs = validateCabRiders()
+    const sep = validateCallBubbleSeparation()
     if (!cab.ok) return cab
     if (!riders.ok) return riders
     if (!cabs.ok) return cabs
+    if (!sep.ok) return sep
     return { ok: true }
   }
 
@@ -417,6 +439,46 @@ export function validateVisibleLandingRiders() {
   return errors.length ? { ok: false, error: errors.join('; ') } : { ok: true }
 }
 
+function bboxOverlapRatio(figRect, otherRect) {
+  const xOverlap = Math.max(0, Math.min(figRect.right, otherRect.right) - Math.max(figRect.left, otherRect.left))
+  const yOverlap = Math.max(0, Math.min(figRect.bottom, otherRect.bottom) - Math.max(figRect.top, otherRect.top))
+  const overlap = xOverlap * yOverlap
+  const area = Math.max(1, figRect.width * figRect.height)
+  return overlap / area
+}
+
+export function validateCallBubbleSeparation() {
+  const errors = []
+  for (const el of document.querySelectorAll('.landing-rider')) {
+    const opacity = parseFloat(getComputedStyle(el).opacity)
+    if (!opacity || opacity < 0.05) continue
+    const floor = Number(el.dataset.floor)
+    const fig = el.querySelector('.figure-wrap')
+    if (!fig) continue
+    const figRect = fig.getBoundingClientRect()
+    const badge = document.querySelector(`.call-badge[data-floor="${floor}"]`)
+    if (!badge) continue
+    const badgeRect = badge.getBoundingClientRect()
+    const ratio = bboxOverlapRatio(figRect, badgeRect)
+    if (ratio > 0.05) {
+      errors.push(`call bubble overlaps ${floor}F figure by ${(ratio * 100).toFixed(1)}%`)
+    }
+    const cx = figRect.left + figRect.width / 2
+    const cy = figRect.top + figRect.height / 2
+    if (cx >= badgeRect.left && cx <= badgeRect.right && cy >= badgeRect.top && cy <= badgeRect.bottom) {
+      errors.push(`figure center for ${floor}F sits inside call bubble`)
+    }
+    if (figRect.left < badgeRect.right - 4) {
+      errors.push(`figure ${floor}F should be right of call bubble (fig left ${figRect.left.toFixed(0)} badge right ${badgeRect.right.toFixed(0)})`)
+    }
+    const hit = document.elementFromPoint(cx, cy)
+    if (hit?.closest?.('.call-badge')) {
+      errors.push(`figure center for ${floor}F hits call bubble in DOM`)
+    }
+  }
+  return errors.length ? { ok: false, error: errors.join('; ') } : { ok: true }
+}
+
 export function validateCabRiders() {
   const car = document.getElementById('car')
   const shell = car?.querySelector('.neon-cab-body')
@@ -437,21 +499,30 @@ export function validateCabRiders() {
   return errors.length ? { ok: false, error: errors.join('; ') } : { ok: true }
 }
 
+function initRiderArt() {
+  for (const id of ['a', 'b', 'c', 'd']) {
+    const land = document.querySelector(`#rider-${id}-landing .figure-wrap`)
+    const cab = document.querySelector(`#rider-${id}-cab .figure-wrap`)
+    if (land) injectRiderSvg(land, id)
+    if (cab) injectRiderSvg(cab, id)
+  }
+}
+
 function placeLandingRiders() {
   for (const spec of DEMO_PASSENGERS) {
     if (spec.origin === 1 && spec.startsInCar) continue
     const el = document.getElementById(`rider-${spec.id}-landing`)
     if (!el) continue
     const h = landingRiderHeightPx(spec.origin)
-    const img = el.querySelector('img')
-    if (img) img.style.height = `${h}px`
+    const fig = el.querySelector('.figure-wrap')
+    if (fig) fig.style.height = `${h}px`
     el.dataset.floor = String(spec.origin)
     el.style.left = `${LAYOUT.landingX}px`
     el.style.top = `${landingSlabY(spec.origin)}px`
-    el.style.transform = 'translate(-58%, -100%)'
+    el.style.transform = 'translate(-50%, -100%)'
   }
-  for (const img of document.querySelectorAll('.cab-rider img')) {
-    img.style.height = `${LAYOUT.cabRiderHeight}px`
+  for (const fig of document.querySelectorAll('.cab-rider .figure-wrap')) {
+    fig.style.height = `${LAYOUT.cabRiderHeight}px`
   }
 }
 
@@ -516,9 +587,9 @@ function buildCalls() {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
     g.setAttribute('class', 'call-badge')
     g.dataset.floor = String(f)
-    g.setAttribute('transform', `translate(${LAYOUT.callX}, ${cy})`)
+    g.setAttribute('transform', `translate(${LAYOUT.callBubbleX}, ${cy})`)
     g.innerHTML = `
-      <circle class="call-circle" cx="0" cy="0" r="22"/>
+      <circle class="call-circle" cx="0" cy="0" r="17"/>
       <circle class="call-dot" cx="0" cy="-2" r="5" opacity="0"/>
       <text class="call-num" x="0" y="6">${f}</text>
       <text class="call-dir" x="0" y="-14">${arrowFor(f)}</text>
