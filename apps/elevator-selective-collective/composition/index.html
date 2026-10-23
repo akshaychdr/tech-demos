@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px; height: 1080px; overflow: hidden;
+        background: #040810;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      #stage {
+        position: relative; width: 1920px; height: 1080px; overflow: hidden;
+      }
+      #camera { position: absolute; inset: 0; transform-origin: 71% 44%; }
+      #plate-wrap {
+        position: absolute; inset: 0;
+        opacity: 0;
+        transition: filter 0.6s ease;
+      }
+      #plate-wrap.dimmed { filter: saturate(0.4) brightness(0.5); }
+      #plate-wrap.title-dim { filter: saturate(0.55) brightness(0.42); }
+      #plate {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+      }
+      #overlay {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        pointer-events: none; z-index: 12;
+      }
+      .route-path { fill: none; stroke-width: 3; stroke-dasharray: 6 8; opacity: 0; }
+      .route-down { stroke: #fb923c; filter: url(#orangeGlow); }
+      .route-sel { stroke: #22d3ee; filter: url(#cyanGlow); }
+      .call-path { fill: none; stroke: #f472b6; stroke-width: 2.5; stroke-dasharray: 4 6; opacity: 0.75; filter: url(#magentaGlow); }
+      .call-circle { fill: #ec4899; filter: url(#magentaGlow); }
+      .call-dot { fill: #f8fafc; filter: url(#magentaGlow); }
+      .call-num, .call-dir {
+        fill: #fff; font-size: 14px; font-weight: 700; text-anchor: middle;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      .floor-label-pill { fill: rgba(4, 8, 18, 0.78); stroke: rgba(34, 211, 238, 0.35); stroke-width: 1; }
+      .floor-tick { stroke: rgba(34, 211, 238, 0.45); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: 0.85; }
+      .floor-label {
+        fill: #e2e8f0; font-size: 14px; font-weight: 600;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      .hall-btn { fill: #1e293b; stroke: #94a3b8; stroke-width: 1; }
+      .hall-lantern { fill: #f472b6; filter: url(#magentaGlow); }
+      .rope {
+        stroke: #67e8f9; stroke-width: 2.5; fill: none; opacity: 0.92;
+        filter: url(#cyanGlow);
+      }
+      #car {
+        position: absolute; left: 0; top: 0; z-index: 20;
+        opacity: 0;
+        overflow: visible;
+        min-width: 80px; min-height: 80px;
+      }
+      #car-indicator {
+        position: absolute; left: 50%; top: -34px;
+        transform: translateX(-50%);
+        min-width: 58px; padding: 5px 10px;
+        background: rgba(2, 8, 18, 0.94);
+        border: 1px solid rgba(34, 211, 238, 0.95);
+        border-radius: 4px;
+        color: #a5f3fc; font-size: 14px; font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        text-align: center; letter-spacing: 0.04em;
+        text-shadow: 0 0 10px rgba(34, 211, 238, 0.9);
+        box-shadow: 0 0 18px rgba(34, 211, 238, 0.45), inset 0 0 12px rgba(34, 211, 238, 0.15);
+        z-index: 8;
+      }
+      .neon-cab {
+        position: relative; width: 100%; height: 100%;
+        filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.35));
+      }
+      .neon-cab-crosshead {
+        position: absolute; top: -5px; left: 28%; right: 28%; height: 5px;
+        background: linear-gradient(90deg, #475569, #94a3b8, #475569);
+        border-radius: 2px;
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
+      }
+      .neon-cab-body {
+        position: absolute; inset: 0;
+        border-radius: 5px;
+        background: linear-gradient(165deg, rgba(10, 28, 48, 0.88) 0%, rgba(4, 12, 24, 0.94) 55%, rgba(8, 20, 36, 0.9) 100%);
+        border: 2px solid rgba(34, 211, 238, 0.85);
+        box-shadow:
+          0 0 22px rgba(34, 211, 238, 0.4),
+          inset 0 0 28px rgba(34, 211, 238, 0.1),
+          inset 0 -12px 24px rgba(236, 72, 153, 0.08);
+      }
+      .neon-cab-body::after {
+        content: "";
+        position: absolute; inset: 3px; border-radius: 3px;
+        border: 1px solid rgba(236, 72, 153, 0.28);
+        pointer-events: none;
+      }
+      .neon-cab-light {
+        position: absolute; top: 8%; left: 12%; right: 12%; height: 9%;
+        border-radius: 2px;
+        background: linear-gradient(180deg, rgba(254, 243, 199, 0.55), rgba(251, 191, 36, 0.2));
+        box-shadow: 0 0 16px rgba(251, 191, 36, 0.35);
+      }
+      .neon-rail {
+        position: absolute; left: 10%; right: 10%; bottom: 30%; height: 3px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, transparent, rgba(203, 213, 225, 0.85), transparent);
+        opacity: 0.85;
+      }
+      .neon-door {
+        position: absolute; top: 22%; bottom: 10%; width: 46%;
+        background: linear-gradient(180deg, rgba(51, 65, 85, 0.95), rgba(30, 41, 59, 0.98));
+        border: 1px solid rgba(148, 163, 184, 0.65);
+        box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.55);
+        transition: transform 0.08s linear, opacity 0.08s linear;
+      }
+      .neon-door::before {
+        content: "";
+        position: absolute; top: 12%; bottom: 12%; width: 2px;
+        background: linear-gradient(180deg, transparent, rgba(34, 211, 238, 0.7), transparent);
+      }
+      .door-left { left: 4%; transform-origin: left center; }
+      .door-left::before { right: 8%; }
+      .door-right { right: 4%; transform-origin: right center; }
+      .door-right::before { left: 8%; }
+      .neon-cab-glow-edge {
+        position: absolute; inset: 0; border-radius: 5px; pointer-events: none;
+        box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.25);
+      }
+      .cab-rider {
+        position: absolute; bottom: 14%; z-index: 6;
+        opacity: 0;
+        width: 22px;
+        filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.95));
+      }
+      .cab-rider .figure-wrap { width: 100%; height: 38px; }
+      #rider-count {
+        position: absolute; top: 6%; right: 8%;
+        padding: 4px 8px; border-radius: 6px;
+        background: rgba(2, 8, 18, 0.9);
+        border: 1px solid rgba(34, 211, 238, 0.6);
+        color: #a5f3fc; font-size: 11px; font-weight: 700;
+        opacity: 0;
+      }
+      .landing-rider {
+        position: absolute; z-index: 22;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .landing-rider .figure-wrap {
+        position: relative;
+        width: 48px;
+        filter: drop-shadow(0 0 12px rgba(103, 232, 249, 0.95)) drop-shadow(0 0 6px rgba(224, 242, 254, 0.75));
+      }
+      .neon-person-svg { display: block; width: 100%; height: 100%; }
+      .rider-chip {
+        position: absolute; left: calc(100% + 6px); top: 2px;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+        pointer-events: none;
+        z-index: 2;
+      }
+      #calls[data-mode="down-collective"] .call-dir { opacity: 0; }
+      #calls[data-mode="down-collective"] .call-dot { opacity: 1; }
+      #calls[data-mode="selective-collective"] .call-dir { opacity: 1; }
+      #calls[data-mode="selective-collective"] .call-dot { opacity: 0; }
+      .rider-name {
+        padding: 2px 7px; border-radius: 999px;
+        background: rgba(4, 8, 18, 0.88);
+        color: #fff; font-size: 11px; font-weight: 700;
+        border: 1px solid rgba(236, 72, 153, 0.85);
+        box-shadow: 0 0 10px rgba(236, 72, 153, 0.55);
+      }
+      .rider-dest {
+        padding: 2px 6px; border-radius: 5px;
+        background: rgba(4, 8, 18, 0.88);
+        color: #a5f3fc; font-size: 10px; font-weight: 600;
+        border: 1px solid rgba(34, 211, 238, 0.45);
+        white-space: nowrap;
+        box-shadow: 0 0 8px rgba(34, 211, 238, 0.35);
+      }
+      .left-panel {
+        position: absolute; left: 48px; top: 0; width: 720px; height: 100%;
+        z-index: 30; pointer-events: none;
+      }
+      #explainer-column {
+        position: absolute; left: 0; top: 36px; width: 640px;
+      }
+      #live-explainer {
+        position: relative; width: 640px;
+        padding: 18px 22px; border-radius: 12px;
+        background: rgba(4, 8, 18, 0.88);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+      }
+      #mode-persist {
+        margin-top: 14px;
+        display: inline-block;
+        padding: 9px 18px;
+        border-radius: 999px;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        opacity: 0;
+        pointer-events: none;
+      }
+      #mode-persist.mode-down {
+        color: #fdba74;
+        background: rgba(24, 12, 6, 0.92);
+        border: 1px solid rgba(251, 146, 60, 0.75);
+        box-shadow: 0 0 22px rgba(251, 146, 60, 0.38), inset 0 0 14px rgba(251, 146, 60, 0.12);
+        text-shadow: 0 0 12px rgba(251, 146, 60, 0.55);
+      }
+      #mode-persist.mode-sel {
+        color: #a5f3fc;
+        background: rgba(6, 18, 28, 0.92);
+        border: 1px solid rgba(34, 211, 238, 0.75);
+        box-shadow: 0 0 22px rgba(34, 211, 238, 0.38), inset 0 0 14px rgba(34, 211, 238, 0.12);
+        text-shadow: 0 0 12px rgba(34, 211, 238, 0.55);
+      }
+      #scene-tag {
+        font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #94a3b8; margin-bottom: 8px;
+      }
+      #exp-headline {
+        font-size: 26px; font-weight: 700; color: #f8fafc; line-height: 1.2;
+        margin-bottom: 8px;
+      }
+      #exp-subtitle {
+        font-size: 18px; color: #cbd5e1; line-height: 1.4; margin-bottom: 12px;
+      }
+      .exp-meta { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+      #exp-direction {
+        padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 800;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(34, 211, 238, 0.5);
+        color: #67e8f9;
+      }
+      #exp-direction[data-dir="up"]::before { content: "▲ "; }
+      #exp-direction[data-dir="down"]::before { content: "▼ "; }
+      #exp-waiting {
+        flex: 1; min-width: 200px;
+        font-size: 14px; color: #94a3b8; line-height: 1.35;
+      }
+      #title-card {
+        position: absolute; left: 56px; top: 50%;
+        transform: translateY(-52%);
+        width: 720px; max-width: calc(100% - 112px);
+        z-index: 35; pointer-events: none;
+        opacity: 0;
+      }
+      #title-card-headline {
+        font-size: 58px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.08;
+        color: #f8fafc;
+        text-shadow: 0 0 60px rgba(34, 211, 238, 0.28);
+      }
+      #title-card-headline .tc-part { display: inline-block; }
+      #title-card-headline .tc-down {
+        color: #fdba74;
+        text-shadow: 0 0 40px rgba(251, 146, 60, 0.45);
+      }
+      #title-card-headline .tc-sel {
+        color: #67e8f9;
+        text-shadow: 0 0 40px rgba(34, 211, 238, 0.45);
+      }
+      #title-card-headline .tc-vs {
+        display: inline-block; margin: 0 0.22em;
+        font-size: 0.42em; font-weight: 500; vertical-align: middle;
+        color: #64748b;
+        text-shadow: none;
+        letter-spacing: 0.06em;
+      }
+      #title-card-sub {
+        margin-top: 20px; font-size: 28px; font-weight: 400; color: #cbd5e1;
+        letter-spacing: 0.01em;
+        text-shadow: 0 0 24px rgba(148, 163, 184, 0.35);
+      }
+      #terms-panel {
+        position: absolute; top: 248px; left: 0; width: 640px;
+        padding: 20px 22px; border-radius: 12px;
+        background: rgba(8, 12, 22, 0.88);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        opacity: 0;
+      }
+      #terms-panel h3 { font-size: 22px; color: #f1f5f9; margin-bottom: 12px; }
+      .term-row {
+        display: flex; gap: 12px; align-items: flex-start;
+        margin-bottom: 10px; font-size: 17px; color: #cbd5e1; line-height: 1.35;
+      }
+      .term-icon {
+        flex-shrink: 0; width: 36px; height: 36px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(34, 211, 238, 0.12);
+        border: 1px solid rgba(34, 211, 238, 0.35);
+        font-size: 16px;
+      }
+      #stats {
+        position: absolute; left: 0; top: 28px; width: 680px;
+        opacity: 0; z-index: 40;
+        background: rgba(8, 12, 22, 0.94); border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 16px; padding: 24px 28px;
+        box-shadow: 0 24px 80px rgba(0,0,0,0.55);
+      }
+      #stats h2 { font-size: 28px; color: #f1f5f9; margin-bottom: 8px; }
+      #stats .lead { font-size: 16px; color: #94a3b8; margin-bottom: 16px; line-height: 1.45; }
+      #stats-takeaway { font-size: 17px; color: #e2e8f0; margin-top: 14px; line-height: 1.4; }
+      .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+      .stat-head { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+      .stat-value { font-size: 40px; font-weight: 700; line-height: 1; margin-bottom: 6px; }
+      .stat-down { color: #fb923c; }
+      .stat-sel { color: #22d3ee; }
+      .stat-bar-bg { height: 6px; background: #0f172a; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+      .stat-bar { height: 100%; width: 0; border-radius: 4px; }
+      .bar-down { background: linear-gradient(90deg, #fb923c, #fdba74); }
+      .bar-sel { background: linear-gradient(90deg, #06b6d4, #67e8f9); }
+      #rider-stats { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+      #rider-stats th, #rider-stats td { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(71,85,105,0.4); }
+      #rider-stats th { color: #94a3b8; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+      #wait-footnote {
+        margin-top: 12px; font-size: 13px; color: #94a3b8; line-height: 1.45;
+        background: rgba(2, 6, 14, 0.95); padding: 10px 12px; border-radius: 8px;
+        border: 1px solid rgba(71, 85, 105, 0.45);
+      }
+      #logo-line {
+        position: absolute; left: 0; bottom: 36px;
+        font-size: 18px; font-weight: 500; color: #cbd5e1; opacity: 0;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+        letter-spacing: 0.02em;
+      }
+      .call-badge { opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="stage"
+      data-composition-id="selective-collective"
+      data-start="0"
+      data-duration="84"
+      data-width="1920"
+      data-height="1080"
+      data-fps="60"
+    >
+      <div id="camera">
+        <div id="plate-wrap">
+          <img id="plate" src="art/processed/plate-tower-1080p.jpg" alt="" width="1920" height="1080" />
+        </div>
+
+        <svg id="overlay" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="cyanGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="magentaGlow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="orangeGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <path id="rope" class="rope" d=""/>
+          <g id="floor-gutter"></g>
+          <g id="floor-labels"></g>
+          <g id="landings"></g>
+          <g id="call-paths"></g>
+          <path id="path-down" class="route-path route-down"/>
+          <path id="path-selective" class="route-path route-sel"/>
+          <g id="calls"></g>
+        </svg>
+
+        <div id="car">
+          <div id="car-indicator">▲ 1F</div>
+          <div class="neon-cab">
+            <div class="neon-cab-crosshead" aria-hidden="true"></div>
+            <div class="neon-cab-body">
+              <div id="rider-count"></div>
+              <div class="neon-cab-light" aria-hidden="true"></div>
+              <div class="neon-rail" aria-hidden="true"></div>
+              <div class="neon-door door-left" aria-hidden="true"></div>
+              <div class="neon-door door-right" aria-hidden="true"></div>
+              <div class="neon-cab-glow-edge" aria-hidden="true"></div>
+              <div class="cab-rider" id="rider-a-cab" style="left: 10%"><div class="figure-wrap"></div></div>
+              <div class="cab-rider" id="rider-b-cab" style="left: 30%"><div class="figure-wrap"></div></div>
+              <div class="cab-rider" id="rider-c-cab" style="left: 50%"><div class="figure-wrap"></div></div>
+              <div class="cab-rider" id="rider-d-cab" style="left: 70%"><div class="figure-wrap"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="landing-rider" id="rider-b-landing" data-floor="4" data-origin-floor="4">
+          <div class="rider-chip"><span class="rider-name">B</span><span class="rider-dest">to 7F</span></div>
+          <div class="figure-wrap"></div>
+        </div>
+        <div class="landing-rider" id="rider-c-landing" data-floor="7" data-origin-floor="7">
+          <div class="rider-chip"><span class="rider-name">C</span><span class="rider-dest">to 9F</span></div>
+          <div class="figure-wrap"></div>
+        </div>
+        <div class="landing-rider" id="rider-d-landing" data-floor="8" data-origin-floor="8">
+          <div class="rider-chip"><span class="rider-name">D</span><span class="rider-dest">to 1F</span></div>
+          <div class="figure-wrap"></div>
+        </div>
+
+        <div id="title-card" aria-hidden="true">
+          <h1 id="title-card-headline">
+            <span class="tc-part tc-down">Down Collective</span>
+            <span class="tc-vs">vs</span>
+            <span class="tc-part tc-sel">Selective Collective</span>
+          </h1>
+          <p id="title-card-sub">Control modes on elevators</p>
+        </div>
+
+        <div class="left-panel">
+          <div id="explainer-column">
+            <div id="live-explainer">
+              <div id="scene-tag">Scene 0 · Terms</div>
+              <div id="exp-headline">Car call, landing call, dwell</div>
+              <div id="exp-subtitle">Loading…</div>
+              <div class="exp-meta">
+                <span id="exp-direction">—</span>
+                <div id="exp-waiting"></div>
+              </div>
+            </div>
+            <div id="mode-persist" class="mode-down" aria-hidden="true">Down collective</div>
+          </div>
+          <div id="terms-panel">
+            <h3>Quick glossary</h3>
+            <div class="term-row"><span class="term-icon">IN</span><span><strong>Car call</strong> = button <em>inside</em> the car (where do I want to go?) — rider A presses 9F.</span></div>
+            <div class="term-row"><span class="term-icon">H</span><span><strong>Landing call</strong> = button in the <em>hallway</em> (come get me) — B, C, D at 4F, 7F, 8F.</span></div>
+            <div class="term-row"><span class="term-icon">||</span><span><strong>Dwell</strong> = the pause with doors open while people board or leave.</span></div>
+            <div class="term-row"><span class="term-icon">A</span><span>Riders <strong>A</strong> (in car → 9F), <strong>B</strong> (4F → 7F), <strong>C</strong> (7F → 9F), <strong>D</strong> (8F → 1F). All calls registered at t=0.</span></div>
+          </div>
+          <div id="stats">
+            <h2>Comparison</h2>
+            <p class="lead"><strong>Wait</strong> = seconds until the car reaches your floor. <strong>Journey</strong> = seconds until you reach your destination (from t=0).</p>
+            <div class="stat-grid">
+              <div>
+                <div class="stat-head">Down collective — mean wait</div>
+                <div id="val-down-wait" class="stat-value stat-down">—</div>
+                <div class="stat-bar-bg"><div id="bar-down-wait" class="stat-bar bar-down" style="width:72%"></div></div>
+                <div class="stat-head">Mean journey</div>
+                <div id="val-down-journey" class="stat-value stat-down" style="font-size:28px">—</div>
+              </div>
+              <div>
+                <div class="stat-head">Selective collective — mean wait</div>
+                <div id="val-sel-wait" class="stat-value stat-sel">—</div>
+                <div class="stat-bar-bg"><div id="bar-sel-wait" class="stat-bar bar-sel" style="width:46%"></div></div>
+                <div class="stat-head">Mean journey</div>
+                <div id="val-sel-journey" class="stat-value stat-sel" style="font-size:28px">—</div>
+              </div>
+            </div>
+            <table id="rider-stats">
+              <thead>
+                <tr>
+                  <th>Rider</th>
+                  <th>Trip</th>
+                  <th>Down wait</th>
+                  <th>Down journey</th>
+                  <th>Sel wait</th>
+                  <th>Sel journey</th>
+                </tr>
+              </thead>
+              <tbody id="rider-stats-body"></tbody>
+            </table>
+            <p id="stats-takeaway"></p>
+            <p id="wait-footnote"></p>
+          </div>
+          <div id="logo-line">HyperFrames · Barney / Harris terminology</div>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {}
+    </script>
+    <script type="module">
+      import { initComposition } from './scene.js'
+      initComposition()
+    </script>
+  </body>
+</html>
