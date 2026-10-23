@@ -56,7 +56,7 @@ const CHECKS = [
   { time: 5, floor: 1, label: 'terms' },
   { time: 14.2, floor: 4.5, label: 'down-going-up-passing-4-7' },
   { time: 19.2, floor: 9, label: 'down-top-turn' },
-  { time: 25.8, floor: 4, label: 'down-4F-board-B' },
+  { time: 26.1, floor: 4, label: 'down-4F-board-B' },
   { time: 34.6, floor: 5.5, label: 'down-second-trip-up' },
   { time: 44, floor: 4, label: 'selective-4F-board-B' },
   { time: 48.6, floor: 7, label: 'selective-7F-B-off-C-on' },

@@ -392,6 +392,10 @@ export function getStateAtSimTime(sim, simTime) {
     }
   }
 
+  let dwellProgress = 0
+  let dwellFloor = null
+  let activeDwellEnd = null
+
   for (const seg of sim.segments) {
     if (t >= seg.t0 && t < seg.t1) {
       if (seg.phase === 'travel') {
@@ -403,8 +407,30 @@ export function getStateAtSimTime(sim, simTime) {
         floor = seg.fromFloor
         doorsOpen = true
         direction = seg.direction
+        dwellFloor = seg.fromFloor
+        dwellProgress = (t - seg.t0) / (seg.t1 - seg.t0)
+        activeDwellEnd = seg.t1
       }
       break
+    }
+  }
+
+  if (doorsOpen && dwellFloor !== null && dwellProgress >= 0.5 && activeDwellEnd !== null) {
+    const endEv = sorted.find(
+      (ev) =>
+        ev.kind === 'dwell_end' &&
+        ev.floor === dwellFloor &&
+        Math.abs(ev.time - activeDwellEnd) < 0.001,
+    )
+    if (endEv) {
+      if (endEv.boarded) for (const id of endEv.boarded) {
+        waiting.delete(id)
+        inCar.add(id)
+      }
+      if (endEv.alighted) for (const id of endEv.alighted) {
+        inCar.delete(id)
+        delivered.add(id)
+      }
     }
   }
 

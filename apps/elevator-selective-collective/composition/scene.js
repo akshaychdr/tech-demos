@@ -138,32 +138,70 @@ export function initComposition() {
     return { phase: 'stats', mode: null, simTime: 0 }
   }
 
+  const liveExplainer = document.getElementById('live-explainer')
+  const callsRoot = document.getElementById('calls')
+
   function setCallBadgeStyle(mode) {
+    if (callsRoot) callsRoot.setAttribute('data-mode', mode)
     document.querySelectorAll('.call-badge').forEach((g) => {
-      const dirEl = g.querySelector('.call-dir')
-      const dotEl = g.querySelector('.call-dot')
+      const dir = g.querySelector('.call-dir')
+      const floor = Number(g.dataset.floor)
+      if (!dir) return
       if (mode === 'down-collective') {
-        if (dirEl) dirEl.style.display = 'none'
-        if (dotEl) dotEl.style.display = 'block'
+        dir.textContent = ''
       } else {
-        if (dirEl) dirEl.style.display = 'block'
-        if (dotEl) dotEl.style.display = 'none'
+        dir.textContent = floor === 8 ? '▼' : '▲'
       }
     })
   }
 
-  function updateRiders(state) {
+  function positionLandingRider(el, floor) {
+    const x = LAYOUT.shaftLeft - 118
+    const y = floorCenterY(floor) + 8
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+  }
+
+  function updateCallBadges(waitingIds) {
+    const originByRider = { b: 4, c: 7, d: 8 }
+    for (const f of CALL_FLOORS) {
+      const badge = document.querySelector(`.call-badge[data-floor="${f}"]`)
+      if (!badge) continue
+      const lit = Object.entries(originByRider).some(
+        ([id, fl]) => fl === f && waitingIds.includes(id),
+      )
+      badge.style.opacity = lit ? '1' : '0.22'
+    }
+  }
+
+  function updateRiders(state, carFloor = 1, doorsOpen = false) {
     for (const spec of DEMO_PASSENGERS) {
       const landing = document.getElementById(`rider-${spec.id}-landing`)
       const inCab = document.getElementById(`rider-${spec.id}-cab`)
       if (!landing || !inCab) continue
-      const onLanding = state.waiting.includes(spec.id)
-      const inside = state.inCar.includes(spec.id)
-      landing.style.opacity = onLanding ? '1' : '0'
-      inCab.style.opacity = inside ? '1' : '0'
+
+      let showLanding = state.waiting.includes(spec.id)
+      let showCab = state.inCar.includes(spec.id)
+      let landingFloor = spec.origin
+
+      if (
+        doorsOpen &&
+        showCab &&
+        spec.destination === Math.round(carFloor) &&
+        !state.delivered.includes(spec.id)
+      ) {
+        showLanding = true
+        showCab = false
+        landingFloor = Math.round(carFloor)
+      }
+
+      if (showLanding) positionLandingRider(landing, landingFloor)
+      landing.style.opacity = showLanding ? '1' : '0'
+      inCab.style.opacity = showCab ? '1' : '0'
     }
-    riderCount.textContent = state.inCar.length ? `${state.inCar.length} in car` : ''
-    riderCount.style.opacity = state.inCar.length ? '1' : '0'
+    const inCarCount = state.inCar.length
+    riderCount.textContent = inCarCount ? `${inCarCount} in car` : ''
+    riderCount.style.opacity = inCarCount ? '1' : '0'
   }
 
   function applyPresentationTime(t) {
@@ -171,17 +209,14 @@ export function initComposition() {
 
     termsPanel.style.opacity = phase === 'terms' ? '1' : '0'
     stats.style.opacity = phase === 'stats' ? '1' : '0'
-    typography.style.opacity = phase === 'terms' ? '1' : '0'
+    typography.style.opacity = '0'
+    liveExplainer.style.opacity = phase === 'stats' ? '0' : '1'
     plateWrap.classList.toggle('dimmed', phase === 'stats')
     if (phase === 'stats') plateWrap.style.opacity = '0.35'
     else plateWrap.style.opacity = '1'
 
     pathDown.style.opacity = phase === 'down' ? '0.85' : '0'
     pathSel.style.opacity = phase === 'selective' ? '0.88' : '0'
-    document.querySelectorAll('.call-badge').forEach((g) => {
-      if (phase !== 'stats') g.style.opacity = phase === 'terms' || phase === 'down' || phase === 'selective' ? '1' : '0'
-    })
-
     if (phase === 'terms') {
       sceneTag.textContent = 'Scene 0 · Terms'
       setCallBadgeStyle('selective-collective')
@@ -191,11 +226,17 @@ export function initComposition() {
       expDir.textContent = '—'
       expWaiting.textContent = 'B @ 4F · C @ 7F · D @ 8F still waiting in the hallway'
       setCarFloor(1, true, 1)
+      for (const spec of DEMO_PASSENGERS) {
+        if (spec.id === 'a') continue
+        const landing = document.getElementById(`rider-${spec.id}-landing`)
+        if (landing) positionLandingRider(landing, spec.origin)
+      }
       updateRiders({
         waiting: ['b', 'c', 'd'],
         inCar: ['a'],
         delivered: [],
       })
+      updateCallBadges(['b', 'c', 'd'])
       car.style.opacity = '1'
       return
     }
@@ -230,23 +271,14 @@ export function initComposition() {
       : 'No hallway waits left'
     setCarFloor(state.floor, state.doorsOpen, state.doorsOpen ? 1 : 0, state.direction)
     car.style.opacity = '1'
-    updateRiders(state)
+    updateRiders(state, state.floor, state.doorsOpen)
+    updateCallBadges(state.waiting)
     if (
       mode === 'selective-collective' &&
       state.doorsOpen &&
       Math.abs(state.floor - 7) < 0.2 &&
       state.simTime >= 9.2
     ) {
-      const bLand = document.getElementById('rider-b-landing')
-      const bCab = document.getElementById('rider-b-cab')
-      const cLand = document.getElementById('rider-c-landing')
-      const cCab = document.getElementById('rider-c-cab')
-      if (bLand && bCab && cLand && cCab) {
-        bLand.style.opacity = '1'
-        bCab.style.opacity = '0'
-        cLand.style.opacity = '0'
-        cCab.style.opacity = '1'
-      }
       expSubtitle.textContent = 'B exits at 7F while C boards — same dwell, two riders.'
     }
   }
@@ -417,10 +449,11 @@ function buildCalls() {
     align.push({ floor: f, cy })
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
     g.setAttribute('class', 'call-badge')
+    g.dataset.floor = String(f)
     g.setAttribute('transform', `translate(${LAYOUT.callX}, ${cy})`)
     g.innerHTML = `
       <circle class="call-circle" cx="0" cy="0" r="22"/>
-      <circle class="call-dot" cx="0" cy="-2" r="5" style="display:none"/>
+      <circle class="call-dot" cx="0" cy="-2" r="5" opacity="0"/>
       <text class="call-num" x="0" y="6">${f}</text>
       <text class="call-dir" x="0" y="-14">${arrowFor(f)}</text>
     `
