@@ -349,6 +349,15 @@ export function initComposition() {
     return { ok: true }
   }
 
+  window.__applyPresentationTime = applyPresentationTime
+
+  const _seek = tl.seek.bind(tl)
+  tl.seek = (time, suppressEvents) => {
+    const result = _seek(time, suppressEvents)
+    applyPresentationTime(tl.time())
+    return result
+  }
+
   tl.seek(0)
   applyPresentationTime(0)
 }

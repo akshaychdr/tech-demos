@@ -399,8 +399,11 @@ export function getStateAtSimTime(sim, simTime) {
   for (const seg of sim.segments) {
     if (t >= seg.t0 && t < seg.t1) {
       if (seg.phase === 'travel') {
-        const p = (t - seg.t0) / (seg.t1 - seg.t0)
-        floor = seg.fromFloor + (seg.toFloor - seg.fromFloor) * p
+        let p = (t - seg.t0) / (seg.t1 - seg.t0)
+        p = Math.max(0, Math.min(1, p))
+        // Smooth in-out between floors (motion only; stop times unchanged).
+        const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2
+        floor = seg.fromFloor + (seg.toFloor - seg.fromFloor) * eased
         direction = seg.direction
         doorsOpen = false
       } else {

@@ -37,7 +37,7 @@ async function main() {
   await mkdir(OUT, { recursive: true })
   const port = process.env.VITE_PORT || '5202'
   const baseUrl = `http://127.0.0.1:${port}/`
-  const vite = spawn('bun', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', port, '--strictPort'], {
+  const vite = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', port, '--strictPort'], {
     cwd: ROOT,
     stdio: 'pipe',
   })
@@ -83,7 +83,7 @@ async function main() {
       tl.seek(0)
       tl.play(0)
     })
-    await page.waitForTimeout(20000)
+    await page.waitForTimeout(86000)
     await context.close()
     await browser.close()
 
