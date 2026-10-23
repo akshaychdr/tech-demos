@@ -51,12 +51,20 @@ function startCompositionServer() {
   })
 }
 
+/** Presentation times (80s storyboard) and approximate car floor for cab checks */
 const CHECKS = [
-  { time: 3, floor: 1, label: 'hook' },
-  { time: 10, floor: 9, label: 'down-collective' },
-  { time: 20, floor: 8.5, label: 'selective' },
-  { time: 34, floor: 9, label: 'stats' },
+  { time: 5, floor: 1, label: 'terms' },
+  { time: 14.2, floor: 4.5, label: 'down-going-up-passing-4-7' },
+  { time: 19.2, floor: 9, label: 'down-top-turn' },
+  { time: 25.8, floor: 4, label: 'down-4F-board-B' },
+  { time: 34.6, floor: 5.5, label: 'down-second-trip-up' },
+  { time: 44, floor: 4, label: 'selective-4F-board-B' },
+  { time: 48.6, floor: 7, label: 'selective-7F-B-off-C-on' },
+  { time: 53.2, floor: 8, label: 'selective-8F-D-board' },
+  { time: 70, floor: 1, label: 'stats' },
 ]
+
+const SNAPSHOT_AT = CHECKS.map((c) => c.time).join(',')
 
 async function assertCabPlacement(baseUrl) {
   const browser = await chromium.launch({ headless: true })
@@ -107,7 +115,7 @@ try {
 
   console.log('Capturing HyperFrames stills…')
   execSync(
-    'npx hyperframes@0.8.181 snapshot composition --at 3,10,20,34 -o storyboard-stills',
+    `npx hyperframes@0.8.181 snapshot composition --at ${SNAPSHOT_AT} -o storyboard-stills`,
     { cwd: root, stdio: 'inherit' },
   )
 } finally {

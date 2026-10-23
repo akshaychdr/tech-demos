@@ -6,9 +6,34 @@ import {
   callToShaftPath,
   assertFloorAlignment,
 } from './layout.js'
-import { simulatePassengers, formatSeconds, SIM, WAIT_DEFINITION } from './simulation.js'
+import {
+  simulatePassengers,
+  formatSeconds,
+  SIM,
+  WAIT_DEFINITION,
+  DEMO_PASSENGERS,
+  getStateAtSimTime,
+} from './simulation.js'
 
 const CALL_FLOORS = [4, 7, 8]
+const GUTTER_X = 1188
+
+export const STORYBOARD = {
+  totalDuration: 80,
+  termsEnd: 10,
+  downStart: 10,
+  downDuration: 30,
+  selectiveStart: 40,
+  selectiveDuration: 22,
+  statsStart: 62,
+}
+
+const RIDER_IMG = {
+  a: 'art/processed/passenger-1.png',
+  b: 'art/processed/passenger-2.png',
+  c: 'art/processed/passenger-3.png',
+  d: 'art/processed/passenger-4.png',
+}
 
 export function initComposition() {
   window.__timelines = window.__timelines || {}
@@ -16,15 +41,16 @@ export function initComposition() {
   const doorL = car.querySelector('.door-left')
   const doorR = car.querySelector('.door-right')
   const indicator = document.getElementById('car-indicator')
-  const riderLobby = document.getElementById('rider-lobby')
 
   car.style.width = `${LAYOUT.carWidth}px`
   car.style.height = `${LAYOUT.carHeight}px`
 
+  buildFloorGutter()
   buildFloorLabels()
   buildLandings()
   buildCalls()
-  placeLandingWaiters()
+  placeLandingRiders()
+  populateStatsRiders()
 
   const down = simulatePassengers('down-collective')
   const sel = simulatePassengers('selective-collective')
@@ -35,25 +61,36 @@ export function initComposition() {
   document.getElementById('val-down-journey').textContent = formatSeconds(down.meanJourney)
   document.getElementById('val-sel-journey').textContent = formatSeconds(sel.meanJourney)
   document.getElementById('wait-footnote').textContent = `${WAIT_DEFINITION} ${SIM.travelPerFloor}s/floor, ${SIM.dwell}s dwell, car starts 1F.`
+  document.getElementById('stats-takeaway').textContent =
+    'Selective collective serves hall calls in the direction of travel, so average wait and journey are lower for the same four riders.'
 
-  const shaftX = LAYOUT.shaftCenterX
+  document.getElementById('bar-down-wait').style.width = `${(down.meanWait / maxWait) * 100}%`
+  document.getElementById('bar-sel-wait').style.width = `${(sel.meanWait / maxWait) * 100}%`
+
+  fillRiderStats(down, sel)
+
   const pathDown = document.getElementById('path-down')
   const pathSel = document.getElementById('path-selective')
-  pathDown.setAttribute('d', `M ${shaftX} ${floorCenterY(1)} L ${shaftX} ${floorCenterY(9)}`)
-  pathSel.setAttribute(
-    'd',
-    `M ${shaftX} ${floorCenterY(1)} L ${shaftX} ${floorCenterY(4)} L ${shaftX} ${floorCenterY(7)} L ${shaftX} ${floorCenterY(9)} L ${shaftX} ${floorCenterY(8)} L ${shaftX} ${floorCenterY(1)}`,
-  )
+  pathDown.setAttribute('d', routePathFromSegments(down.segments))
+  pathSel.setAttribute('d', routePathFromSegments(sel.segments))
 
-  const waiter4 = document.getElementById('waiter-4')
-  const callPaths = document.querySelectorAll('.call-path')
-  const callBadges = document.querySelectorAll('.call-badge')
-  const lanterns = document.querySelectorAll('.hall-lantern')
+  const expHeadline = document.getElementById('exp-headline')
+  const expSubtitle = document.getElementById('exp-subtitle')
+  const expDir = document.getElementById('exp-direction')
+  const expWaiting = document.getElementById('exp-waiting')
+  const termsPanel = document.getElementById('terms-panel')
+  const sceneTag = document.getElementById('scene-tag')
+  const stats = document.getElementById('stats')
+  const typography = document.getElementById('typography')
+  const plateWrap = document.getElementById('plate-wrap')
+  const camera = document.getElementById('camera')
+  const logo = document.getElementById('logo-line')
+  const riderCount = document.getElementById('rider-count')
 
   let prevF = 1
+  let lastTravelDir = 'up'
 
   function setRopes(carFloor) {
-    const cy = floorCenterY(carFloor)
     const carTop = carTranslateY(carFloor)
     const rope = document.getElementById('rope')
     rope.setAttribute(
@@ -70,140 +107,211 @@ export function initComposition() {
     doorR.style.opacity = open ? Math.max(0.15, 1 - amount * 0.9) : 1
   }
 
-  function setCarFloor(f, overshoot = 0, doorsOpen = false, doorAmt = 1) {
+  function setCarFloor(f, doorsOpen = false, doorAmt = 1, travelDir = null) {
     const x = carTranslateX()
-    const y = carTranslateY(f, overshoot)
+    const y = carTranslateY(f)
     car.style.transform = `translate(${x}px, ${y}px)`
     setRopes(f)
     setDoors(doorsOpen, doorAmt)
 
     const rounded = Math.max(1, Math.min(LAYOUT.floors, Math.round(f)))
-    const dir = f >= prevF ? 'up' : 'down'
-    prevF = f
+    let dir = travelDir
+    if (!dir) {
+      dir = Math.abs(f - prevF) < 0.02 ? lastTravelDir : f >= prevF ? 'up' : 'down'
+    }
+    lastTravelDir = dir
+    if (Math.abs(f - prevF) >= 0.02) prevF = f
     const arrow = dir === 'up' ? '▲' : '▼'
-    indicator.textContent = `${arrow} ${rounded}`
+    indicator.textContent = `${arrow} ${rounded}F`
   }
 
-  const capTitle = document.getElementById('cap-title')
-  const capBody = document.getElementById('cap-body')
-  const sceneCaption = document.getElementById('scene-caption')
-  const headline = document.querySelectorAll('#headline .word')
-  const subhead = document.getElementById('subhead')
-  const camera = document.getElementById('camera')
-  const stats = document.getElementById('stats')
-  const logo = document.getElementById('logo-line')
-  const typography = document.getElementById('typography')
-  const plateWrap = document.getElementById('plate-wrap')
-
-  function applyCarStateAtTime(t) {
-    if (t < 7) {
-      setCarFloor(1, 0, true, 1)
-      return
+  function presentationToSim(t) {
+    if (t < STORYBOARD.downStart) return { phase: 'terms', mode: null, simTime: 0 }
+    if (t < STORYBOARD.selectiveStart) {
+      const p = (t - STORYBOARD.downStart) / STORYBOARD.downDuration
+      return { phase: 'down', mode: 'down-collective', simTime: p * down.finishTime }
     }
-    if (t < 9.8) {
-      const p = Math.min(1, (t - 7) / 2.8)
-      setCarFloor(1 + p * 8, 0, false, 0)
-      return
+    if (t < STORYBOARD.statsStart) {
+      const p = (t - STORYBOARD.selectiveStart) / STORYBOARD.selectiveDuration
+      return { phase: 'selective', mode: 'selective-collective', simTime: p * sel.finishTime }
     }
-    if (t < 14) {
-      setCarFloor(9, 0, false, 0)
-      return
-    }
-    if (t < 14.8) {
-      setCarFloor(1, 0, true, 1)
-      return
-    }
-    if (t < 16.4) {
-      const p = Math.min(1, (t - 14.8) / 1.6)
-      setCarFloor(1 + p * 3, 0, false, 0)
-      return
-    }
-    if (t < 17.2) {
-      setCarFloor(4, 0, true, 1)
-      return
-    }
-    if (t < 19.4) {
-      const p = Math.min(1, (t - 17.2) / 2.2)
-      setCarFloor(4 + p * 4.5, 0, false, 0)
-      return
-    }
-    if (t < 28) {
-      setCarFloor(8.5, 0, false, 0)
-      return
-    }
-    setCarFloor(9, 0, false, 0)
+    return { phase: 'stats', mode: null, simTime: 0 }
   }
 
-  gsap.set(headline, { y: 28, opacity: 0 })
-  gsap.set(riderLobby, { opacity: 1 })
-  applyCarStateAtTime(0)
+  function setCallBadgeStyle(mode) {
+    document.querySelectorAll('.call-badge').forEach((g) => {
+      const dirEl = g.querySelector('.call-dir')
+      const dotEl = g.querySelector('.call-dot')
+      if (mode === 'down-collective') {
+        if (dirEl) dirEl.style.display = 'none'
+        if (dotEl) dotEl.style.display = 'block'
+      } else {
+        if (dirEl) dirEl.style.display = 'block'
+        if (dotEl) dotEl.style.display = 'none'
+      }
+    })
+  }
+
+  function updateRiders(state) {
+    for (const spec of DEMO_PASSENGERS) {
+      const landing = document.getElementById(`rider-${spec.id}-landing`)
+      const inCab = document.getElementById(`rider-${spec.id}-cab`)
+      if (!landing || !inCab) continue
+      const onLanding = state.waiting.includes(spec.id)
+      const inside = state.inCar.includes(spec.id)
+      landing.style.opacity = onLanding ? '1' : '0'
+      inCab.style.opacity = inside ? '1' : '0'
+    }
+    riderCount.textContent = state.inCar.length ? `${state.inCar.length} in car` : ''
+    riderCount.style.opacity = state.inCar.length ? '1' : '0'
+  }
+
+  function applyPresentationTime(t) {
+    const { phase, mode, simTime } = presentationToSim(t)
+
+    termsPanel.style.opacity = phase === 'terms' ? '1' : '0'
+    stats.style.opacity = phase === 'stats' ? '1' : '0'
+    typography.style.opacity = phase === 'terms' ? '1' : '0'
+    plateWrap.classList.toggle('dimmed', phase === 'stats')
+    if (phase === 'stats') plateWrap.style.opacity = '0.35'
+    else plateWrap.style.opacity = '1'
+
+    pathDown.style.opacity = phase === 'down' ? '0.85' : '0'
+    pathSel.style.opacity = phase === 'selective' ? '0.88' : '0'
+    document.querySelectorAll('.call-badge').forEach((g) => {
+      if (phase !== 'stats') g.style.opacity = phase === 'terms' || phase === 'down' || phase === 'selective' ? '1' : '0'
+    })
+
+    if (phase === 'terms') {
+      sceneTag.textContent = 'Scene 0 · Terms'
+      setCallBadgeStyle('selective-collective')
+      expHeadline.textContent = 'Car call, landing call, dwell'
+      expSubtitle.textContent =
+        'Same four riders (A–D) and the same calls at t=0 for both control systems.'
+      expDir.textContent = '—'
+      expWaiting.textContent = 'B @ 4F · C @ 7F · D @ 8F still waiting in the hallway'
+      setCarFloor(1, true, 1)
+      updateRiders({
+        waiting: ['b', 'c', 'd'],
+        inCar: ['a'],
+        delivered: [],
+      })
+      car.style.opacity = '1'
+      return
+    }
+
+    if (phase === 'stats') {
+      sceneTag.textContent = 'Scene 3 · Comparison'
+      expHeadline.textContent = 'Mean wait vs mean journey'
+      expSubtitle.textContent = WAIT_DEFINITION
+      expDir.textContent = '—'
+      expDir.removeAttribute('data-dir')
+      expWaiting.textContent = ''
+      setCarFloor(1, false, 0)
+      car.style.opacity = '0.35'
+      updateRiders({ waiting: [], inCar: [], delivered: ['a', 'b', 'c', 'd'] })
+      document.querySelectorAll('.call-badge').forEach((g) => {
+        g.style.opacity = '0.35'
+      })
+      return
+    }
+
+    const sim = mode === 'down-collective' ? down : sel
+    const state = getStateAtSimTime(sim, simTime)
+    setCallBadgeStyle(mode)
+    sceneTag.textContent =
+      mode === 'down-collective' ? 'Scene 1 · Down collective' : 'Scene 2 · Selective collective'
+    expHeadline.textContent = state.headline
+    expSubtitle.textContent = state.subtitle
+    expDir.textContent = state.direction === 'up' ? 'UP' : 'DOWN'
+    expDir.dataset.dir = state.direction
+    expWaiting.textContent = state.stillWaiting.length
+      ? `Still waiting: ${state.stillWaiting.join(' · ')}`
+      : 'No hallway waits left'
+    setCarFloor(state.floor, state.doorsOpen, state.doorsOpen ? 1 : 0, state.direction)
+    car.style.opacity = '1'
+    updateRiders(state)
+    if (
+      mode === 'selective-collective' &&
+      state.doorsOpen &&
+      Math.abs(state.floor - 7) < 0.2 &&
+      state.simTime >= 9.2
+    ) {
+      const bLand = document.getElementById('rider-b-landing')
+      const bCab = document.getElementById('rider-b-cab')
+      const cLand = document.getElementById('rider-c-landing')
+      const cCab = document.getElementById('rider-c-cab')
+      if (bLand && bCab && cLand && cCab) {
+        bLand.style.opacity = '1'
+        bCab.style.opacity = '0'
+        cLand.style.opacity = '0'
+        cCab.style.opacity = '1'
+      }
+      expSubtitle.textContent = 'B exits at 7F while C boards — same dwell, two riders.'
+    }
+  }
+
+  gsap.set('#headline .word', { y: 28, opacity: 0 })
+  gsap.set('#subhead', { opacity: 0 })
+  applyPresentationTime(0)
 
   const tl = gsap.timeline({
     paused: true,
-    onUpdate: () => applyCarStateAtTime(tl.time()),
+    onUpdate: () => applyPresentationTime(tl.time()),
   })
 
-  tl.to(headline, { opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: 'back.out(1.4)' }, 0.4)
-  tl.to(subhead, { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.1)
-  tl.fromTo(camera, { scale: 1, x: 0, y: 0 }, { scale: 1.04, x: -12, y: 6, duration: 5, ease: 'power1.inOut' }, 0)
+  tl.to('#headline .word', { opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: 'back.out(1.4)' }, 0.4)
+  tl.to('#subhead', { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.1)
+  tl.fromTo(camera, { scale: 1, x: 0, y: 0 }, { scale: 1.03, x: -10, y: 4, duration: STORYBOARD.totalDuration, ease: 'none' }, 0)
   tl.to(plateWrap, { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.2)
-  tl.to(car, { opacity: 1, duration: 0.5 }, 1.5)
-  tl.to(callBadges, { opacity: 1, duration: 0.6, stagger: 0.08 }, 2)
-  tl.to(['#waiter-4', '#waiter-7', '#waiter-8'], { opacity: 1, duration: 0.5, stagger: 0.06 }, 2.2)
-  tl.to(typography, { opacity: 0, duration: 0.6 }, 5.2)
-
-  tl.add(() => {
-    capTitle.textContent = 'Down collective'
-    capBody.textContent =
-      'One hall button per landing — up travel serves car calls only. The 4F rider is passed on the way up.'
-    gsap.set(waiter4, { opacity: 1 })
-  }, 6)
-  tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 6)
-  tl.to(callPaths, { opacity: 0.92, duration: 0.5 }, 6.2)
-  tl.to(lanterns, { opacity: 1, duration: 0.4 }, 6.2)
-  tl.to(pathDown, { opacity: 0.88, duration: 0.5 }, 6.5)
-  tl.to({}, { duration: 2.8, ease: 'power2.inOut' }, 7)
-  tl.to(sceneCaption, { opacity: 0, duration: 0.4 }, 13.5)
-  tl.to(pathDown, { opacity: 0, duration: 0.4 }, 13.5)
-
-  tl.add(() => {
-    capTitle.textContent = 'Selective collective (LOOK)'
-    capBody.textContent =
-      'Up and down hall buttons — landing calls in the direction of travel, then reverse.'
-  }, 14)
-  tl.to(sceneCaption, { opacity: 1, duration: 0.5 }, 14)
-  tl.to(pathSel, { opacity: 0.9, duration: 0.5 }, 14.2)
-  tl.to({}, { duration: 1.6, ease: 'power2.inOut' }, 14.8)
-  tl.add(() => {}, 16.4)
-  tl.to(waiter4, { opacity: 0, duration: 0.4 }, 16.4)
-  tl.to({}, { duration: 2.2, ease: 'power2.inOut' }, 17.2)
-  tl.fromTo(camera, { scale: 1.04 }, { scale: 1.06, x: -18, y: 8, duration: 4, ease: 'power2.inOut' }, 17)
-
-  tl.to(sceneCaption, { opacity: 0, duration: 0.5 }, 27.5)
-  tl.to(pathSel, { opacity: 0, duration: 0.5 }, 27.5)
-
-  tl.add(() => {
-    capTitle.textContent = ''
-    capBody.textContent = ''
-  }, 28)
-  tl.to(sceneCaption, { opacity: 0, duration: 0.3 }, 28)
-  tl.add(() => plateWrap.classList.add('dimmed'), 28)
-  tl.to(plateWrap, { opacity: 0.35, duration: 0.8 }, 28)
-  tl.to(stats, { opacity: 1, duration: 0.6 }, 28.2)
-  tl.to('#bar-down-wait', { width: `${(down.meanWait / maxWait) * 100}%`, duration: 1 }, 29)
-  tl.to('#bar-sel-wait', { width: `${(sel.meanWait / maxWait) * 100}%`, duration: 1 }, 29.3)
-  tl.to(logo, { opacity: 1, duration: 0.8 }, 34)
-  tl.fromTo(camera, { scale: 1.06 }, { scale: 1, x: 0, y: 0, duration: 3, ease: 'power2.inOut' }, 28)
+  tl.to(car, { opacity: 1, duration: 0.5 }, 1.2)
+  tl.to('.call-badge', { opacity: 1, duration: 0.6, stagger: 0.08 }, 2)
+  tl.to('.landing-rider', { opacity: 1, duration: 0.5, stagger: 0.06 }, 2.2)
+  tl.to(logo, { opacity: 1, duration: 0.8 }, STORYBOARD.statsStart + 2)
+  tl.to({}, { duration: STORYBOARD.totalDuration - 0.01 })
 
   window.__timelines['selective-collective'] = tl
+  window.__storyboard = STORYBOARD
+  window.__sims = { down, sel }
 
   window.__validateCab = (floor) => {
-    applyCarStateAtTime(tl.time())
+    applyPresentationTime(tl.time())
     return validateCabPlacement(floor)
   }
 
   tl.seek(0)
-  applyCarStateAtTime(0)
+  applyPresentationTime(0)
+}
+
+function fillRiderStats(down, sel) {
+  const tbody = document.getElementById('rider-stats-body')
+  if (!tbody) return
+  tbody.innerHTML = ''
+  for (const spec of DEMO_PASSENGERS) {
+    const pd = down.passengers.find((p) => p.id === spec.id)
+    const ps = sel.passengers.find((p) => p.id === spec.id)
+    const tr = document.createElement('tr')
+    tr.innerHTML = `
+      <td>${spec.label}</td>
+      <td>${spec.origin}F → ${spec.destination}F</td>
+      <td class="stat-down">${formatSeconds(pd?.wait ?? 0)}</td>
+      <td class="stat-down">${formatSeconds(pd?.journey ?? 0)}</td>
+      <td class="stat-sel">${formatSeconds(ps?.wait ?? 0)}</td>
+      <td class="stat-sel">${formatSeconds(ps?.journey ?? 0)}</td>
+    `
+    tbody.appendChild(tr)
+  }
+}
+
+function routePathFromSegments(segments) {
+  const shaftX = LAYOUT.shaftCenterX
+  const travels = segments.filter((s) => s.phase === 'travel')
+  if (!travels.length) return `M ${shaftX} ${floorCenterY(1)}`
+  let d = `M ${shaftX} ${floorCenterY(travels[0].fromFloor)}`
+  for (const s of travels) {
+    d += ` L ${shaftX} ${floorCenterY(s.toFloor)}`
+  }
+  return d
 }
 
 export function validateCabPlacement(floor) {
@@ -235,13 +343,39 @@ export function validateCabPlacement(floor) {
   return { ok: true, cx, fy, width: rect.width, height: rect.height }
 }
 
-function placeLandingWaiters() {
-  for (const el of document.querySelectorAll('.landing-waiter')) {
-    const f = Number(el.dataset.floor)
-    const x = LAYOUT.shaftLeft - 92
-    const y = floorCenterY(f)
+function placeLandingRiders() {
+  for (const spec of DEMO_PASSENGERS) {
+    if (spec.origin === 1 && spec.startsInCar) continue
+    const el = document.getElementById(`rider-${spec.id}-landing`)
+    if (!el) continue
+    const x = LAYOUT.shaftLeft - 118
+    const y = floorCenterY(spec.origin)
     el.style.left = `${x}px`
     el.style.top = `${y}px`
+  }
+}
+
+function buildFloorGutter() {
+  const g = document.getElementById('floor-gutter')
+  const top = floorCenterY(LAYOUT.floors) - 18
+  const bottom = floorCenterY(1) + 18
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+  rect.setAttribute('x', GUTTER_X - 52)
+  rect.setAttribute('y', top)
+  rect.setAttribute('width', 48)
+  rect.setAttribute('height', bottom - top)
+  rect.setAttribute('rx', 4)
+  rect.setAttribute('class', 'floor-gutter-bg')
+  g.appendChild(rect)
+  for (let f = 1; f <= LAYOUT.floors; f++) {
+    const cy = floorCenterY(f)
+    const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+    tick.setAttribute('x1', GUTTER_X - 8)
+    tick.setAttribute('x2', GUTTER_X)
+    tick.setAttribute('y1', cy)
+    tick.setAttribute('y2', cy)
+    tick.setAttribute('class', 'floor-tick')
+    g.appendChild(tick)
   }
 }
 
@@ -250,7 +384,7 @@ function buildFloorLabels() {
   for (let f = 1; f <= LAYOUT.floors; f++) {
     const cy = floorCenterY(f)
     const t = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-    t.setAttribute('x', LAYOUT.labelX)
+    t.setAttribute('x', GUTTER_X - 14)
     t.setAttribute('y', cy + 5)
     t.setAttribute('text-anchor', 'end')
     t.setAttribute('class', 'floor-label')
@@ -277,17 +411,18 @@ function buildCalls() {
   const callsG = document.getElementById('calls')
   const callPathsG = document.getElementById('call-paths')
   const align = []
+  const arrowFor = (f) => (f === 8 ? '▼' : '▲')
   CALL_FLOORS.forEach((f) => {
     const cy = floorCenterY(f)
     align.push({ floor: f, cy })
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
     g.setAttribute('class', 'call-badge')
     g.setAttribute('transform', `translate(${LAYOUT.callX}, ${cy})`)
-    const arrow = f === 8 ? '▼' : '▲'
     g.innerHTML = `
       <circle class="call-circle" cx="0" cy="0" r="22"/>
+      <circle class="call-dot" cx="0" cy="-2" r="5" style="display:none"/>
       <text class="call-num" x="0" y="6">${f}</text>
-      <text class="call-dir" x="0" y="-14">${arrow}</text>
+      <text class="call-dir" x="0" y="-14">${arrowFor(f)}</text>
     `
     callsG.appendChild(g)
     const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
@@ -296,4 +431,8 @@ function buildCalls() {
     callPathsG.appendChild(p)
   })
   assertFloorAlignment(align)
+}
+
+function populateStatsRiders() {
+  // placeholder for HTML table built in fillRiderStats
 }

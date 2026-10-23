@@ -1,41 +1,24 @@
-# Selective collective (LOOK) vs down collective — storyboard
+# Storyboard — elevator selective vs down collective (~80s)
 
-Target reel: **~38 s** @ **1920×1080**, **60 fps**.  
-Terminology: Gina Barney, *The History of Lift Traffic Control*; Harris elevator terms.
+| Scene | Presentation time | Simulation |
+| --- | --- | --- |
+| 0 Terms | 0–10s | Static lobby; glossary + riders A–D |
+| 1 Down collective | 10–40s | Full sim 0–36s (compressed) |
+| 2 Selective collective | 40–62s | Full sim 0–25s (compressed) |
+| 3 Stats | 62–80s | Mean wait/journey + per-rider table |
 
-## Scenario (identical for both controls)
+## Key stills (`npm run snapshot:stills`)
 
-| Passenger | Request @ t=0 | Notes |
-|-----------|---------------|--------|
-| Lobby rider | 1F → 9F | Boards at start |
-| Interfloor rider | 4F → 7F (up) | Waiting at 4F |
-| Down rider | 8F → 1F | Down request at 8F |
+| Time | Moment |
+| --- | --- |
+| 5s | Terms + call bubbles |
+| 14.2s | Down collective going up; B/C waiting |
+| 19.2s | Down collective at 9F (turn) |
+| 25.8s | Down collective at 4F; B boards |
+| 34.6s | Down collective second up trip |
+| 44s | Selective at 4F; B boards |
+| 48.6s | Selective at 7F; B off / C on |
+| 53.2s | Selective down at 8F; D boards |
+| 70s | Comparison stats |
 
-Physics: **1.0 s/floor**, **1.5 s dwell** after each stop, car starts **1F**.  
-**9 visible floors** on the art plate (`composition/art/measured-layout.js`); cab/passenger PNGs from `bun run process:art`.
-
-**Wait** = registration → car arrives at your floor (excludes dwell).  
-**Journey** = registration → arrival at destination (includes dwell at stops).
-
-### Simulation results (from `composition/simulation.js`)
-
-| Passenger | Down collective wait | Down journey | Selective wait | Selective journey |
-|-----------|---------------------|--------------|----------------|-------------------|
-| Lobby → 9F | 0.0 s | 9.5 s | 0.0 s | 12.5 s |
-| 4F → 7F (up) | 17.5 s | 29.5 s | 4.5 s | 9.0 s |
-| 8F → 1F (down) | 12.0 s | 22.0 s | 15.0 s | 23.5 s |
-| **Mean** | **9.8 s** | **20.3 s** | **6.5 s** | **15.0 s** |
-
-Down collective: while travelling **up**, only **car calls** stop the car — 4F rider is **passed**.  
-Selective collective (LOOK): **up** landing call at 4F is served on the ascent.
-
-## Scenes
-
-| # | Time | Copy | Still |
-|---|------|------|-------|
-| 1 Hook | 0–6 s | “Going up?” / “I'll grab you on the way.” | @ 3 s |
-| 2 Down collective | 6–14 s | Explains up-distributive / down-collective | @ 10 s |
-| 3 Selective collective | 14–28 s | LOOK / directional collective | @ 20 s |
-| 4 Stats | 28–38 s | Mean wait + mean journey bars | @ 34 s |
-
-Stills: `bun run snapshot:stills` → `storyboard-stills/frame-00-at-3s.png` … `frame-03-at-34s.png`.
+Animation reads `composition/simulation.js` (segments + events), not hard-coded stop times.

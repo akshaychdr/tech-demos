@@ -16,34 +16,41 @@ describe('floor layout', () => {
   })
 })
 
-describe('down collective vs selective collective (LOOK)', () => {
+describe('down collective vs selective collective (A–D scenario)', () => {
   const down = simulatePassengers('down-collective')
   const sel = simulatePassengers('selective-collective')
 
-  it('down collective passes 4F interfloor rider on the up trip', () => {
-    const p2 = down.passengers.find((p) => p.id === 'p2')!
-    expect(p2.wait).toBe(17.5)
-    expect(p2.journey).toBe(29.5)
+  it('down collective full cycle including second up trip for B and C', () => {
+    const a = down.passengers.find((p) => p.id === 'a')!
+    const b = down.passengers.find((p) => p.id === 'b')!
+    const c = down.passengers.find((p) => p.id === 'c')!
+    const d = down.passengers.find((p) => p.id === 'd')!
+    expect(a.wait).toBe(0)
+    expect(a.journey).toBe(9.5)
+    expect(d.wait).toBe(12)
+    expect(d.journey).toBe(23.5)
+    expect(c.wait).toBe(14.5)
+    expect(c.journey).toBe(34.5)
+    expect(b.wait).toBe(19)
+    expect(b.journey).toBe(31)
   })
 
-  it('selective collective picks up 4F rider while ascending', () => {
-    const p2 = sel.passengers.find((p) => p.id === 'p2')!
-    expect(p2.wait).toBe(4.5)
-    expect(p2.journey).toBe(9)
+  it('selective collective serves 4F and 7F up, skips 8F up, returns for 8F down', () => {
+    const b = sel.passengers.find((p) => p.id === 'b')!
+    const c = sel.passengers.find((p) => p.id === 'c')!
+    const d = sel.passengers.find((p) => p.id === 'd')!
+    expect(b.wait).toBe(4.5)
+    expect(b.journey).toBe(9)
+    expect(c.wait).toBe(9)
+    expect(c.journey).toBe(12.5)
+    expect(d.wait).toBe(15)
+    expect(d.journey).toBe(23.5)
   })
 
-  it('matches frozen simulation table', () => {
-    expect(down.meanWait).toBeCloseTo(9.8, 1)
-    expect(down.meanJourney).toBeCloseTo(20.3, 1)
-    expect(sel.meanWait).toBeCloseTo(6.5, 1)
-    expect(sel.meanJourney).toBeCloseTo(15, 1)
-
-    const p1d = down.passengers.find((p) => p.id === 'p1')!
-    expect(p1d.wait).toBe(0)
-    expect(p1d.journey).toBe(9.5)
-
-    const p3s = sel.passengers.find((p) => p.id === 'p3')!
-    expect(p3s.wait).toBe(15)
-    expect(p3s.journey).toBe(23.5)
+  it('matches owner mean wait and journey table', () => {
+    expect(down.meanWait).toBeCloseTo(11.375, 3)
+    expect(down.meanJourney).toBeCloseTo(24.625, 3)
+    expect(sel.meanWait).toBeCloseTo(7.125, 3)
+    expect(sel.meanJourney).toBeCloseTo(14.375, 3)
   })
 })
