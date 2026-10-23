@@ -16,6 +16,11 @@ for (let i = 0; i < MEASURED_FLOOR_Y.length - 1; i++) {
 }
 const medianPitch = pitches.sort((a, b) => a - b)[Math.floor(pitches.length / 2)]
 
+/** Left of facade over sky (under ~460px at 1024-wide preview). */
+export const FLOOR_LABEL_X = 780
+/** Where horizontal ticks meet the building face. */
+export const FACADE_TICK_X = 1108
+
 export const LAYOUT = {
   floors: MEASURED_FLOOR_Y.length,
   viewW: 1920,
@@ -31,6 +36,10 @@ export const LAYOUT = {
   labelX: MEASURED_LABEL_X,
   carWidth: Math.round(MEASURED_SHAFT.width * 0.94),
   carHeight: Math.round(medianPitch * 0.92),
+  medianPitch,
+  landingRiderMaxHeight: Math.round(medianPitch * 0.85),
+  cabRiderHeight: Math.round(medianPitch * 0.38),
+  landingX: MEASURED_HALL_X - 8,
   frontTop: MEASURED_FLOOR_Y[MEASURED_FLOOR_Y.length - 1],
   frontBottom: MEASURED_FLOOR_Y[0],
 }
@@ -61,6 +70,27 @@ export function callToShaftPath(floor) {
   const x1 = LAYOUT.shaftLeft + 6
   const cx = (x0 + x1) / 2
   return `M ${x0} ${y} Q ${cx} ${y - 32} ${x1} ${y}`
+}
+
+/** @returns {{ top: number, bottom: number, center: number, pitch: number }} */
+export function floorBand(floor) {
+  const f = Math.max(1, Math.min(LAYOUT.floors, Math.round(floor)))
+  const center = floorCenterY(f)
+  const above =
+    f < LAYOUT.floors ? (floorCenterY(f) - floorCenterY(f + 1)) / 2 : (MEASURED_FLOOR_Y[f - 2] - MEASURED_FLOOR_Y[f - 1]) / 2
+  const below =
+    f > 1 ? (floorCenterY(f - 1) - floorCenterY(f)) / 2 : (MEASURED_FLOOR_Y[0] - MEASURED_FLOOR_Y[1]) / 2
+  const pitch = above + below
+  return { top: center - above, bottom: center + below, center, pitch }
+}
+
+export function landingSlabY(floor) {
+  const band = floorBand(floor)
+  return band.bottom - band.pitch * 0.06
+}
+
+export function landingRiderHeightPx(floor) {
+  return Math.floor(floorBand(floor).pitch * 0.82)
 }
 
 export function assertFloorAlignment(placements) {

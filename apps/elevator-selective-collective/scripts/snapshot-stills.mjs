@@ -76,7 +76,7 @@ async function assertCabPlacement(baseUrl) {
   await page.waitForTimeout(800)
   const ready = await page.evaluate(
     () =>
-      typeof window.__validateCab === 'function' &&
+      typeof window.__validateFrame === 'function' &&
       Boolean(window.__timelines?.['selective-collective']),
   )
   if (!ready) {
@@ -93,16 +93,14 @@ async function assertCabPlacement(baseUrl) {
       window.__timelines['selective-collective'].seek(t)
     }, time)
     await page.waitForTimeout(150)
-    const result = await page.evaluate((f) => window.__validateCab(f), floor)
+    const result = await page.evaluate((f) => window.__validateFrame(f), floor)
     if (!result?.ok) {
       await browser.close()
       throw new Error(
-        `Cab placement check failed @ ${time}s (${label}): ${result?.error ?? 'unknown'}`,
+        `Frame check failed @ ${time}s (${label}): ${result?.error ?? 'unknown'}`,
       )
     }
-    console.log(
-      `✓ cab @ ${time}s (${label}): ${result.width.toFixed(0)}×${result.height.toFixed(0)}px, center x=${result.cx.toFixed(0)}`,
-    )
+    console.log(`✓ frame @ ${time}s (${label})`)
   }
 
   await browser.close()

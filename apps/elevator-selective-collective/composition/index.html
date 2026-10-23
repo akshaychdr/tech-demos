@@ -42,8 +42,8 @@
         fill: #fff; font-size: 14px; font-weight: 700; text-anchor: middle;
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
       }
-      .floor-gutter-bg { fill: rgba(4, 8, 18, 0.82); stroke: rgba(34, 211, 238, 0.25); stroke-width: 1; }
-      .floor-tick { stroke: rgba(34, 211, 238, 0.55); stroke-width: 2; }
+      .floor-label-pill { fill: rgba(4, 8, 18, 0.78); stroke: rgba(34, 211, 238, 0.35); stroke-width: 1; }
+      .floor-tick { stroke: rgba(34, 211, 238, 0.45); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: 0.85; }
       .floor-label {
         fill: #e2e8f0; font-size: 14px; font-weight: 600;
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
@@ -137,7 +137,7 @@
         opacity: 0;
         filter: drop-shadow(0 0 12px rgba(244, 114, 182, 0.9)) drop-shadow(0 0 4px #22d3ee);
       }
-      .cab-rider img { height: 78px; width: auto; display: block; opacity: 1; }
+      .cab-rider img { height: 38px; width: auto; display: block; opacity: 1; max-width: 36px; object-fit: contain; }
       #rider-count {
         position: absolute; top: 6%; right: 8%;
         padding: 4px 8px; border-radius: 6px;
@@ -149,44 +149,39 @@
       .landing-rider {
         position: absolute; z-index: 22;
         opacity: 0;
-        transform: translate(-50%, -92%);
         pointer-events: none;
       }
       .landing-rider .figure-wrap {
         position: relative;
-        filter: drop-shadow(0 0 18px rgba(244, 114, 182, 1)) drop-shadow(0 0 8px #22d3ee);
-        background: rgba(4, 8, 18, 0.72);
-        border-radius: 6px;
-        padding: 4px 6px 2px;
-        border: 2px solid rgba(34, 211, 238, 0.75);
+        filter: drop-shadow(0 0 10px rgba(244, 114, 182, 0.95)) drop-shadow(0 0 6px rgba(34, 211, 238, 0.85));
       }
       .landing-rider img {
-        height: 150px; width: auto; display: block; opacity: 1;
-        filter: contrast(1.45) saturate(1.3) brightness(1.12);
-        border-radius: 3px;
+        width: auto; display: block; opacity: 1;
+        filter: contrast(1.5) saturate(1.35) brightness(1.08);
       }
       .rider-chip {
-        position: absolute; left: calc(100% + 10px); top: 6px;
-        transform: none;
-        display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+        position: absolute; left: calc(100% + 4px); top: 0;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+        pointer-events: none;
       }
       #calls[data-mode="down-collective"] .call-dir { opacity: 0; }
       #calls[data-mode="down-collective"] .call-dot { opacity: 1; }
       #calls[data-mode="selective-collective"] .call-dir { opacity: 1; }
       #calls[data-mode="selective-collective"] .call-dot { opacity: 0; }
       .rider-name {
-        padding: 4px 10px; border-radius: 999px;
-        background: rgba(236, 72, 153, 0.95);
-        color: #fff; font-size: 13px; font-weight: 700;
-        border: 1px solid rgba(255,255,255,0.35);
-        box-shadow: 0 0 14px rgba(236, 72, 153, 0.65);
+        padding: 2px 7px; border-radius: 999px;
+        background: rgba(4, 8, 18, 0.88);
+        color: #fff; font-size: 11px; font-weight: 700;
+        border: 1px solid rgba(236, 72, 153, 0.85);
+        box-shadow: 0 0 10px rgba(236, 72, 153, 0.55);
       }
       .rider-dest {
-        padding: 3px 8px; border-radius: 6px;
-        background: rgba(2, 8, 18, 0.92);
-        color: #a5f3fc; font-size: 12px; font-weight: 600;
-        border: 1px solid rgba(34, 211, 238, 0.55);
+        padding: 2px 6px; border-radius: 5px;
+        background: rgba(4, 8, 18, 0.88);
+        color: #a5f3fc; font-size: 10px; font-weight: 600;
+        border: 1px solid rgba(34, 211, 238, 0.45);
         white-space: nowrap;
+        box-shadow: 0 0 8px rgba(34, 211, 238, 0.35);
       }
       .left-panel {
         position: absolute; left: 48px; top: 0; width: 720px; height: 100%;
@@ -335,15 +330,15 @@
           </div>
         </div>
 
-        <div class="landing-rider" id="rider-b-landing" data-floor="4">
+        <div class="landing-rider" id="rider-b-landing" data-floor="4" data-origin-floor="4">
           <div class="rider-chip"><span class="rider-name">B</span><span class="rider-dest">to 7F</span></div>
           <div class="figure-wrap"><img src="art/processed/passenger-2.png" alt="" /></div>
         </div>
-        <div class="landing-rider" id="rider-c-landing" data-floor="7">
+        <div class="landing-rider" id="rider-c-landing" data-floor="7" data-origin-floor="7">
           <div class="rider-chip"><span class="rider-name">C</span><span class="rider-dest">to 9F</span></div>
           <div class="figure-wrap"><img src="art/processed/passenger-3.png" alt="" /></div>
         </div>
-        <div class="landing-rider" id="rider-d-landing" data-floor="8">
+        <div class="landing-rider" id="rider-d-landing" data-floor="8" data-origin-floor="8">
           <div class="rider-chip"><span class="rider-name">D</span><span class="rider-dest">to 1F</span></div>
           <div class="figure-wrap"><img src="art/processed/passenger-4.png" alt="" /></div>
         </div>

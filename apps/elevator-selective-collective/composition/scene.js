@@ -1,6 +1,11 @@
 import {
   LAYOUT,
+  FLOOR_LABEL_X,
+  FACADE_TICK_X,
   floorCenterY,
+  floorBand,
+  landingSlabY,
+  landingRiderHeightPx,
   carTranslateY,
   carTranslateX,
   callToShaftPath,
@@ -16,7 +21,6 @@ import {
 } from './simulation.js'
 
 const CALL_FLOORS = [4, 7, 8]
-const GUTTER_X = 1188
 
 export const STORYBOARD = {
   totalDuration: 80,
@@ -26,13 +30,6 @@ export const STORYBOARD = {
   selectiveStart: 40,
   selectiveDuration: 22,
   statsStart: 62,
-}
-
-const RIDER_IMG = {
-  a: 'art/processed/passenger-1.png',
-  b: 'art/processed/passenger-2.png',
-  c: 'art/processed/passenger-3.png',
-  d: 'art/processed/passenger-4.png',
 }
 
 export function initComposition() {
@@ -156,10 +153,13 @@ export function initComposition() {
   }
 
   function positionLandingRider(el, floor) {
-    const x = LAYOUT.shaftLeft - 118
-    const y = floorCenterY(floor) + 8
-    el.style.left = `${x}px`
-    el.style.top = `${y}px`
+    const h = landingRiderHeightPx(floor)
+    const img = el.querySelector('img')
+    if (img) img.style.height = `${h}px`
+    el.dataset.floor = String(floor)
+    el.style.left = `${LAYOUT.landingX}px`
+    el.style.top = `${landingSlabY(floor)}px`
+    el.style.transform = 'translate(-58%, -100%)'
   }
 
   function updateCallBadges(waitingIds) {
@@ -311,6 +311,22 @@ export function initComposition() {
     return validateCabPlacement(floor)
   }
 
+  window.__validateRiders = () => {
+    applyPresentationTime(tl.time())
+    return validateVisibleLandingRiders()
+  }
+
+  window.__validateFrame = (floor) => {
+    applyPresentationTime(tl.time())
+    const cab = validateCabPlacement(floor)
+    const riders = validateVisibleLandingRiders()
+    const cabs = validateCabRiders()
+    if (!cab.ok) return cab
+    if (!riders.ok) return riders
+    if (!cabs.ok) return cabs
+    return { ok: true }
+  }
+
   tl.seek(0)
   applyPresentationTime(0)
 }
@@ -365,14 +381,60 @@ export function validateCabPlacement(floor) {
       error: `cab center x=${cx.toFixed(1)} outside shaft [${LAYOUT.shaftLeft}, ${LAYOUT.shaftRight}]`,
     }
   }
-  const fy = floorCenterY(floor)
-  if (fy < rect.top - 24 || fy > rect.bottom + 24) {
+  const band = floorBand(floor)
+  const cabCy = rect.top + rect.height / 2
+  if (cabCy < band.top - 8 || cabCy > band.bottom + 8) {
     return {
       ok: false,
-      error: `floor ${floor} y=${fy.toFixed(1)} outside cab vertical span [${rect.top.toFixed(1)}, ${rect.bottom.toFixed(1)}]`,
+      error: `floor ${floor} cab center y=${cabCy.toFixed(1)} outside band [${band.top.toFixed(1)}, ${band.bottom.toFixed(1)}]`,
     }
   }
-  return { ok: true, cx, fy, width: rect.width, height: rect.height }
+  return { ok: true, cx, fy: band.center, width: rect.width, height: rect.height }
+}
+
+export function validateVisibleLandingRiders() {
+  const errors = []
+  for (const el of document.querySelectorAll('.landing-rider')) {
+    const opacity = parseFloat(getComputedStyle(el).opacity)
+    if (!opacity || opacity < 0.05) continue
+    const floor = Number(el.dataset.floor)
+    if (!floor) continue
+    const band = floorBand(floor)
+    const fig = el.querySelector('.figure-wrap')
+    const rect = (fig ?? el).getBoundingClientRect()
+    const cy = rect.top + rect.height / 2
+    const maxH = band.pitch * 0.85 + 6
+    if (rect.height > maxH) {
+      errors.push(`rider @ ${floor}F height ${rect.height.toFixed(1)} > ${maxH.toFixed(1)}`)
+    }
+    if (cy < band.top - 2 || cy > band.bottom + 2) {
+      errors.push(`rider @ ${floor}F center y=${cy.toFixed(0)} outside band [${band.top.toFixed(0)}, ${band.bottom.toFixed(0)}]`)
+    }
+    if (rect.bottom > band.bottom + 4) {
+      errors.push(`rider @ ${floor}F feet below band (bottom=${rect.bottom.toFixed(0)} band=${band.bottom.toFixed(0)})`)
+    }
+  }
+  return errors.length ? { ok: false, error: errors.join('; ') } : { ok: true }
+}
+
+export function validateCabRiders() {
+  const car = document.getElementById('car')
+  const shell = car?.querySelector('.neon-cab-body')
+  if (!car || !shell) return { ok: true }
+  const shellRect = shell.getBoundingClientRect()
+  const errors = []
+  for (const el of document.querySelectorAll('.cab-rider')) {
+    const opacity = parseFloat(getComputedStyle(el).opacity)
+    if (!opacity || opacity < 0.05) continue
+    const rect = el.getBoundingClientRect()
+    if (rect.height > LAYOUT.cabRiderHeight + 6) {
+      errors.push(`cab rider too tall ${rect.height.toFixed(0)}`)
+    }
+    if (rect.bottom > shellRect.bottom + 2 || rect.top < shellRect.top - 2) {
+      errors.push('cab rider overflows cab glass')
+    }
+  }
+  return errors.length ? { ok: false, error: errors.join('; ') } : { ok: true }
 }
 
 function placeLandingRiders() {
@@ -380,30 +442,26 @@ function placeLandingRiders() {
     if (spec.origin === 1 && spec.startsInCar) continue
     const el = document.getElementById(`rider-${spec.id}-landing`)
     if (!el) continue
-    const x = LAYOUT.shaftLeft - 118
-    const y = floorCenterY(spec.origin)
-    el.style.left = `${x}px`
-    el.style.top = `${y}px`
+    const h = landingRiderHeightPx(spec.origin)
+    const img = el.querySelector('img')
+    if (img) img.style.height = `${h}px`
+    el.dataset.floor = String(spec.origin)
+    el.style.left = `${LAYOUT.landingX}px`
+    el.style.top = `${landingSlabY(spec.origin)}px`
+    el.style.transform = 'translate(-58%, -100%)'
+  }
+  for (const img of document.querySelectorAll('.cab-rider img')) {
+    img.style.height = `${LAYOUT.cabRiderHeight}px`
   }
 }
 
 function buildFloorGutter() {
   const g = document.getElementById('floor-gutter')
-  const top = floorCenterY(LAYOUT.floors) - 18
-  const bottom = floorCenterY(1) + 18
-  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
-  rect.setAttribute('x', GUTTER_X - 52)
-  rect.setAttribute('y', top)
-  rect.setAttribute('width', 48)
-  rect.setAttribute('height', bottom - top)
-  rect.setAttribute('rx', 4)
-  rect.setAttribute('class', 'floor-gutter-bg')
-  g.appendChild(rect)
   for (let f = 1; f <= LAYOUT.floors; f++) {
     const cy = floorCenterY(f)
     const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line')
-    tick.setAttribute('x1', GUTTER_X - 8)
-    tick.setAttribute('x2', GUTTER_X)
+    tick.setAttribute('x1', FLOOR_LABEL_X + 36)
+    tick.setAttribute('x2', FACADE_TICK_X)
     tick.setAttribute('y1', cy)
     tick.setAttribute('y2', cy)
     tick.setAttribute('class', 'floor-tick')
@@ -415,10 +473,18 @@ function buildFloorLabels() {
   const g = document.getElementById('floor-labels')
   for (let f = 1; f <= LAYOUT.floors; f++) {
     const cy = floorCenterY(f)
+    const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    pill.setAttribute('x', FLOOR_LABEL_X - 34)
+    pill.setAttribute('y', cy - 11)
+    pill.setAttribute('width', 38)
+    pill.setAttribute('height', 20)
+    pill.setAttribute('rx', 4)
+    pill.setAttribute('class', 'floor-label-pill')
+    g.appendChild(pill)
     const t = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-    t.setAttribute('x', GUTTER_X - 14)
+    t.setAttribute('x', FLOOR_LABEL_X - 15)
     t.setAttribute('y', cy + 5)
-    t.setAttribute('text-anchor', 'end')
+    t.setAttribute('text-anchor', 'middle')
     t.setAttribute('class', 'floor-label')
     t.textContent = `${f}F`
     g.appendChild(t)
