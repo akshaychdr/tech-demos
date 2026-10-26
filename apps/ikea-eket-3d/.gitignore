@@ -1,0 +1,4 @@
+node_modules
+dist
+docs/video/raw
+docs/video/qa-frames
