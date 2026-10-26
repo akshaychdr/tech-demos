@@ -1,0 +1,27 @@
+{
+  "name": "ikea-eket-3d",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "preview:pages": "VITE_BASE_PATH=/tech-demos/ikea-eket-3d/ vite build && VITE_BASE_PATH=/tech-demos/ikea-eket-3d/ vite preview --port 4176",
+    "test": "vitest run",
+    "capture:artifacts": "node scripts/capture-artifacts.mjs",
+    "qa:video": "bash scripts/qa-reel-frames.sh docs/video/app-demo.mp4"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "playwright": "^1.64.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "pdfjs-dist": "^6.4.299",
+    "three": "^0.186.1"
+  }
+}

@@ -20,3 +20,4 @@ bun run dev
 | airllm | AirLLM ([lyogavin](https://github.com/lyogavin/airllm)) | 2026-10-19 | [#2](https://github.com/akshaychdr/tech-demos/pull/2) |
 | elevator-selective-collective | HyperFrames ([heygen-com](https://github.com/heygen-com/hyperframes)) | 2026-10-21 | [#3](https://github.com/akshaychdr/tech-demos/pull/3) |
 | elevator-install-3d | Federal Panorama/Renaissance install guide (3D + HyperFrames reel) | 2026-10-26 | TBD |
+| ikea-eket-3d | IKEA 3D Assembly Dataset — EKET 2-drawer cabinet (00333947) | 2026-10-26 | TBD |
