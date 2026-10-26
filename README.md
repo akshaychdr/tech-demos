@@ -19,3 +19,4 @@ bun run dev
 | diagram-design | diagram-design ([cathrynlavery](https://github.com/cathrynlavery/diagram-design)) | 2026-10-18 | [#1](https://github.com/akshaychdr/tech-demos/pull/1) |
 | airllm | AirLLM ([lyogavin](https://github.com/lyogavin/airllm)) | 2026-10-19 | [#2](https://github.com/akshaychdr/tech-demos/pull/2) |
 | elevator-selective-collective | HyperFrames ([heygen-com](https://github.com/heygen-com/hyperframes)) | 2026-10-21 | [#3](https://github.com/akshaychdr/tech-demos/pull/3) |
+| elevator-install-3d | Federal Panorama/Renaissance install guide (3D + HyperFrames reel) | 2026-10-26 | TBD |

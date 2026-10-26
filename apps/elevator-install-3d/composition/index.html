@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; }
+      html, body, #root {
+        width: 1920px; height: 1080px; overflow: hidden;
+      }
+      body {
+        background: #0a1628; color: #e6f1ff;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      .slide { position: absolute; inset: 0; padding: 80px; opacity: 0; }
+      .tag { color: #ff8a3d; font-size: 22px; font-weight: 600; margin-bottom: 24px; }
+      h1 { font-size: 64px; color: #38d6ff; margin-bottom: 16px; }
+      p { font-size: 28px; color: #8ba4c7; max-width: 900px; line-height: 1.4; }
+      .mono { font-family: 'IBM Plex Mono', monospace; color: #38d6ff; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="elevator-install-3d"
+      data-duration="84"
+      data-width="1920"
+      data-height="1080"
+      data-fps="60"
+    >
+      <div class="slide" data-slide="0">
+        <div class="tag">Illustrative demo, not for installation</div>
+        <h1>Install in 3D</h1>
+        <p>Federal Panorama/Renaissance · Type A layout, IR curtain, disconnect wiring — all dimensions in millimetres.</p>
+      </div>
+      <div class="slide" data-slide="1">
+        <div class="tag">Scene 1</div>
+        <h1>Type A plan → shaft</h1>
+        <p class="mono">1270 × 1360 mm hoistway · 950 × 1255 mm platform · E ℄ 730 mm · R ℄ 660 mm</p>
+      </div>
+      <div class="slide" data-slide="2">
+        <div class="tag">Scene 2</div>
+        <h1>IR curtain assembly</h1>
+        <p>Brackets A at <span class="mono">225 / 953 / 248 mm</span> — Appendix 5 redrawn.</p>
+      </div>
+      <div class="slide" data-slide="3">
+        <div class="tag">Scene 3</div>
+        <h1>Disconnect &amp; motor</h1>
+        <p>110 V aux (15 A) then 3-pole main (30 A) through contactors and overload — illustrative power flow.</p>
+      </div>
+      <div class="slide" data-slide="4">
+        <div class="tag">Credits</div>
+        <h1>Sources</h1>
+        <p>Federal Planning Guide (2023) · Hydraulic Residential Installation Manual Appendices 3 &amp; 5. Graphics redrawn only.</p>
+      </div>
+    </div>
+    <script src="./reel.js"></script>
+  </body>
+</html>
