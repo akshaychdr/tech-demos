@@ -34,10 +34,12 @@ export function createScene1(): Scene1Api {
     const hd = g.hoistwayD * s
     const sh = g.shaftHeight * s
 
-    const wallMat = new THREE.MeshBasicMaterial({
+    const wallMat = new THREE.MeshStandardMaterial({
       color: 0x38d6ff,
       transparent: true,
-      opacity: 0.06,
+      opacity: 0.12,
+      metalness: 0.1,
+      roughness: 0.85,
     })
     const edgeMat = new THREE.LineBasicMaterial({ color: 0x38d6ff })
 
@@ -142,7 +144,12 @@ export function createScene1(): Scene1Api {
       const light = new THREE.DirectionalLight(0xffffff, 0.6)
       light.position.set(2, 4, 3)
       scene.add(light)
-      scene.add(new THREE.AmbientLight(0x38d6ff, 0.25))
+      scene.fog = new THREE.Fog(0x0a1628, 3, 12)
+      scene.add(new THREE.AmbientLight(0x38d6ff, 0.3))
+      scene.add(new THREE.HemisphereLight(0x38d6ff, 0x0a1628, 0.45))
+      const fill = new THREE.DirectionalLight(0xff8a3d, 0.25)
+      fill.position.set(-2, 1, -1)
+      scene.add(fill)
 
       const resize = () => {
         const { clientWidth, clientHeight } = canvasHost

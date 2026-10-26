@@ -19,13 +19,23 @@ export function createScene3(): Scene3Api {
   let motorMode: 'single' | 'delta' | 'wye' = 'delta'
   const circuit = getCircuit()
   let anim: gsap.core.Timeline | null = null
+  let flowT = 0
+  let flowRaf = 0
+
+  function tickFlow() {
+    if (energisedEdgeIds(state).size > 0) {
+      flowT += 0.016
+      render()
+    }
+    flowRaf = requestAnimationFrame(tickFlow)
+  }
 
   function render() {
-    root.querySelector('[data-schematic]')!.innerHTML = renderSchematicSvg(state)
-    root.querySelector('[data-motor-views]')!.innerHTML = ['single', 'delta', 'wye']
+    root.querySelector('[data-schematic]')!.innerHTML = renderSchematicSvg(state, flowT)
+    root.querySelector('[data-motor-views]')!.innerHTML = (['single', 'delta', 'wye'] as const)
       .map((m) => {
-        const active = m === motorMode ? 'highlight' : ''
-        return `<div class="${active}" data-motor="${m}">${renderMotorLinkSvg(m as 'single' | 'delta' | 'wye')}</div>`
+        const active = m === motorMode
+        return `<div class="motor-card${active ? ' active' : ''}" data-motor="${m}">${renderMotorLinkSvg(m, active)}</div>`
       })
       .join('')
 
@@ -39,9 +49,9 @@ export function createScene3(): Scene3Api {
         )
         .join('')}</tbody></table>`
 
-    const status = root.querySelector('[data-status]')!
     const on = energisedEdgeIds(state)
-    status.textContent = `Aux ${state.aux110 ? 'ON' : 'OFF'} · Main ${state.main ? 'ON' : 'OFF'} · ${on.size} energised paths (illustrative)`
+    root.querySelector('[data-status]')!.textContent =
+      `Aux ${state.aux110 ? 'ON' : 'OFF'} · Main ${state.main ? 'ON' : 'OFF'} · ${on.size} energised paths`
   }
 
   return {
@@ -55,9 +65,13 @@ export function createScene3(): Scene3Api {
           <label>Supply <select data-supply>${circuit.ampTable.cols.map((c, i) => `<option value="${i}">${c}</option>`).join('')}</select></label>
           <label>Motor view <select data-motor><option value="single">Single-phase</option><option value="delta">Δ</option><option value="wye">Y</option></select></label>
         </div>
-        <div class="schematic-wrap" data-schematic data-testid="scene3-schematic"></div>
-        <div class="motor-views" data-motor-views></div>
-        <div data-amp-table></div>
+        <div class="scene3-grid">
+          <div class="schematic-wrap" data-schematic data-testid="scene3-schematic"></div>
+          <aside class="scene3-side">
+            <div class="motor-views" data-motor-views></div>
+            <div data-amp-table></div>
+          </aside>
+        </div>
         <p class="mono" data-status></p>
       `
       root.querySelector('[data-hp]')!.addEventListener('change', (e) => {
@@ -74,6 +88,7 @@ export function createScene3(): Scene3Api {
       })
       root.querySelector('[data-run-seq]')!.addEventListener('click', () => this.runSequence())
       render()
+      flowRaf = requestAnimationFrame(tickFlow)
     },
     setHp(h) {
       hp = h
@@ -90,15 +105,17 @@ export function createScene3(): Scene3Api {
     runSequence() {
       anim?.kill()
       state = { aux110: false, main: false }
+      flowT = 0
       render()
       anim = gsap.timeline()
-      anim.to({}, { duration: 0.6, onComplete: () => { state.aux110 = true; render() } })
-      anim.to({}, { duration: 0.8, onComplete: () => { state.main = true; render() } })
-      anim.to({}, { duration: 1.5, onComplete: () => {} })
-      anim.to({}, { duration: 0.5, onComplete: () => { state.main = false; render() } })
+      anim.to({}, { duration: 0.8, onComplete: () => { state.aux110 = true; render() } })
+      anim.to({}, { duration: 1, onComplete: () => { state.main = true; render() } })
+      anim.to({}, { duration: 2.2 })
+      anim.to({}, { duration: 0.6, onComplete: () => { state.main = false; render() } })
     },
     dispose() {
       anim?.kill()
+      cancelAnimationFrame(flowRaf)
     },
   }
 }
