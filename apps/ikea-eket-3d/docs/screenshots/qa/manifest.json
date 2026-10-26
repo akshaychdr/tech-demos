@@ -1,0 +1,133 @@
+[
+  {
+    "frame": 0,
+    "subId": "0a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-00-0a-context.png"
+  },
+  {
+    "frame": 1,
+    "subId": "0b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-01-0b-context.png"
+  },
+  {
+    "frame": 2,
+    "subId": "0c",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-02-0c-context.png"
+  },
+  {
+    "frame": 3,
+    "subId": "1",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-03-1-context.png"
+  },
+  {
+    "frame": 4,
+    "subId": "2",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-04-2-context.png"
+  },
+  {
+    "frame": 5,
+    "subId": "3a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-05-3a-context.png"
+  },
+  {
+    "frame": 6,
+    "subId": "3b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-06-3b-context.png",
+    "closeup": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-06-3b-closeup.png"
+  },
+  {
+    "frame": 7,
+    "subId": "4",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-07-4-context.png"
+  },
+  {
+    "frame": 8,
+    "subId": "5",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-08-5-context.png"
+  },
+  {
+    "frame": 9,
+    "subId": "6a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-09-6a-context.png"
+  },
+  {
+    "frame": 10,
+    "subId": "6b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-10-6b-context.png",
+    "closeup": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-10-6b-closeup.png"
+  },
+  {
+    "frame": 11,
+    "subId": "7a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-11-7a-context.png"
+  },
+  {
+    "frame": 12,
+    "subId": "7b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-12-7b-context.png",
+    "closeup": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-12-7b-closeup.png"
+  },
+  {
+    "frame": 13,
+    "subId": "8",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-13-8-context.png"
+  },
+  {
+    "frame": 14,
+    "subId": "9a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-14-9a-context.png"
+  },
+  {
+    "frame": 15,
+    "subId": "9b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-15-9b-context.png",
+    "closeup": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-15-9b-closeup.png"
+  },
+  {
+    "frame": 16,
+    "subId": "10",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-16-10-context.png"
+  },
+  {
+    "frame": 17,
+    "subId": "11a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-17-11a-context.png"
+  },
+  {
+    "frame": 18,
+    "subId": "11b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-18-11b-context.png",
+    "closeup": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-18-11b-closeup.png"
+  },
+  {
+    "frame": 19,
+    "subId": "12a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-19-12a-context.png"
+  },
+  {
+    "frame": 20,
+    "subId": "12b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-20-12b-context.png",
+    "closeup": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-20-12b-closeup.png"
+  },
+  {
+    "frame": 21,
+    "subId": "13",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-21-13-context.png"
+  },
+  {
+    "frame": 22,
+    "subId": "14",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-22-14-context.png"
+  },
+  {
+    "frame": 23,
+    "subId": "15a",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-23-15a-context.png"
+  },
+  {
+    "frame": 24,
+    "subId": "15b",
+    "context": "/workspace/apps/ikea-eket-3d/docs/screenshots/qa/frame-24-15b-context.png"
+  }
+]

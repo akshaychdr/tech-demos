@@ -1,33 +1,30 @@
-import { EketViewer } from '../scene/EketViewer'
-import {
-  cumulativeNodes,
-  hardwareIntroducedThrough,
-  product,
-  steps,
-} from '../model/stepsData'
+import { assemblyFrames } from '../data/assemblyFrames'
+import { ManualViewer } from '../scene/ManualViewer'
+import { cumulativeNodes, hardwareIntroducedThrough, product, steps } from '../model/stepsData'
 
-const DATASET =
-  'https://github.com/IKEA/IKEA3DAssemblyDataset'
-const LICENSE = 'https://creativecommons.org/licenses/by-nc-sa/4.0/'
-
+const DATASET = 'https://github.com/IKEA/IKEA3DAssemblyDataset'
 export async function mountApp(root: HTMLElement) {
   const base = import.meta.env.BASE_URL
+  const maxFrame = assemblyFrames.length - 1
   root.innerHTML = `
     <div class="shell">
       <header class="top">
         <div>
           <h1>EKET · 2 drawers</h1>
-          <p class="sub">Article ${product.article} · ${product.sizeMm[0]}×${product.sizeMm[1]}×${product.sizeMm[2]} mm · Manual ${product.manual}</p>
+          <p class="sub">Article ${product.article} · Manual-first assembly · ${product.manual}</p>
         </div>
         <div class="counters">
-          <span data-step-counter>Step 0/${steps.length - 1}</span>
-          <span data-part-counter>Parts 0</span>
+          <span data-frame-counter>Frame 0/${maxFrame}</span>
+          <span data-phase-tag>Flat pack</span>
         </div>
       </header>
       <main class="main">
         <section class="viewport-wrap" data-viewport></section>
         <aside class="manual" data-manual>
-          <img data-manual-img alt="Assembly manual page" />
+          <div class="manual-frame">
+            <img data-manual-img alt="Assembly manual page" />
+            <div class="manual-callout" data-manual-callout hidden></div>
+          </div>
           <p class="manual-cap">Manual page <span data-manual-page>7</span></p>
         </aside>
         <aside class="side">
@@ -41,15 +38,15 @@ export async function mountApp(root: HTMLElement) {
             <button type="button" data-play>▶</button>
             <button type="button" data-next>→</button>
           </div>
-          <input class="timeline" type="range" min="0" max="${steps.length - 1}" value="0" data-timeline />
+          <input class="timeline" type="range" min="0" max="${maxFrame}" value="0" data-timeline />
           <p class="dims" data-dims>Outer: ${product.sizeMm.join(' × ')} mm</p>
           <section class="license">
             <h3>Data &amp; license</h3>
-            <p>3D models and assembly manual from the <a href="${DATASET}" target="_blank" rel="noopener">IKEA 3D Assembly Dataset</a> (Inter IKEA Systems B.V.), licensed under <a href="${LICENSE}" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. PDF: <a href="${base}dataset/AA-1914748-7.pdf" target="_blank" rel="noopener">${product.manual}</a>.</p>
+            <p>3D models and manual from the <a href="${DATASET}" target="_blank" rel="noopener">IKEA 3D Assembly Dataset</a> (CC BY-NC-SA 4.0). PDF: <a href="${base}dataset/AA-1914748-7.pdf" target="_blank" rel="noopener">${product.manual}</a>.</p>
           </section>
           <section class="keys">
             <h3>Keys</h3>
-            <p><kbd>[</kbd> <kbd>]</kbd> steps · <kbd>Space</kbd> play · <kbd>0</kbd>–<kbd>9</kbd> jump · <kbd>C</kbd> full build · <kbd>R</kbd> reset view</p>
+            <p><kbd>[</kbd> <kbd>]</kbd> frames · <kbd>Space</kbd> play</p>
           </section>
         </aside>
       </main>
@@ -57,59 +54,82 @@ export async function mountApp(root: HTMLElement) {
   `
 
   const viewport = root.querySelector<HTMLElement>('[data-viewport]')!
-  const viewer = new EketViewer(viewport)
+  const viewer = new ManualViewer(viewport)
   if (new URLSearchParams(location.search).has('capture')) {
-    ;(window as unknown as { __eketViewer?: EketViewer }).__eketViewer = viewer
+    ;(window as unknown as { __eketViewer?: ManualViewer }).__eketViewer = viewer
   }
+
   const manualImg = root.querySelector<HTMLImageElement>('[data-manual-img]')!
+  const callout = root.querySelector<HTMLDivElement>('[data-manual-callout]')!
   const manualPage = root.querySelector<HTMLSpanElement>('[data-manual-page]')!
   const titleEl = root.querySelector<HTMLHeadingElement>('[data-step-title]')!
   const hwList = root.querySelector<HTMLUListElement>('[data-hw-list]')!
-  const stepCounter = root.querySelector<HTMLSpanElement>('[data-step-counter]')!
-  const partCounter = root.querySelector<HTMLSpanElement>('[data-part-counter]')!
+  const frameCounter = root.querySelector<HTMLSpanElement>('[data-frame-counter]')!
+  const phaseTag = root.querySelector<HTMLSpanElement>('[data-phase-tag]')!
   const timeline = root.querySelector<HTMLInputElement>('[data-timeline]')!
   let playing = false
 
-  function refresh(stepIndex: number) {
-    const step = steps[stepIndex]
-    titleEl.textContent = `Step ${step.id}: ${step.title}`
+  function refreshFrame(frameIdx: number) {
+    const frame = assemblyFrames[frameIdx]
+    const step = steps[frame.stepId]
+    titleEl.textContent = `${frame.subId} · ${frame.title}`
     root.querySelector<HTMLParagraphElement>('[data-step-summary]')!.textContent =
-      step.id === 0
-        ? 'Exploded preview of all GLB parts. Step through to assemble the cabinet and open the drawers.'
-        : `Follow manual page ${step.manualPage}.`
-    stepCounter.textContent = `Step ${step.id}/${steps.length - 1}`
-    const placed = cumulativeNodes(stepIndex).size
-    partCounter.textContent =
-      stepIndex === 0 ? `Parts 0/83 (flat pack)` : `Assembled ${placed}/83`
-    manualPage.textContent = String(step.manualPage)
-    manualImg.src = `${base}dataset/manual-pages/page-${String(step.manualPage).padStart(2, '0')}.png`
+      frame.phase === 'closeup'
+        ? `Close-up: align fastener, follow dashed line and rotation arrow. Manual p.${frame.manualPage}.`
+        : `Context view — mirror manual page ${frame.manualPage} (step ${step.id}: ${step.title}).`
+    frameCounter.textContent = `Frame ${frameIdx}/${maxFrame}`
+    phaseTag.textContent =
+      frame.phase === 'flatpack'
+        ? 'Parts tray'
+        : frame.phase === 'closeup'
+          ? 'Close-up'
+          : frame.phase === 'finish'
+            ? 'Finish'
+            : 'Context'
+    manualPage.textContent = String(frame.manualPage)
+    manualImg.src = `${base}dataset/manual-pages/page-${String(frame.manualPage).padStart(2, '0')}.png`
+
+    if (frame.manualRegion) {
+      callout.hidden = false
+      const r = frame.manualRegion
+      callout.style.left = `${r.x * 100}%`
+      callout.style.top = `${r.y * 100}%`
+      callout.style.width = `${r.w * 100}%`
+      callout.style.height = `${r.h * 100}%`
+    } else {
+      callout.hidden = true
+    }
 
     hwList.innerHTML = ''
-    const hw = hardwareIntroducedThrough(stepIndex)
+    const hw = hardwareIntroducedThrough(frame.stepId)
     for (const [id, count] of Object.entries(hw)) {
       const li = document.createElement('li')
       li.textContent = `${count}× ${id}`
       hwList.appendChild(li)
     }
-    if (step.hardware.length) {
-      for (const h of step.hardware) {
-        const li = document.createElement('li')
-        li.className = 'new-hw'
-        li.textContent = `+${h.count}× ${h.label ?? h.id} (this step)`
-        hwList.appendChild(li)
-      }
+    if (frame.hardware) {
+      const li = document.createElement('li')
+      li.className = 'new-hw'
+      li.textContent = `→ ${frame.hardware.count}× ${frame.hardware.partId} (${frame.hardware.label})`
+      hwList.appendChild(li)
     }
-    timeline.value = String(stepIndex)
+    const placed = cumulativeNodes(frame.placedThroughStep).size
+    if (frame.phase !== 'flatpack') {
+      const li = document.createElement('li')
+      li.textContent = `Assembled parts visible: ${placed}/83`
+      hwList.appendChild(li)
+    }
+    timeline.value = String(frameIdx)
   }
 
-  viewer.setOnStep(refresh)
+  viewer.setOnFrame((_, i) => refreshFrame(i))
   await viewer.loadModel(base)
-  refresh(0)
+  refreshFrame(0)
   viewer.resize()
 
-  const go = (i: number) => void viewer.goToStep(i)
-  root.querySelector('[data-prev]')!.addEventListener('click', () => go(viewer.step - 1))
-  root.querySelector('[data-next]')!.addEventListener('click', () => go(viewer.step + 1))
+  const go = (i: number) => void viewer.goToFrame(i)
+  root.querySelector('[data-prev]')!.addEventListener('click', () => go(viewer.frame - 1))
+  root.querySelector('[data-next]')!.addEventListener('click', () => go(viewer.frame + 1))
   root.querySelector('[data-play]')!.addEventListener('click', () => {
     playing = !playing
     viewer.play(playing)
@@ -119,19 +139,12 @@ export async function mountApp(root: HTMLElement) {
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return
-    if (e.key === '[') go(viewer.step - 1)
-    if (e.key === ']') go(viewer.step + 1)
+    if (e.key === '[') go(viewer.frame - 1)
+    if (e.key === ']') go(viewer.frame + 1)
     if (e.key === ' ') {
       e.preventDefault()
       playing = !playing
       viewer.play(playing)
-    }
-    if (e.key === 'r' || e.key === 'R') viewer.resetView()
-    if (e.key === 'c' || e.key === 'C') void viewer.playAll()
-    const d = Number(e.key)
-    if (d >= 0 && d <= 9) {
-      const idx = steps.findIndex((s) => s.id === d)
-      if (idx >= 0) go(idx)
     }
   })
 }

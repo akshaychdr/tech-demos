@@ -78,11 +78,77 @@ body,
   display: block;
 }
 
-.leader-lines {
+.leader-lines,
+.viewport-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
   overflow: visible;
+}
+
+.viewport-overlay .pulse-ring {
+  fill: none;
+  stroke: #c43c3c;
+  stroke-width: 2;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.viewport-overlay .insert-line {
+  stroke: #1a1a1a;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  opacity: 0.75;
+}
+
+.viewport-overlay .rotate-arc {
+  fill: none;
+  stroke: #0058a3;
+  stroke-width: 2;
+}
+
+.viewport-overlay .hw-badge {
+  fill: #1a1a1a;
+  font: 700 13px 'DM Sans', system-ui, sans-serif;
+}
+
+.viewport-overlay .inset-bubble circle {
+  fill: #fffdf9;
+  stroke: #1a1a1a;
+  stroke-width: 1.5;
+}
+
+.viewport-overlay .inset-text {
+  fill: #1a1a1a;
+  font: 600 11px 'DM Sans', system-ui, sans-serif;
+  white-space: pre;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    r: 12;
+  }
+  50% {
+    opacity: 0.95;
+    r: 18;
+  }
+}
+
+.manual-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.manual-callout {
+  position: absolute;
+  border: 2px solid #c43c3c;
+  background: rgba(196, 60, 60, 0.12);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
 }
 
 .leader-lines .leader {

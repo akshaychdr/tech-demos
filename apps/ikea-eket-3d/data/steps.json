@@ -23,7 +23,104 @@
         "azimuth": 0.55,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.9,
+          1.05,
+          0.85
+        ],
+        "target": [
+          0,
+          0,
+          0.35
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "0a",
+          "title": "Panels",
+          "phase": "flatpack",
+          "camera": {
+            "position": [
+              0.9,
+              1.05,
+              0.85
+            ],
+            "target": [
+              0,
+              0,
+              0.35
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.08,
+            "y": 0.52,
+            "w": 0.84,
+            "h": 0.22
+          }
+        },
+        {
+          "id": "0b",
+          "title": "Drawer kits",
+          "phase": "flatpack",
+          "camera": {
+            "position": [
+              0.9,
+              1.05,
+              0.85
+            ],
+            "target": [
+              0,
+              0,
+              0.35
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "0c",
+          "title": "Hardware tray",
+          "phase": "flatpack",
+          "camera": {
+            "position": [
+              0.9,
+              1.05,
+              0.85
+            ],
+            "target": [
+              0,
+              0,
+              0.35
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.06,
+            "y": 0.06,
+            "w": 0.88,
+            "h": 0.38
+          }
+        }
+      ]
     },
     {
       "id": 1,
@@ -38,7 +135,54 @@
         "azimuth": 0.6000000000000001,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.06,
+          0.58,
+          0.22
+        ],
+        "target": [
+          0.02,
+          0.08,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "1",
+          "title": "Bottom panel — position",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.06,
+              0.58,
+              0.22
+            ],
+            "target": [
+              0.02,
+              0.08,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.05,
+            "y": 0.55,
+            "w": 0.9,
+            "h": 0.35
+          }
+        }
+      ]
     },
     {
       "id": 2,
@@ -54,7 +198,54 @@
         "azimuth": 0.65,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.5,
+          0.26,
+          0.46
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "2",
+          "title": "Side panels — upright",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.5,
+              0.26,
+              0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.05,
+            "y": 0.08,
+            "w": 0.9,
+            "h": 0.45
+          }
+        }
+      ]
     },
     {
       "id": 3,
@@ -82,7 +273,82 @@
         "azimuth": 0.7000000000000001,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.5,
+          0.26,
+          0.46
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "3a",
+          "title": "Dowels — where they go",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.5,
+              0.26,
+              0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.04,
+            "y": 0.02,
+            "w": 0.92,
+            "h": 0.48
+          }
+        },
+        {
+          "id": "3b",
+          "title": "Dowel — press in",
+          "phase": "closeup",
+          "camera": {
+            "position": [
+              0.14,
+              0.12,
+              0.18
+            ],
+            "target": [
+              0.06,
+              0.07,
+              0.04
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.12,
+            "y": 0.05,
+            "w": 0.76,
+            "h": 0.42
+          }
+        }
+      ]
     },
     {
       "id": 4,
@@ -97,7 +363,54 @@
         "azimuth": 0.75,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          -0.5,
+          0.26,
+          -0.46
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "4",
+          "title": "Back panel — rear view",
+          "phase": "context",
+          "camera": {
+            "position": [
+              -0.5,
+              0.26,
+              -0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.05,
+            "y": 0.12,
+            "w": 0.9,
+            "h": 0.55
+          }
+        }
+      ]
     },
     {
       "id": 5,
@@ -112,7 +425,48 @@
         "azimuth": 0.8,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.06,
+          0.58,
+          0.22
+        ],
+        "target": [
+          0.02,
+          0.08,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "5",
+          "title": "Top panel — clamp",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.06,
+              0.58,
+              0.22
+            ],
+            "target": [
+              0.02,
+              0.08,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 6,
@@ -140,7 +494,82 @@
         "azimuth": 0.8500000000000001,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          -0.5,
+          0.26,
+          -0.46
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "6a",
+          "title": "Frame connectors — back",
+          "phase": "context",
+          "camera": {
+            "position": [
+              -0.5,
+              0.26,
+              -0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.04,
+            "y": 0.08,
+            "w": 0.92,
+            "h": 0.5
+          }
+        },
+        {
+          "id": "6b",
+          "title": "Connector — snap in",
+          "phase": "closeup",
+          "camera": {
+            "position": [
+              -0.12,
+              0.11,
+              -0.2
+            ],
+            "target": [
+              -0.04,
+              0.07,
+              -0.08
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.1,
+            "y": 0.55,
+            "w": 0.35,
+            "h": 0.35
+          }
+        }
+      ]
     },
     {
       "id": 7,
@@ -162,11 +591,80 @@
         "azimuth": 0.9000000000000001,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          -0.5,
+          0.26,
+          -0.46
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "7a",
+          "title": "Wall fittings — back",
+          "phase": "context",
+          "camera": {
+            "position": [
+              -0.5,
+              0.26,
+              -0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.05,
+            "y": 0.1,
+            "w": 0.9,
+            "h": 0.55
+          }
+        },
+        {
+          "id": "7b",
+          "title": "Wall fitting — screw",
+          "phase": "closeup",
+          "camera": {
+            "position": [
+              -0.14,
+              0.14,
+              -0.18
+            ],
+            "target": [
+              -0.05,
+              0.09,
+              -0.07
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 8,
-      "title": "Drawer 1 \u2014 box",
+      "title": "Drawer 1 — box",
       "manualPage": 19,
       "nodes": [
         "109041_01",
@@ -187,11 +685,52 @@
         "azimuth": 0.9500000000000001,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.42,
+          0.2,
+          0.38
+        ],
+        "target": [
+          0.12,
+          0.05,
+          0.02
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "8",
+          "title": "Drawer 1 — box parts",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.42,
+              0.2,
+              0.38
+            ],
+            "target": [
+              0.12,
+              0.05,
+              0.02
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 9,
-      "title": "Drawer 1 \u2014 fasteners",
+      "title": "Drawer 1 — fasteners",
       "manualPage": 20,
       "nodes": [
         "110519_01",
@@ -206,14 +745,83 @@
       "hardware": [],
       "openDrawers": false,
       "camera": {
-        "azimuth": 1.0,
+        "azimuth": 1,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.42,
+          0.2,
+          0.38
+        ],
+        "target": [
+          0.12,
+          0.05,
+          0.02
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "9a",
+          "title": "Drawer 1 — screw locations",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.42,
+              0.2,
+              0.38
+            ],
+            "target": [
+              0.12,
+              0.05,
+              0.02
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "9b",
+          "title": "Screw — tighten",
+          "phase": "closeup",
+          "camera": {
+            "position": [
+              0.2,
+              0.1,
+              0.22
+            ],
+            "target": [
+              0.12,
+              0.06,
+              0.08
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.08,
+            "y": 0.04,
+            "w": 0.84,
+            "h": 0.46
+          }
+        }
+      ]
     },
     {
       "id": 10,
-      "title": "Drawer 2 \u2014 box",
+      "title": "Drawer 2 — box",
       "manualPage": 21,
       "nodes": [
         "109041_05",
@@ -234,11 +842,52 @@
         "azimuth": 1.05,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.42,
+          0.2,
+          0.38
+        ],
+        "target": [
+          0.12,
+          0.05,
+          0.02
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "10",
+          "title": "Drawer 2 — box",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.42,
+              0.2,
+              0.38
+            ],
+            "target": [
+              0.12,
+              0.05,
+              0.02
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 11,
-      "title": "Drawer 2 \u2014 fasteners",
+      "title": "Drawer 2 — fasteners",
       "manualPage": 21,
       "nodes": [
         "110519_05",
@@ -256,7 +905,70 @@
         "azimuth": 1.1,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.42,
+          0.2,
+          0.38
+        ],
+        "target": [
+          0.12,
+          0.05,
+          0.02
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "11a",
+          "title": "Drawer 2 — fasteners",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.42,
+              0.2,
+              0.38
+            ],
+            "target": [
+              0.12,
+              0.05,
+              0.02
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "11b",
+          "title": "Plug — press",
+          "phase": "closeup",
+          "camera": {
+            "position": [
+              0.18,
+              0.1,
+              0.2
+            ],
+            "target": [
+              0.11,
+              0.05,
+              0.07
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 12,
@@ -288,7 +1000,76 @@
         "azimuth": 1.1500000000000001,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.58,
+          0.18,
+          0.02
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "12a",
+          "title": "Slides — lay out",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.58,
+              0.18,
+              0.02
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.05,
+            "y": 0.15,
+            "w": 0.9,
+            "h": 0.7
+          }
+        },
+        {
+          "id": "12b",
+          "title": "Slide rail — fix",
+          "phase": "closeup",
+          "camera": {
+            "position": [
+              0.32,
+              0.1,
+              0.06
+            ],
+            "target": [
+              0.14,
+              0.06,
+              0.02
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 13,
@@ -306,7 +1087,48 @@
         "azimuth": 1.2000000000000002,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.58,
+          0.18,
+          0.02
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "13",
+          "title": "Mount slides to carcass",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.58,
+              0.18,
+              0.02
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 14,
@@ -325,7 +1147,48 @@
         "azimuth": 1.25,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          -0.5,
+          0.26,
+          -0.46
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "14",
+          "title": "Secure to wall — back",
+          "phase": "context",
+          "camera": {
+            "position": [
+              -0.5,
+              0.26,
+              -0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     },
     {
       "id": 15,
@@ -338,7 +1201,76 @@
         "azimuth": 1.3,
         "elevation": 0.32,
         "distance": 2.2
-      }
+      },
+      "manualCamera": {
+        "position": [
+          0.5,
+          0.26,
+          0.46
+        ],
+        "target": [
+          0.02,
+          0.07,
+          0
+        ],
+        "assemblyRotation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "subSteps": [
+        {
+          "id": "15a",
+          "title": "Finished cabinet — front",
+          "phase": "context",
+          "camera": {
+            "position": [
+              0.5,
+              0.26,
+              0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "15b",
+          "title": "Open both drawers",
+          "phase": "finish",
+          "camera": {
+            "position": [
+              0.5,
+              0.26,
+              0.46
+            ],
+            "target": [
+              0.02,
+              0.07,
+              0
+            ]
+          },
+          "assemblyRotation": [
+            0,
+            0,
+            0
+          ],
+          "manualRegion": {
+            "x": 0.1,
+            "y": 0.12,
+            "w": 0.8,
+            "h": 0.55
+          }
+        }
+      ]
     }
   ]
 }
