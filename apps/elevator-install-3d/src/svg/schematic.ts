@@ -3,8 +3,8 @@ import { auxContactClosed, energisedEdgeIds } from '../model/circuit'
 
 export type FlowPhase = 'idle' | 'aux' | 'main' | 'motor'
 
-const W = 1180
-const H = 520
+const W = 1400
+const H = 720
 
 function wireClass(on: Set<string>, id: string, phase: string): string {
   const lit = on.has(id)
@@ -26,7 +26,7 @@ export function renderSchematicSvg(state: SwitchState, flowT = 0): string {
     <filter id="glow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
   <rect width="100%" height="100%" fill="#0a1628"/>
-  <text x="16" y="28" fill="#ff8a3d" font-family="Inter" font-size="14" font-weight="600">Illustrative demo, not for installation</text>
+  <text x="20" y="36" fill="#ff8a3d" font-family="Inter" font-size="20" font-weight="600">Illustrative demo, not for installation</text>
 
   <!-- 110V aux disconnect -->
   <g transform="translate(40,70)">

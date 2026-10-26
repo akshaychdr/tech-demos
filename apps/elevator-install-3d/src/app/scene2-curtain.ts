@@ -51,7 +51,9 @@ export function createScene2(): Scene2Api {
     root.querySelector('[data-step-caption]')!.textContent = step.caption
     root.querySelector('[data-step-index]')!.textContent = `Step ${stepIndex + 1} / ${steps.length}`
     renderCallouts()
-    curtain3d?.applyStep(stepIndex as 0 | 1 | 2 | 3 | 4 | 5, exploded ? step.explode : 0)
+    const explodeAmt = exploded ? step.explode : 0
+    curtain3d?.applyStep(stepIndex as 0 | 1 | 2 | 3 | 4 | 5, explodeAmt)
+    root.querySelector('.curtain-3d')?.classList.toggle('step-active', true)
   }
 
   return {

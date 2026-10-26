@@ -27,7 +27,7 @@ function buildShell() {
         <label>Travel (mm, max ${dimensions.maxTravelMm})
           <input data-travel type="number" min="1000" max="${dimensions.maxTravelMm}" value="3505" />
         </label>
-        <button type="button" data-morph class="primary">Extrude to 3D</button>
+        <button type="button" data-morph class="primary">Animate 2D → 3D</button>
       </div>
       <div data-scene1-root></div>
     </section>

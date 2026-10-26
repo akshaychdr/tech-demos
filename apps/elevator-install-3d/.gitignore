@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 out
+docs/video/raw
 dist
 dist-ssr
 *.local

@@ -142,6 +142,76 @@ header.app-header h1 {
   min-height: 420px;
 }
 
+.layout-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.layout-toolbar button {
+  font-family: inherit;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.layout-toolbar button.active {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.layout-view {
+  display: grid;
+  gap: 0.75rem;
+  min-height: min(72vh, 820px);
+}
+
+.layout-view--split {
+  grid-template-columns: 1fr 1fr;
+}
+
+.layout-view--2d {
+  grid-template-columns: 1fr;
+}
+
+.layout-view--2d .layout-panel--3d {
+  display: none;
+}
+
+.layout-view--3d {
+  grid-template-columns: 1fr;
+}
+
+.layout-view--3d .layout-panel--plan {
+  display: none;
+}
+
+.layout-panel {
+  min-height: min(68vh, 760px);
+  border: 1px solid var(--grid);
+  border-radius: 6px;
+  background: rgba(10, 22, 40, 0.55);
+  overflow: hidden;
+}
+
+.layout-panel--plan svg.layout-plan-svg {
+  width: 100%;
+  height: 100%;
+  min-height: min(68vh, 760px);
+  display: block;
+}
+
+.layout-panel--3d canvas {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: min(68vh, 760px);
+  display: block;
+}
+
 @media (max-width: 960px) {
   .split-view {
     grid-template-columns: 1fr;
@@ -253,14 +323,17 @@ header.app-header h1 {
 }
 
 .schematic-wrap {
-  min-height: 420px;
+  min-height: 480px;
+  overflow: auto;
 }
 
-.schematic-wrap svg {
+.schematic-wrap svg.wiring-schematic {
   width: 100%;
   height: auto;
-  min-height: 400px;
+  min-height: 460px;
   display: block;
+  transform: scale(1.08);
+  transform-origin: top center;
 }
 
 .wiring-schematic .wire {

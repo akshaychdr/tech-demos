@@ -35,9 +35,13 @@ async function main() {
 
   const delay = (ms) => page.waitForTimeout(ms)
 
-  // Scene 1 — cab selector + 3D
+  // Scene 1 — layout 2D→3D story first
   await page.click('[data-tab="1"]')
-  await delay(1500)
+  await delay(2000)
+  await page.click('[data-view="split"]')
+  await delay(800)
+  await page.click('[data-morph]')
+  await delay(6000)
   const config = page.locator('[data-config]')
   await config.selectOption({ index: 0 })
   await delay(1200)

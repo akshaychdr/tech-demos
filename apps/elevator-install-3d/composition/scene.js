@@ -13,6 +13,9 @@ const G = {
   overhead: 2438,
   travel: 3505,
   cabH: 2007,
+  wallRail: 140,
+  wallCyl: 140,
+  wallCab: 254,
 }
 
 function kineticCaption(text, el) {
@@ -28,9 +31,9 @@ function kineticCaption(text, el) {
 }
 
 function buildPlanSvg() {
-  const s = 0.11
-  const ox = 120
-  const oy = 100
+  const s = 0.78
+  const ox = 140
+  const oy = 120
   const w = G.hoistwayW * s
   const d = G.hoistwayD * s
   const pw = G.platformW * s
@@ -39,16 +42,21 @@ function buildPlanSvg() {
   const py = oy + ((G.hoistwayD - G.platformD) / 2) * s
   const ex = ox + G.entrance * s
   const rx = ox + G.rail * s
+  const doorW = pw * 0.75
   return `
-    <rect class="plan-shape" x="${ox}" y="${oy}" width="${w}" height="${d}"/>
-    <rect class="plan-shape" x="${px}" y="${py}" width="${pw}" height="${pd}" opacity="0.9"/>
-    <line class="plan-shape" x1="${ex}" y1="${oy}" x2="${ex}" y2="${oy + d}"/>
+    <rect class="plan-shape" x="${ox}" y="${oy}" width="${w}" height="${d}" fill="rgba(56,214,255,0.08)"/>
+    <rect class="plan-shape" x="${px}" y="${py}" width="${pw}" height="${pd}" fill="rgba(255,138,61,0.15)"/>
+    <path class="plan-shape" d="M ${ox + G.entrance * s - doorW / 2} ${oy + d} L ${ox + G.entrance * s - doorW * 0.35} ${oy + d - 70} L ${ox + G.entrance * s + doorW * 0.35} ${oy + d - 70} L ${ox + G.entrance * s + doorW / 2} ${oy + d}" fill="none" stroke="#ff8a3d" stroke-width="3"/>
+    <line class="plan-shape" x1="${ex}" y1="${oy}" x2="${ex}" y2="${oy + d}" stroke-dasharray="12 8"/>
     <line class="plan-shape" x1="${rx}" y1="${oy}" x2="${rx}" y2="${oy + d}"/>
-    <line class="dim-line" x1="${ox}" y1="${oy - 30}" x2="${ox + w}" y2="${oy - 30}"/>
-    <text x="${ox + w / 2}" y="${oy - 38}" text-anchor="middle" fill="#e6f1ff" font-family="IBM Plex Mono" font-size="16">${G.hoistwayW} mm</text>
-    <line class="dim-line" x1="${ox - 30}" y1="${oy}" x2="${ox - 30}" y2="${oy + d}"/>
-    <text x="${ox - 38}" y="${oy + d / 2}" text-anchor="middle" fill="#e6f1ff" font-family="IBM Plex Mono" font-size="16" transform="rotate(-90 ${ox - 38} ${oy + d / 2})">${G.hoistwayD} mm</text>
-    <text x="${ox}" y="${oy + d + 48}" fill="#8ba4c7" font-family="IBM Plex Mono" font-size="14">Platform ${G.platformW}×${G.platformD} mm · E ℄ ${G.entrance} mm · R ℄ ${G.rail} mm</text>
+    <circle class="plan-shape" cx="${ox + (G.hoistwayW - G.wallCyl) * s}" cy="${oy + (G.hoistwayD - G.wallCyl) * s}" r="22" fill="rgba(255,138,61,0.2)" stroke="#ff8a3d" stroke-width="2"/>
+    <line class="dim-line" x1="${ox}" y1="${oy - 44}" x2="${ox + w}" y2="${oy - 44}"/>
+    <text x="${ox + w / 2}" y="${oy - 52}" text-anchor="middle" fill="#e6f1ff" font-family="IBM Plex Mono" font-size="22">${G.hoistwayW} mm</text>
+    <line class="dim-line" x1="${ox - 44}" y1="${oy}" x2="${ox - 44}" y2="${oy + d}"/>
+    <text x="${ox - 52}" y="${oy + d / 2}" text-anchor="middle" fill="#e6f1ff" font-family="IBM Plex Mono" font-size="22" transform="rotate(-90 ${ox - 52} ${oy + d / 2})">${G.hoistwayD} mm</text>
+    <text x="${ex + 10}" y="${oy + 36}" fill="#38d6ff" font-size="20" font-family="IBM Plex Mono">E ℄ ${G.entrance}</text>
+    <text x="${rx + 10}" y="${oy + 64}" fill="#38d6ff" font-size="20" font-family="IBM Plex Mono">R ℄ ${G.rail}</text>
+    <text x="${ox}" y="${oy + d + 56}" fill="#8ba4c7" font-family="IBM Plex Mono" font-size="18">Platform ${G.platformW}×${G.platformD} mm · wall offsets ${G.wallRail}/${G.wallCyl}/${G.wallCab} mm</text>
   `
 }
 
@@ -58,17 +66,17 @@ function initLayout3D(canvas) {
   renderer.setPixelRatio(1)
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x0a1628)
-  scene.fog = new THREE.Fog(0x0a1628, 4, 14)
-  const camera = new THREE.PerspectiveCamera(42, 1920 / 1080, 0.05, 50)
-  camera.position.set(2.5, 2.2, 3.2)
+  scene.fog = new THREE.Fog(0x0a1628, 8, 22)
+  const camera = new THREE.PerspectiveCamera(42, 1920 / 1080, 0.05, 80)
+  camera.position.set(0.2, 5.5, 0.2)
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
   controls.autoRotate = false
   controls.target.set(0, 1.2, 0)
 
-  scene.add(new THREE.AmbientLight(0x38d6ff, 0.35))
-  scene.add(new THREE.HemisphereLight(0x38d6ff, 0x0a1628, 0.5))
-  const key = new THREE.DirectionalLight(0xffffff, 0.9)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6))
+  scene.add(new THREE.HemisphereLight(0x88ddff, 0x0a1628, 0.75))
+  const key = new THREE.DirectionalLight(0xffffff, 1.15)
   key.position.set(4, 6, 3)
   scene.add(key)
   const rim = new THREE.DirectionalLight(0xff8a3d, 0.35)
@@ -100,16 +108,28 @@ function initLayout3D(canvas) {
   plat.position.y = G.pit * sc
   group.add(plat)
 
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.04, G.travel * sc, 0.07), wallMat)
-  rail.position.set(-G.rail * sc + hw / 2, G.pit * sc + G.travel * sc / 2, 0)
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, G.travel * sc, 0.08), wallMat)
+  rail.position.set(-hw / 2 + G.rail * sc, G.pit * sc + G.travel * sc / 2, 0)
   group.add(rail)
 
   const cyl = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1, 0.1, G.travel * sc * 0.88, 20),
-    new THREE.MeshStandardMaterial({ color: 0xff8a3d, transparent: true, opacity: 0.35, roughness: 0.4 }),
+    new THREE.CylinderGeometry(0.11, 0.11, G.travel * sc * 0.9, 24),
+    new THREE.MeshStandardMaterial({ color: 0xff8a3d, transparent: true, opacity: 0.5, roughness: 0.4 }),
   )
-  cyl.position.set(hw / 2 - 0.14, G.pit * sc + G.travel * sc * 0.45, hd / 2 - 0.12)
+  cyl.position.set(hw / 2 - G.wallCyl * sc, G.pit * sc + G.travel * sc / 2, hd / 2 - G.wallCyl * sc)
   group.add(cyl)
+
+  const floor = new THREE.Group()
+  floor.position.y = G.pit * sc + 0.002
+  const line = (x1, z1, x2, z2) => {
+    const pts = [new THREE.Vector3(x1, 0, z1), new THREE.Vector3(x2, 0, z2)]
+    floor.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x38d6ff, transparent: true, opacity: 0.7 })))
+  }
+  line(-hw / 2, -hd / 2, hw / 2, -hd / 2)
+  line(hw / 2, -hd / 2, hw / 2, hd / 2)
+  line(hw / 2, hd / 2, -hw / 2, hd / 2)
+  line(-hw / 2, hd / 2, -hw / 2, -hd / 2)
+  group.add(floor)
 
   const cab = new THREE.Mesh(
     new THREE.BoxGeometry(G.platformW * sc * 0.92, G.cabH * sc, G.platformD * sc * 0.92),
@@ -118,25 +138,43 @@ function initLayout3D(canvas) {
   cab.position.y = G.pit * sc + G.cabH * sc / 2
   group.add(cab, new THREE.LineSegments(new THREE.EdgesGeometry(cab.geometry), edge))
 
-  group.scale.set(0.01, 0.01, 0.01)
+  group.scale.set(1, 0.015, 1)
 
-  return { renderer, scene, camera, controls, group }
+  const fitCamera = (iso = true) => {
+    const box = new THREE.Box3().setFromObject(group)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const fov = (camera.fov * Math.PI) / 180
+    const dist = (maxDim / (2 * Math.tan(fov / 2))) * 1.15
+    if (iso) {
+      camera.position.set(center.x + dist * 0.72, center.y + dist * 0.58, center.z + dist * 0.78)
+    } else {
+      camera.position.set(center.x, center.y + dist * 1.05, center.z + dist * 0.08)
+    }
+    controls.target.copy(center)
+    camera.updateProjectionMatrix()
+  }
+  fitCamera(false)
+
+  return { renderer, scene, camera, controls, group, hw, hd, sc, fitCamera }
 }
 
 function initCurtain3D(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setSize(1920, 1080)
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x0a1628)
-  scene.fog = new THREE.Fog(0x0a1628, 3, 9)
+  scene.background = new THREE.Color(0x0f2240)
+  scene.fog = new THREE.Fog(0x0f2240, 6, 18)
   const camera = new THREE.PerspectiveCamera(40, 1920 / 1080, 0.1, 40)
   camera.position.set(2.4, 1.9, 2.8)
   const controls = new OrbitControls(camera, canvas)
   controls.target.set(0, 0.7, 0)
   controls.enableDamping = true
 
-  scene.add(new THREE.AmbientLight(0x38d6ff, 0.4))
-  const key = new THREE.DirectionalLight(0xffffff, 0.85)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75))
+  scene.add(new THREE.HemisphereLight(0xaeefff, 0x1a2840, 0.85))
+  const key = new THREE.DirectionalLight(0xffffff, 1.3)
   key.position.set(3, 5, 2)
   scene.add(key)
 
@@ -232,6 +270,8 @@ function init() {
   const planLayer = document.getElementById('layer-plan')
   const planSvg = document.getElementById('plan-svg')
   planSvg.innerHTML = buildPlanSvg()
+  planSvg.setAttribute('viewBox', '100 60 1080 1020')
+  planSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
 
   const layoutCanvas = document.getElementById('canvas-layout')
   const curtainCanvas = document.getElementById('canvas-curtain')
@@ -267,12 +307,26 @@ function init() {
   tl.to('.dim-line', { strokeDashoffset: 0, duration: 1.4, stagger: 0.12, ease: 'power2.out' }, 4.2)
   tl.add(kineticCaption('1270 × 1360 mm hoistway — every dimension in millimetres', caption), 4.5)
 
-  // Extrude 3D
-  tl.to(planLayer, { opacity: 0, duration: 0.7 }, 8)
-  tl.set(layoutCanvas, { opacity: 1 }, 8.2)
-  tl.to(layout.group.scale, { x: 1, y: 1, z: 1, duration: 2, ease: 'expo.inOut' }, 8.3)
-  tl.to(layout.camera.position, { x: 1.9, y: 2.4, z: 2.6, duration: 2.2, ease: 'power3.inOut' }, 8.5)
-  tl.add(kineticCaption('Same numbers build the 3D shaft, rails, cylinder and cab', caption), 9)
+  // 2D plan holds full frame, then continuous tilt + extrude
+  tl.to({}, { duration: 2.5 }, 7.5)
+  tl.set(layoutCanvas, { opacity: 1 }, 10)
+  tl.call(() => layout.fitCamera(false), null, 10)
+  tl.to(layout.group.scale, { y: 1, duration: 2.2, ease: 'expo.out' }, 10.2)
+  tl.to(planLayer, { opacity: 0.25, duration: 1.8 }, 10.4)
+  tl.add(kineticCaption('Plan on the floor — ghosted linework under the extruding shaft', caption), 10.5)
+  tl.to({}, {
+    duration: 2.8,
+    onUpdate() {
+      const p = this.progress()
+      layout.fitCamera(false)
+      const c = layout.controls.target
+      layout.camera.position.x = c.x + (1.6 - c.x) * p
+      layout.camera.position.y = c.y + (2.4 - c.y) * p
+      layout.camera.position.z = c.z + (2.2 - c.z) * p
+    },
+  }, 11.2)
+  tl.to(planLayer, { opacity: 0, duration: 1 }, 13.5)
+  tl.add(kineticCaption(`Pit ${G.pit} mm · travel ${G.travel} mm · overhead ${G.overhead} mm`, caption), 13.8)
 
   tl.to({}, {
     duration: 10,

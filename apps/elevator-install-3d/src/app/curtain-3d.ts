@@ -8,8 +8,8 @@ const DIMS = { top: 225, mid: 953, bot: 248 }
 
 export function mountCurtain3D(host: HTMLElement) {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x0a1628)
-  scene.fog = new THREE.Fog(0x0a1628, 2.5, 8)
+  scene.background = new THREE.Color(0x0f2240)
+  scene.fog = new THREE.Fog(0x0f2240, 6, 18)
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50)
   camera.position.set(2.2, 1.8, 2.6)
@@ -22,11 +22,12 @@ export function mountCurtain3D(host: HTMLElement) {
   controls.enableDamping = true
   controls.target.set(0, 0.6, 0)
 
-  scene.add(new THREE.AmbientLight(0x38d6ff, 0.35))
-  const key = new THREE.DirectionalLight(0xffffff, 0.85)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75))
+  scene.add(new THREE.HemisphereLight(0xaeefff, 0x1a2840, 0.85))
+  const key = new THREE.DirectionalLight(0xffffff, 1.35)
   key.position.set(3, 5, 2)
   scene.add(key)
-  const rim = new THREE.DirectionalLight(0xff8a3d, 0.35)
+  const rim = new THREE.DirectionalLight(0xff8a3d, 0.65)
   rim.position.set(-2, 2, -3)
   scene.add(rim)
 

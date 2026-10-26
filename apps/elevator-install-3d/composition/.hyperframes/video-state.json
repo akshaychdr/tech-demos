@@ -1,7 +1,7 @@
 {
   "version": 1,
   "historyId": "7c1d9a90-b522-4d13-b5e1-12faf2a37bf5",
-  "currentRevision": "3cd9f3a6-21cf-4e89-afb8-4307361ba6f5",
+  "currentRevision": "9db164ad-71b8-4bb2-a545-a3feea6d472a",
   "pendingChanges": false,
   "files": {
     "hyperframes.json": {
@@ -9,12 +9,12 @@
       "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/53/53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50"
     },
     "index.html": {
-      "hash": "7e3155f04d6f9e6aae55eedb280cefa83439bea5926cd90fc6c1b55d25719d58",
-      "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/7e/7e3155f04d6f9e6aae55eedb280cefa83439bea5926cd90fc6c1b55d25719d58"
+      "hash": "9351fa224b18a701e15e7eb761b1ed79b477496cc3c356f193243a4acb4a2c25",
+      "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/93/9351fa224b18a701e15e7eb761b1ed79b477496cc3c356f193243a4acb4a2c25"
     },
     "scene.js": {
-      "hash": "158c114bcffac118af7fefcba47f066b9b68c156669382baafc3010017150094",
-      "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/15/158c114bcffac118af7fefcba47f066b9b68c156669382baafc3010017150094"
+      "hash": "0011d9355208c75167f09069ad5a626e746a84db2b9bf50c4c74a1431a3ecdee",
+      "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/00/0011d9355208c75167f09069ad5a626e746a84db2b9bf50c4c74a1431a3ecdee"
     }
   },
   "revisions": {
@@ -93,6 +93,59 @@
           "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/15/158c114bcffac118af7fefcba47f066b9b68c156669382baafc3010017150094"
         }
       }
+    },
+    "170aea61-ea3b-42e1-8c88-629de182bab7": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1792999141772,
+      "endedAt": 1792999141779,
+      "files": {
+        "index.html": {
+          "before": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/7e/7e3155f04d6f9e6aae55eedb280cefa83439bea5926cd90fc6c1b55d25719d58",
+          "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/63/638474e99b068dd2f1f50da94d03477f10d26792526048dcd60ee1d19176f130"
+        },
+        "scene.js": {
+          "before": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/15/158c114bcffac118af7fefcba47f066b9b68c156669382baafc3010017150094",
+          "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/a5/a50bcff669da456d587ca8051b3103e08626357155c819e53cc909c000312b94"
+        }
+      }
+    },
+    "9aaf0530-333b-46b5-82e5-2adee14770e5": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1792999735103,
+      "endedAt": 1792999735104,
+      "files": {
+        "scene.js": {
+          "before": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/a5/a50bcff669da456d587ca8051b3103e08626357155c819e53cc909c000312b94",
+          "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/e1/e1255fe456ff7a70940dc39ed21260c501acfe1ba4f51035b51f5eb3b5fd2e55"
+        }
+      }
+    },
+    "9db164ad-71b8-4bb2-a545-a3feea6d472a": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793000181823,
+      "endedAt": 1793000181831,
+      "files": {
+        "index.html": {
+          "before": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/63/638474e99b068dd2f1f50da94d03477f10d26792526048dcd60ee1d19176f130",
+          "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/93/9351fa224b18a701e15e7eb761b1ed79b477496cc3c356f193243a4acb4a2c25"
+        },
+        "scene.js": {
+          "before": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/e1/e1255fe456ff7a70940dc39ed21260c501acfe1ba4f51035b51f5eb3b5fd2e55",
+          "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/00/0011d9355208c75167f09069ad5a626e746a84db2b9bf50c4c74a1431a3ecdee"
+        }
+      }
     }
   },
   "checks": {
@@ -107,15 +160,15 @@
   },
   "renders": {
     "latest": {
-      "id": "f2a6e72f-6544-4238-9eb4-7ef780b6c7f6",
-      "completedAt": 1792998496371,
+      "id": "9e7b69a7-7e34-42bd-9993-39c72bdbfdcb",
+      "completedAt": 1793000581896,
       "output": "/workspace/apps/elevator-install-3d/out/elevator-install-3d-reel.mp4",
       "status": "completed",
-      "revision": "3cd9f3a6-21cf-4e89-afb8-4307361ba6f5"
+      "revision": "9db164ad-71b8-4bb2-a545-a3feea6d472a"
     },
     "retainedRevisions": [
-      "3cd9f3a6-21cf-4e89-afb8-4307361ba6f5",
-      "06dbfc75-f522-4e40-869e-bd4fe490c021"
+      "9db164ad-71b8-4bb2-a545-a3feea6d472a",
+      "9aaf0530-333b-46b5-82e5-2adee14770e5"
     ]
   },
   "pendingArtifactCleanup": []
