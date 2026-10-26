@@ -1,22 +1,22 @@
 import * as THREE from 'three'
-import { hardwareLabel, isHardwareName, partKind } from './partKind'
+import { isHardwareName, partKind } from './partKind'
 import { partNameForMatch } from './partNames'
 
 export type FlatPackSlot = {
   position: THREE.Vector3
   rotation: THREE.Euler
   scale: number
-  label?: string
 }
 
 const floorY = 0.002
-const panelPitch = 0.68
-const panelRow = 0.52
+const PANEL_DX = 0.82
+const PANEL_DZ = 0.62
 
-/** Flat-pack floor plan (metres), inspired by manual page 7 groupings. */
+/** Wide floor grid (metres), manual page 7 inspired. */
 export function flatPackSlot(name: string, index: number): FlatPackSlot {
   const kind = partKind(name)
   const rot = new THREE.Euler(0, 0, 0)
+  const matchName = partNameForMatch(name)
 
   if (kind === 'panel') {
     const panelSlots: Record<string, [number, number]> = {
@@ -26,8 +26,7 @@ export function flatPackSlot(name: string, index: number): FlatPackSlot {
       'side panel left': [0, 1],
       'side panel right': [1, 1],
     }
-    let slot = [2.5 + (index % 3) * 0.5, 2 + Math.floor(index / 3) * 0.45]
-    const matchName = partNameForMatch(name)
+    let slot = [3 + (index % 2), 2 + Math.floor(index / 2)]
     for (const [key, s] of Object.entries(panelSlots)) {
       if (matchName.includes(key)) {
         slot = s
@@ -37,64 +36,67 @@ export function flatPackSlot(name: string, index: number): FlatPackSlot {
     rot.x = -Math.PI / 2
     if (matchName.includes('back panel')) rot.y = Math.PI / 2
     else if (matchName.includes('side panel')) rot.y = matchName.includes('left') ? -Math.PI / 2 : Math.PI / 2
-    else rot.y = 0
-    rot.z = 0
     return {
-      position: new THREE.Vector3(slot[0] * panelPitch, floorY + 0.012, slot[1] * panelRow),
+      position: new THREE.Vector3(
+        (slot[0] - 1) * PANEL_DX,
+        floorY + 0.012,
+        slot[1] * PANEL_DZ,
+      ),
       rotation: rot,
       scale: 1,
-      label: name.replace(/_\d+$/, '').replace(/ dr ut.*/, ''),
     }
   }
 
   if (kind === 'drawer') {
-    const col = index % 4
-    const row = Math.floor(index / 4)
+    const isOne = matchName.includes('_01')
+    const baseCol = isOne ? 0 : 2
+    const col = baseCol + (index % 2)
+    const row = Math.floor(index / 2)
     rot.x = -Math.PI / 2
-    rot.y = partNameForMatch(name).includes('front') ? Math.PI : 0
+    rot.y = matchName.includes('front') ? Math.PI : 0
     return {
-      position: new THREE.Vector3(0.15 + col * 0.5, floorY + 0.01, 2.35 + row * 0.4),
+      position: new THREE.Vector3(
+        (col - 0.5) * 0.55,
+        floorY + 0.01,
+        1.35 + row * 0.42 + (isOne ? 0 : 0.85),
+      ),
       rotation: rot,
       scale: 1,
-      label: name.split('_')[0],
     }
   }
 
   if (kind === 'slide') {
     rot.x = -Math.PI / 2
     return {
-      position: new THREE.Vector3(2.4 + index * 0.55, floorY, 2.5),
+      position: new THREE.Vector3(1.65 + index * 0.48, floorY, 2.55),
       rotation: rot,
       scale: 1,
-      label: 'Drawer slide',
     }
   }
 
   const hwId = name.split('_')[0]
   const bins: Record<string, [number, number]> = {
-    '100349': [3.15, 0.15],
-    '109041': [3.15, 0.48],
-    '110519': [3.15, 0.81],
-    '120161': [3.15, 1.14],
-    '120162': [3.15, 1.47],
-    '128918': [3.65, 0.15],
-    '139434': [3.65, 0.48],
-    '141413': [3.65, 0.81],
-    '145572': [4.15, 0.15],
-    '147222': [4.15, 0.48],
-    '150594': [4.15, 0.81],
-    '147219': [4.15, 1.14],
-    '145568': [4.65, 0.15],
-    '145569': [4.65, 0.48],
-    '147221': [4.65, 0.81],
+    '100349': [0, 2.8],
+    '109041': [0, 3.15],
+    '110519': [0, 3.5],
+    '120161': [0, 3.85],
+    '120162': [0, 4.2],
+    '128918': [0.55, 2.8],
+    '139434': [0.55, 3.15],
+    '141413': [0.55, 3.5],
+    '145572': [1.1, 2.8],
+    '147222': [1.1, 3.15],
+    '150594': [1.1, 3.5],
+    '147219': [1.1, 3.85],
+    '145568': [1.65, 2.8],
+    '145569': [1.65, 3.15],
+    '147221': [1.65, 3.5],
   }
-  const base = bins[hwId] ?? [3.15 + (index % 5) * 0.1, 1.75 + Math.floor(index / 5) * 0.1]
-  const jitter = (index % 5) * 0.012
+  const base = bins[hwId] ?? [0.4 + (index % 4) * 0.42, 2.6 + Math.floor(index / 4) * 0.32]
   return {
-    position: new THREE.Vector3(base[0] + jitter, floorY + 0.035, base[1]),
-    rotation: new THREE.Euler(0, (index % 6) * 0.35, 0),
-    scale: 5.2,
-    label: `${hardwareLabel(name)} (${hwId})`,
+    position: new THREE.Vector3(2.05 + base[0], floorY + 0.04, base[1]),
+    rotation: new THREE.Euler(0, (index % 5) * 0.25, 0),
+    scale: 6.5,
   }
 }
 

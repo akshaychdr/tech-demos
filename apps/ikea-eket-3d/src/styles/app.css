@@ -93,8 +93,7 @@ body,
 
 .leader-lines .leader-text {
   fill: #1a1a1a;
-  font: 600 11px 'DM Sans', system-ui, sans-serif;
-  text-anchor: middle;
+  font: 600 12px 'DM Sans', system-ui, sans-serif;
 }
 
 .manual {

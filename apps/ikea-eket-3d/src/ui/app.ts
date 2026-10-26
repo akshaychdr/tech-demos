@@ -58,6 +58,9 @@ export async function mountApp(root: HTMLElement) {
 
   const viewport = root.querySelector<HTMLElement>('[data-viewport]')!
   const viewer = new EketViewer(viewport)
+  if (new URLSearchParams(location.search).has('capture')) {
+    ;(window as unknown as { __eketViewer?: EketViewer }).__eketViewer = viewer
+  }
   const manualImg = root.querySelector<HTMLImageElement>('[data-manual-img]')!
   const manualPage = root.querySelector<HTMLSpanElement>('[data-manual-page]')!
   const titleEl = root.querySelector<HTMLHeadingElement>('[data-step-title]')!

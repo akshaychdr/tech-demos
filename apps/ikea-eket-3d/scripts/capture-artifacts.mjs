@@ -11,7 +11,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const OUT = path.join(ROOT, 'docs')
 const VIEWPORT = { width: 1920, height: 1080 }
-const URL = process.env.DEMO_URL || 'http://localhost:5176'
+const BASE = process.env.DEMO_URL || 'http://localhost:5176'
+const URL = BASE.includes('?') ? BASE : `${BASE}?capture=1`
 
 const SHOT_STEPS = [
   { step: 0, file: 'step-00-flat-pack.png' },
@@ -29,10 +30,13 @@ function ffmpeg(args) {
   })
 }
 
+const STEP_HOLD_MS = Number(process.env.STEP_HOLD_MS || 4200)
+const STEP15_HOLD_MS = Number(process.env.STEP15_HOLD_MS || 5500)
+
 async function gotoStep(page, n) {
   await page.locator('[data-timeline]').fill(String(n))
   await page.locator('[data-timeline]').dispatchEvent('input')
-  await page.waitForTimeout(3000)
+  await page.waitForTimeout(n === 15 ? STEP15_HOLD_MS : STEP_HOLD_MS)
 }
 
 async function main() {
@@ -53,14 +57,21 @@ async function main() {
 
   for (const { step, file } of SHOT_STEPS) {
     await gotoStep(page, step)
+    if (step === 15) {
+      await page.evaluate(() => window.__eketViewer?.finishShowcase?.())
+      await page.waitForTimeout(400)
+    }
     await page.screenshot({ path: path.join(OUT, 'screenshots', file) })
   }
 
   for (let s = 0; s <= 15; s++) {
     await gotoStep(page, s)
-    await page.waitForTimeout(3000)
+    if (s === 15) {
+      await page.evaluate(() => window.__eketViewer?.finishShowcase?.())
+      await page.waitForTimeout(800)
+    }
   }
-  await page.waitForTimeout(4000)
+  await page.waitForTimeout(1500)
 
   await context.close()
   await browser.close()
@@ -69,10 +80,13 @@ async function main() {
   const webm = rawFiles.find((f) => f.endsWith('.webm'))
   if (!webm) throw new Error('No recorded webm')
   const mp4Path = path.join(OUT, 'video', 'app-demo.mp4')
+  const targetSeconds = Number(process.env.VIDEO_SECONDS || 78)
   await ffmpeg([
     '-y',
     '-i',
     path.join(rawDir, webm),
+    '-t',
+    String(targetSeconds),
     '-c:v',
     'libx264',
     '-pix_fmt',
