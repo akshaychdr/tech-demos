@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "preview:pages": "VITE_BASE_PATH=/tech-demos/elevator-install-3d/ vite build && VITE_BASE_PATH=/tech-demos/elevator-install-3d/ vite preview --port 4174",
     "test": "vitest run",
     "render:mp4": "mkdir -p out public/docs/video && npx hyperframes@0.8.181 render composition -o out/elevator-install-3d-reel.mp4 -f 60 -q looks && cp out/elevator-install-3d-reel.mp4 public/docs/video/elevator-install-3d-reel.mp4 && bash scripts/qa-reel-frames.sh out/elevator-install-3d-reel.mp4",
     "capture:artifacts": "node scripts/capture-artifacts.mjs",
