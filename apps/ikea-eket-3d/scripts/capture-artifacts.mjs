@@ -1,8 +1,8 @@
 /**
- * Full-window 1920×1080 walkthrough + screenshots for PR.
+ * Full-window 1920×1080 walkthrough + step screenshots for PR.
  */
 import { chromium } from 'playwright'
-import { mkdir, readdir, rename } from 'node:fs/promises'
+import { mkdir, readdir, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +13,15 @@ const OUT = path.join(ROOT, 'docs')
 const VIEWPORT = { width: 1920, height: 1080 }
 const URL = process.env.DEMO_URL || 'http://localhost:5176'
 
+const SHOT_STEPS = [
+  { step: 0, file: 'step-00-flat-pack.png' },
+  { step: 3, file: 'step-03-dowels.png' },
+  { step: 6, file: 'step-06-frame.png' },
+  { step: 9, file: 'step-09-drawer1.png' },
+  { step: 12, file: 'step-12-slides.png' },
+  { step: 15, file: 'step-15-drawers-open.png' },
+]
+
 function ffmpeg(args) {
   return new Promise((resolve, reject) => {
     const p = spawn('ffmpeg', args, { stdio: 'inherit' })
@@ -20,10 +29,18 @@ function ffmpeg(args) {
   })
 }
 
+async function gotoStep(page, n) {
+  await page.locator('[data-timeline]').fill(String(n))
+  await page.locator('[data-timeline]').dispatchEvent('input')
+  await page.waitForTimeout(3000)
+}
+
 async function main() {
   await mkdir(path.join(OUT, 'screenshots'), { recursive: true })
   await mkdir(path.join(OUT, 'video'), { recursive: true })
   const rawDir = path.join(OUT, 'video', 'raw')
+  await rm(rawDir, { recursive: true, force: true })
+  await mkdir(rawDir, { recursive: true })
 
   const browser = await chromium.launch({ headless: true })
   const context = await browser.newContext({
@@ -31,31 +48,19 @@ async function main() {
     recordVideo: { dir: rawDir, size: VIEWPORT },
   })
   const page = await context.newPage()
-  await page.goto(URL, { waitUntil: 'networkidle', timeout: 120000 })
+  await page.goto(URL, { waitUntil: 'networkidle', timeout: 180000 })
+  await page.waitForTimeout(5000)
+
+  for (const { step, file } of SHOT_STEPS) {
+    await gotoStep(page, step)
+    await page.screenshot({ path: path.join(OUT, 'screenshots', file) })
+  }
+
+  for (let s = 0; s <= 15; s++) {
+    await gotoStep(page, s)
+    await page.waitForTimeout(3000)
+  }
   await page.waitForTimeout(4000)
-
-  const delay = (ms) => page.waitForTimeout(ms)
-
-  await page.screenshot({ path: path.join(OUT, 'screenshots', 'step-0-exploded.png') })
-  await delay(1500)
-
-  for (let i = 1; i <= 15; i++) {
-    await page.click('[data-next]')
-    await delay(3200)
-  }
-  await page.screenshot({ path: path.join(OUT, 'screenshots', 'step-15-drawers-open.png') })
-  await delay(2000)
-
-  await page.click('[data-timeline]')
-  await page.keyboard.press('Home')
-  await delay(1000)
-  for (let i = 0; i < 15; i++) {
-    await page.click('[data-next]')
-    await delay(2500)
-  }
-  await page.click('[data-play]')
-  await delay(8000)
-  await delay(5000)
 
   await context.close()
   await browser.close()
@@ -63,12 +68,11 @@ async function main() {
   const rawFiles = await readdir(rawDir)
   const webm = rawFiles.find((f) => f.endsWith('.webm'))
   if (!webm) throw new Error('No recorded webm')
-  const rawPath = path.join(rawDir, webm)
   const mp4Path = path.join(OUT, 'video', 'app-demo.mp4')
   await ffmpeg([
     '-y',
     '-i',
-    rawPath,
+    path.join(rawDir, webm),
     '-c:v',
     'libx264',
     '-pix_fmt',

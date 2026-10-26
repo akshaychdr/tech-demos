@@ -75,7 +75,9 @@ export async function mountApp(root: HTMLElement) {
         ? 'Exploded preview of all GLB parts. Step through to assemble the cabinet and open the drawers.'
         : `Follow manual page ${step.manualPage}.`
     stepCounter.textContent = `Step ${step.id}/${steps.length - 1}`
-    partCounter.textContent = `Parts ${cumulativeNodes(stepIndex).size}/83`
+    const placed = cumulativeNodes(stepIndex).size
+    partCounter.textContent =
+      stepIndex === 0 ? `Parts 0/83 (flat pack)` : `Assembled ${placed}/83`
     manualPage.textContent = String(step.manualPage)
     manualImg.src = `${base}dataset/manual-pages/page-${String(step.manualPage).padStart(2, '0')}.png`
 

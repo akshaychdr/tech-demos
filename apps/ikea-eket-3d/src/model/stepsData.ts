@@ -8,9 +8,11 @@ export const product = stepsJson.product
 export const steps = stepsJson.steps
 export const hardwareTotals = partsJson.hardwareTotals
 
+/** Parts placed in the assembly through this step (step 0 → none). */
 export function cumulativeNodes(stepIndex: number): Set<string> {
   const s = new Set<string>()
-  for (let i = 0; i <= stepIndex; i++) {
+  if (stepIndex <= 0) return s
+  for (let i = 1; i <= stepIndex; i++) {
     for (const n of steps[i].nodes) s.add(n)
   }
   return s
