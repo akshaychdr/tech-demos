@@ -3,12 +3,25 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import partsJson from '../../data/parts.json'
 import { assemblyFrames, type AssemblyFrame } from '../data/assemblyFrames'
 import { steps } from '../model/stepsData'
 import { drawerMobileTier } from './drawerMotion'
-import { layoutFlatPackPage } from './flatPackPages'
+import { hardwareLabel, isHardwareName, partKind } from './partKind'
+import {
+  approachFromClearance,
+  approachOffsets,
+  facePoint,
+  insertionAxis,
+  nearestInPlaneEdge,
+  orientOutward,
+  sidePose,
+  thinAxis,
+  viewDistance,
+  worldBox,
+} from './frameCamera'
 import { addPanelEdgeLines, enhanceCatalogMaterials } from './materials'
-import { normalizePartName } from './partNames'
+import { normalizePartName, partNameForMatch } from './partNames'
 import { renderOverlays, type OverlayState } from './overlays'
 
 export class ManualViewer {
@@ -18,6 +31,8 @@ export class ManualViewer {
   private renderer: THREE.WebGLRenderer
   private scene = new THREE.Scene()
   private camera: THREE.PerspectiveCamera
+  private ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 30)
+  private renderCamera: THREE.Camera
   private controls: OrbitControls
   private pivot = new THREE.Group()
   private assembly = new THREE.Group()
@@ -27,8 +42,10 @@ export class ManualViewer {
   private homeScale = new Map<string, number>()
   private introStep = new Map<string, number>()
   private frameIndex = 0
-  private overlay: OverlayState = { showInset: false }
+  private overlay: OverlayState = {}
   private pulseT = 0
+  private poseGen = 0
+  private holeMarker: THREE.Mesh | null = null
   private onFrame?: (f: AssemblyFrame, i: number) => void
   private drawerPull = { lower: 0, upper: 0 }
 
@@ -42,6 +59,7 @@ export class ManualViewer {
     container.appendChild(this.overlaySvg)
 
     this.camera = new THREE.PerspectiveCamera(28, 1, 0.005, 50)
+    this.renderCamera = this.camera
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true })
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -193,102 +211,316 @@ export class ManualViewer {
     })
   }
 
-  private layoutFlat(frame: AssemblyFrame) {
-    const page = frame.flatpackPage ?? 0
-    const slots = layoutFlatPackPage([...this.partRoots.keys()], page)
+  /** Orthographic top-down grid. One cell per part type, scaled to fit, padded inside the view. */
+  private layoutTray(page: 0 | 1 | 2) {
+    const names = [...this.partRoots.keys()]
+    const picked: { name: string; label: string }[] = []
+    if (page === 0) {
+      for (const n of names) {
+        if (partKind(n) !== 'panel') continue
+        const m = partNameForMatch(n)
+        if (/bottom panel|top panel|back panel|side panel/.test(m)) {
+          picked.push({ name: n, label: m.replace(/ dr.*/, '') })
+        }
+      }
+    } else if (page === 1) {
+      for (const n of names) {
+        if (partKind(n) !== 'drawer' && partKind(n) !== 'slide') continue
+        const m = partNameForMatch(n)
+        if (!m.includes('front') && !m.includes('slide')) continue
+        const tier = / 02$/.test(m) ? 'upper' : 'lower'
+        const label = m.includes('front')
+          ? `Front, ${tier}`
+          : `${/\bl\b/.test(m) ? 'Slide L' : 'Slide R'}, ${tier}`
+        picked.push({ name: n, label })
+      }
+    } else {
+      const seen = new Set<string>()
+      const totals = partsJson.hardwareTotals as Record<string, number>
+      for (const n of names.sort()) {
+        if (!isHardwareName(n)) continue
+        const id = n.split('_')[0]
+        if (seen.has(id)) continue
+        seen.add(id)
+        picked.push({ name: n, label: `${hardwareLabel(n)} ×${totals[id] ?? 1}` })
+      }
+    }
+
+    for (const obj of this.partRoots.values()) obj.visible = false
+    const aspect = Math.max(this.camera.aspect || 1.4, 0.5)
+    const cols = page === 0 ? Math.max(picked.length, 1) : Math.max(1, Math.ceil(Math.sqrt(picked.length * aspect)))
+    const rows = Math.max(1, Math.ceil(picked.length / cols))
+    const cell = 1
+    const labels: OverlayState['labels'] = []
+
+    picked.forEach((item, i) => {
+      const obj = this.partRoots.get(item.name)!
+      obj.visible = true
+      obj.rotation.set(0, 0, 0)
+      obj.quaternion.identity()
+      obj.scale.set(1, 1, 1)
+      obj.position.set(0, 0, 0)
+      obj.updateMatrixWorld(true)
+      const flat = worldBox(obj).size
+      const thin = [flat.x, flat.y, flat.z].indexOf(Math.min(flat.x, flat.y, flat.z))
+      if (thin === 0) obj.rotation.z = Math.PI / 2
+      else if (thin === 2) obj.rotation.x = Math.PI / 2
+      this.setOpacity(item.name, 1)
+      const { size } = worldBox(obj)
+      const maxDim = Math.max(size.x, size.y, size.z, 0.001)
+      obj.scale.setScalar(0.48 / maxDim)
+      obj.updateMatrixWorld(true)
+      const fitted = worldBox(obj)
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      const gx = (col - (cols - 1) / 2) * cell
+      const gz = (row - (rows - 1) / 2) * cell
+      obj.position.set(gx - fitted.center.x, -fitted.box.min.y, gz - fitted.center.z - 0.1)
+      labels.push({ world: new THREE.Vector3(gx, 0.04, gz + 0.36), text: item.label })
+    })
+
+    const halfW = (cols * cell) / 2
+    const halfD = (rows * cell) / 2
+    let left = -halfW
+    let right = halfW
+    let top = halfD
+    let bottom = -halfD
+    const gridAspect = (right - left) / Math.max(top - bottom, 0.001)
+    if (aspect > gridAspect) {
+      const hw = ((top - bottom) * aspect) / 2
+      left = -hw
+      right = hw
+    } else {
+      const hh = (right - left) / aspect / 2
+      top = hh
+      bottom = -hh
+    }
+    const pad = 1.36
+    this.ortho.left = left * pad
+    this.ortho.right = right * pad
+    this.ortho.top = top * pad
+    this.ortho.bottom = bottom * pad
+    this.ortho.position.set(0, 8, 0)
+    this.ortho.up.set(0, 0, -1)
+    this.ortho.lookAt(0, 0, 0)
+    this.ortho.updateProjectionMatrix()
+    this.renderCamera = this.ortho
+    this.overlay = { labels }
+  }
+
+  private cabinetCenter() {
+    const box = new THREE.Box3()
+    for (const name of ['bottom panel dr ut 70x35_02', 'top panel dr ut 70x35_02', 'back panel 35x25 dr_01']) {
+      const o = this.partRoots.get(normalizePartName(name))
+      if (!o) continue
+      this.applyHome(normalizePartName(name))
+      box.expandByObject(o)
+    }
+    return box.getCenter(new THREE.Vector3())
+  }
+
+  private partByMatch(re: RegExp) {
     for (const [name, obj] of this.partRoots) {
-      const slot = slots.get(name)
-      if (!slot) {
+      if (re.test(partNameForMatch(name))) return { name, obj }
+    }
+    return null
+  }
+
+  private hideHoleMarker() {
+    if (this.holeMarker) this.holeMarker.visible = false
+  }
+
+  private placeHoleMarker(face: THREE.Vector3, approach: THREE.Vector3) {
+    if (!this.holeMarker) {
+      this.holeMarker = new THREE.Mesh(
+        new THREE.CircleGeometry(1, 28),
+        new THREE.MeshBasicMaterial({ color: 0x141414, side: THREE.DoubleSide, depthTest: true }),
+      )
+      this.holeMarker.renderOrder = 4
+      this.scene.add(this.holeMarker)
+    }
+    const n = approach.clone().normalize()
+    this.holeMarker.visible = true
+    this.holeMarker.position.copy(face).addScaledVector(n, 0.003)
+    this.holeMarker.scale.setScalar(0.009)
+    this.holeMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n)
+  }
+
+  /** Parts that meet at the fastener, plus a nearby small part (rail, clip host). */
+  private jointHosts(center: THREE.Vector3, exclude: string) {
+    const ranked: { name: string; box: THREE.Box3; dist: number; longest: number }[] = []
+    for (const [name, obj] of this.partRoots) {
+      if (name === exclude || !obj.visible || isHardwareName(name)) continue
+      this.applyHome(name)
+      const { box, size } = worldBox(obj)
+      ranked.push({
+        name,
+        box,
+        dist: box.distanceToPoint(center),
+        longest: Math.max(size.x, size.y, size.z),
+      })
+    }
+    ranked.sort((a, b) => a.dist - b.dist)
+    return ranked.slice(0, 2)
+  }
+
+  private showOnly(names: Set<string>) {
+    for (const [name, obj] of this.partRoots) {
+      if (!names.has(name)) {
         obj.visible = false
         continue
       }
       obj.visible = true
-      obj.position.copy(slot.position)
-      obj.rotation.copy(slot.rotation)
-      obj.scale.setScalar(slot.scale)
+      this.applyHome(name)
       this.setOpacity(name, 1)
     }
-    this.pivot.rotation.set(0, 0, 0)
   }
 
   private applyVisibility(frame: AssemblyFrame) {
     const placed = this.cumulativeThrough(frame.placedThroughStep)
     const active = new Set(frame.activeNodes.map(normalizePartName))
     const stepIdx = frame.stepId
-    const showcase = frame.stepId >= 14 && frame.placedThroughStep >= 14
+    const showcase = frame.stepId >= 14
+    let near = new Set<string>()
+    if (frame.phase === 'closeup' && frame.hardware) {
+      const jointName = normalizePartName(frame.hardware.nodes[0])
+      this.applyHome(jointName)
+      const joint = worldBox(this.partRoots.get(jointName)!).center
+      for (const [name, obj] of this.partRoots) {
+        if (isHardwareName(name)) continue
+        this.applyHome(name)
+        const box = worldBox(obj).box
+        if (box.distanceToPoint(joint) < 0.06) near.add(name)
+      }
+      near.add(jointName)
+    }
 
     for (const [name, obj] of this.partRoots) {
       const intro = this.introStep.get(name) ?? 99
-      if (frame.phase === 'flatpack') continue
-      if (intro > stepIdx && !active.has(name)) {
+      if (intro > stepIdx && !active.has(name) && !near.has(name)) {
+        obj.visible = false
+        continue
+      }
+      if (frame.phase === 'closeup' && isHardwareName(name) && !active.has(name)) {
+        obj.visible = false
+        continue
+      }
+      const structural = frame.phase === 'closeup' && placed.has(name) && !isHardwareName(name)
+      const show =
+        showcase ||
+        structural ||
+        near.has(name) ||
+        active.has(name) ||
+        (frame.phase !== 'closeup' && placed.has(name))
+      if (!show) {
         obj.visible = false
         continue
       }
       obj.visible = true
       this.applyHome(name)
-      if (showcase) this.setOpacity(name, 1)
-      else if (active.has(name)) this.setOpacity(name, 1, 0xb83a3a)
-      else if (placed.has(name)) this.setOpacity(name, 0.22)
-      else this.setOpacity(name, 0.45)
+      if (frame.phase === 'closeup' || showcase || active.has(name) || !isHardwareName(name)) {
+        this.setOpacity(name, 1)
+      } else this.setOpacity(name, 0.25)
     }
   }
 
-  private async animateHardware(frame: AssemblyFrame, animate: boolean) {
+  private localDelta(obj: THREE.Object3D, worldDelta: THREE.Vector3) {
+    const q = new THREE.Quaternion()
+    obj.parent?.getWorldQuaternion(q)
+    return worldDelta.clone().applyQuaternion(q.invert())
+  }
+
+  /**
+   * Park the fastener just outside the hole, travelling in along `approach`.
+   * The settled pose stays proud of the surface so the head, the hole, and both
+   * mating edges stay readable after the animation.
+   */
+  private async stageFastener(
+    frame: AssemblyFrame,
+    hole: THREE.Vector3,
+    approach: THREE.Vector3,
+    animate: boolean,
+  ) {
     const hw = frame.hardware
     if (!hw) return
     const name = normalizePartName(hw.nodes[0])
     const obj = this.partRoots.get(name)
     if (!obj) return
-    const h = this.home.get(name)!
-    const axis = hw.insertAxis
-    const start = h.clone()
-    if (axis === 'x') start.x -= hw.insertM
-    if (axis === 'y') start.y -= hw.insertM
-    if (axis === 'z') start.z -= hw.insertM
+    this.applyHome(name)
+    let before = worldBox(obj)
+    let longest = Math.max(before.size.x, before.size.y, before.size.z)
+    if (longest < 0.024) {
+      const pivot = before.center.clone()
+      obj.scale.multiplyScalar(0.03 / Math.max(longest, 0.002))
+      obj.updateMatrixWorld(true)
+      const after = worldBox(obj).center
+      obj.position.add(this.localDelta(obj, pivot.sub(after)))
+      before = worldBox(obj)
+      longest = Math.max(before.size.x, before.size.y, before.size.z)
+    }
+    const center = before.center.clone()
+    const gap = longest * 0.5 + 0.014
+    const travel = 0.06
+    const endWorld = hole.clone().addScaledVector(approach, gap)
+    const startWorld = hole.clone().addScaledVector(approach, gap + travel)
+    const placed = obj.position.clone()
+    const end = placed.clone().add(this.localDelta(obj, endWorld.clone().sub(center)))
+    const start = placed.clone().add(this.localDelta(obj, startWorld.clone().sub(center)))
+    obj.position.copy(animate ? start : end)
+    this.setOpacity(name, 1, 0x33302c)
 
-    obj.position.copy(start)
-    this.setOpacity(name, 1, 0xc43c3c)
-
-    const pulse: THREE.Vector3[] = []
-    obj.getWorldPosition(new THREE.Vector3())
-    pulse.push(new THREE.Vector3())
-    obj.getWorldPosition(pulse[0])
-
+    const outer = endWorld.clone().addScaledVector(approach, longest * 0.45)
     this.overlay = {
-      hardware: hw,
-      pulseWorld: pulse,
-      showInset: true,
-      insetLabel: `${hw.label}\n${hw.count}×`,
+      hole: hole.clone(),
+      axisTip: outer,
+      label: `${hw.count}× ${hw.partId}  ${hw.label}`,
+      showArrow: Boolean(hw.rotate),
+      clockwise: hw.rotate?.clockwise !== false,
     }
-
-    if (!animate) {
-      this.applyHome(name)
-      return
-    }
+    if (!animate) return
     await new Promise<void>((resolve) => {
       gsap.to(obj.position, {
-        x: h.x,
-        y: h.y,
-        z: h.z,
-        duration: 0.85,
+        x: end.x,
+        y: end.y,
+        z: end.z,
+        duration: 1.25,
         ease: 'power2.inOut',
-        onComplete: () => {
-          if (hw.rotate) {
-            const r = { t: 0 }
-            gsap.to(r, {
-              t: hw.rotate!.turns * Math.PI * 2,
-              duration: 0.7,
-              onUpdate: () => {
-                obj.rotation.copy(this.homeRot.get(name)!)
-                if (hw.rotate!.axis === 'y') obj.rotation.y += r.t
-              },
-              onComplete: () => resolve(),
-            })
-          } else resolve()
-        },
+        onComplete: () => resolve(),
       })
     })
-    this.applyHome(name)
+  }
+
+  private async animateMate(names: string[], animate: boolean) {
+    const centre = this.cabinetCenter()
+    const jobs: Promise<void>[] = []
+    for (const raw of names) {
+      const name = normalizePartName(raw)
+      const obj = this.partRoots.get(name)
+      if (!obj) continue
+      this.applyHome(name)
+      const { center, size } = worldBox(obj)
+      const axis = orientOutward(thinAxis(size), center, centre)
+      const home = this.home.get(name)!.clone()
+      const start = home.clone().add(this.localDelta(obj, axis.clone().multiplyScalar(0.15)))
+      if (!animate) {
+        obj.position.copy(home)
+        continue
+      }
+      obj.position.copy(start)
+      jobs.push(
+        new Promise((resolve) => {
+          gsap.to(obj.position, {
+            x: home.x,
+            y: home.y,
+            z: home.z,
+            duration: 1.35,
+            ease: 'power2.inOut',
+            onComplete: () => resolve(),
+          })
+        }),
+      )
+    }
+    if (jobs.length) await Promise.all(jobs)
   }
 
   private applyDrawerPull() {
@@ -297,28 +529,28 @@ export class ManualViewer {
       if (!tier) continue
       const h = this.home.get(name)!
       const pull = tier === 'lower' ? this.drawerPull.lower : this.drawerPull.upper
-      obj.position.set(h.x, h.y, h.z + pull)
+      obj.position.set(h.x + pull, h.y, h.z)
     }
   }
 
   async goToFrame(index: number, animate = true) {
     const i = Math.max(0, Math.min(index, this.maxFrame))
+    const gen = ++this.poseGen
     this.frameIndex = i
     const frame = assemblyFrames[i]
     this.onFrame?.(frame, i)
-    this.overlay = { showInset: frame.phase === 'closeup' }
+    this.renderCamera = this.camera
+    this.overlay = {}
+    this.hideHoleMarker()
 
     if (frame.phase === 'flatpack') {
-      this.layoutFlat(frame)
       this.pivot.rotation.set(0, 0, 0)
-      await this.fitToVisible(frame.fill ?? 0.62, animate, [1.1, 1.35, 1.05])
-      this.onFrame?.(frame, i)
+      this.layoutTray(frame.flatpackPage ?? 0)
       return
-    } else {
-      this.applyVisibility(frame)
-      const rot = frame.assemblyRotation ?? [0, 0, 0]
-      this.pivot.rotation.set(rot[0], rot[1], rot[2])
     }
+
+    this.applyVisibility(frame)
+    this.pivot.rotation.set(0, 0, 0)
 
     if (frame.phase === 'finish') {
       this.drawerPull.lower = 0.18
@@ -330,85 +562,181 @@ export class ManualViewer {
       this.applyDrawerPull()
     }
 
-    if (frame.pulseNodes?.length && frame.phase === 'context') {
-      const pulse: THREE.Vector3[] = []
-      for (const n of frame.pulseNodes) {
-        const o = this.partRoots.get(normalizePartName(n))
-        if (!o?.visible) continue
-        const p = new THREE.Vector3()
-        o.getWorldPosition(p)
-        pulse.push(p)
+    if (frame.phase === 'context' && frame.pulseNodes?.length) {
+      const rings: THREE.Vector3[] = []
+      for (const raw of frame.pulseNodes) {
+        const obj = this.partRoots.get(normalizePartName(raw))
+        if (!obj?.visible) continue
+        rings.push(worldBox(obj).center)
       }
-      this.overlay.pulseWorld = pulse
+      this.overlay = { rings }
     }
 
-    await this.animateCamera(frame, animate)
+    if (frame.phase === 'closeup' && frame.hardware) {
+      const joint = this.jointView(frame)
+      if (joint) {
+        this.showOnly(joint.keep)
+        this.placeHoleMarker(joint.hole, joint.approach)
+        await this.moveCamera(joint.position, joint.target, animate)
+        if (gen !== this.poseGen) return
+        await this.stageFastener(frame, joint.hole, joint.approach, animate)
+        return
+      }
+    }
 
-    if (frame.phase === 'closeup') await this.animateHardware(frame, animate)
+    await this.framePose(frame, animate)
+    if (gen !== this.poseGen) return
+
+    if (frame.subId === '2') {
+      await this.animateMate(
+        ['side panel left dr ut 70x35_01', 'side panel right dr ut 70x35_05'],
+        animate,
+      )
+    }
+    if (frame.subId === '4') await this.animateMate(['back panel 35x25 dr_01'], animate)
+    if (frame.subId === '5') await this.animateMate(['top panel dr ut 70x35_02'], animate)
   }
 
-  private fitToVisible(fill: number, animate: boolean, dir: [number, number, number]) {
-    const box = new THREE.Box3()
+  /** Close-up aimed 40° off the fastener axis, on the clear side of the joint. */
+  private jointView(frame: AssemblyFrame) {
+    const hw = frame.hardware
+    if (!hw) return null
+    const name = normalizePartName(hw.nodes[0])
+    const obj = this.partRoots.get(name)
+    if (!obj) return null
+    this.applyHome(name)
+    const fastener = worldBox(obj)
+    const hosts = this.jointHosts(fastener.center, name)
+    const keep = new Set<string>([name, ...hosts.map((h) => h.name)])
+    const axis = insertionAxis(fastener.size)
+    const approach = approachFromClearance(
+      axis,
+      fastener.center,
+      hosts.map((h) => h.box),
+    )
+    const primary = hosts[0]
+    const hole = primary
+      ? facePoint(primary.box, approach, fastener.center)
+      : fastener.center.clone()
+    const reach = hosts.reduce(
+      (m, host) => Math.max(m, nearestInPlaneEdge(host.box, hole, approach)),
+      0.02,
+    )
+    const capped = Math.min(reach, 0.11)
+    const region = Math.min(0.18, Math.max(0.09, 2 * (capped + 0.025) * 0.55))
+    const dist = viewDistance(region, this.camera.fov, 0.55)
+    const boxes = hosts.map((h) => h.box)
+    let bestDir = approachOffsets(approach, 40)[0]
+    let bestScore = -Infinity
+    for (const dir of approachOffsets(approach, 40)) {
+      const cam = hole.clone().addScaledVector(dir, dist)
+      const mid = hole.clone().addScaledVector(dir, dist * 0.5)
+      let score = dir.y * 2
+      if (boxes.some((b) => b.containsPoint(cam))) score -= 6
+      if (boxes.some((b) => b.containsPoint(mid))) score -= 4
+      for (const host of hosts) {
+        const c = host.box.getCenter(new THREE.Vector3())
+        const toCam = hole.clone().sub(cam).normalize()
+        const toHost = c.sub(cam).normalize()
+        if (toHost.dot(toCam) > 0.65) score += 2
+      }
+      if (score > bestScore) {
+        bestScore = score
+        bestDir = dir
+      }
+    }
+    return {
+      keep,
+      hole,
+      approach,
+      position: hole.clone().addScaledVector(bestDir, dist),
+      target: hole.clone(),
+    }
+  }
+
+  private viewKind(frame: AssemblyFrame): 'back' | 'front' | 'top' | 'side' {
+    const t = frame.title.toLowerCase()
+    if (/rear|back|wall/.test(t)) return 'back'
+    if (/top|bottom|clamp/.test(t)) return 'top'
+    if (/side|slide/.test(t)) return 'side'
+    return 'front'
+  }
+
+  /** Front is the opposite of the back panel's outward normal. */
+  private frontOutward(centre: THREE.Vector3) {
+    const back = this.partByMatch(/back panel/)
+    if (!back) return new THREE.Vector3(1, 0, 0)
+    const box = worldBox(back.obj)
+    return orientOutward(thinAxis(box.size), box.center, centre).negate()
+  }
+
+  private async framePose(frame: AssemblyFrame, animate: boolean) {
+    const fov = this.camera.fov
+    const centre = this.cabinetCenter()
+    const shell = new THREE.Box3()
     for (const obj of this.partRoots.values()) {
       if (!obj.visible) continue
-      obj.updateMatrixWorld(true)
-      box.expandByObject(obj)
+      shell.expandByObject(obj)
     }
-    if (box.isEmpty()) return Promise.resolve()
-    const center = new THREE.Vector3()
-    const size = new THREE.Vector3()
-    box.getCenter(center)
-    box.getSize(size)
-    const maxDim = Math.max(size.x, size.y, size.z, 0.08)
-    const dist = maxDim / fill
-    const d = new THREE.Vector3(dir[0], dir[1], dir[2]).normalize()
-    const pos = center.clone().add(d.multiplyScalar(dist))
-    if (!animate) {
-      this.camera.position.copy(pos)
-      this.controls.target.copy(center)
-      return Promise.resolve()
+    const shellSize = shell.getSize(new THREE.Vector3())
+    const shellCenter = shell.isEmpty() ? centre : shell.getCenter(new THREE.Vector3())
+    const span = Math.max(shellSize.x, shellSize.y, shellSize.z, 0.2)
+
+    let pose: { position: THREE.Vector3; target: THREE.Vector3 }
+    const kind = this.viewKind(frame)
+    const frontOut = this.frontOutward(centre)
+    if (kind === 'back') {
+      const back = this.partByMatch(/back panel/)
+      const box = back ? worldBox(back.obj) : { center: shellCenter, size: shellSize }
+      const outward = orientOutward(thinAxis(box.size), box.center, centre)
+      pose = sidePose(box.center, outward, Math.max(box.size.y, box.size.z, span * 0.85), fov, 0.58)
+      const flank = new THREE.Vector3().crossVectors(outward, new THREE.Vector3(0, 1, 0)).normalize()
+      pose.position.add(flank.multiplyScalar(span * 0.55))
+      pose.position.y += span * 0.12
+    } else if (kind === 'top') {
+      const dir = frontOut.clone().multiplyScalar(0.42).add(new THREE.Vector3(0, 1, 0)).normalize()
+      const dist = viewDistance(span, fov, 0.62)
+      pose = { position: shellCenter.clone().addScaledVector(dir, dist), target: shellCenter }
+    } else {
+      const side = this.partByMatch(kind === 'side' ? /side panel left/ : /drawer front/)
+      let flank = new THREE.Vector3().crossVectors(frontOut, new THREE.Vector3(0, 1, 0)).normalize()
+      if (side) {
+        const sb = worldBox(side.obj)
+        const out = orientOutward(thinAxis(sb.size), sb.center, centre)
+        if (Math.abs(out.dot(frontOut)) < 0.75) flank = out
+      }
+      const dir = frontOut
+        .clone()
+        .multiplyScalar(0.78)
+        .add(flank.multiplyScalar(kind === 'side' ? 0.55 : 0.32))
+        .add(new THREE.Vector3(0, 0.26, 0))
+        .normalize()
+      const dist = viewDistance(span * 1.05, fov, 0.6)
+      pose = { position: shellCenter.clone().addScaledVector(dir, dist), target: shellCenter }
     }
-    return new Promise<void>((resolve) => {
-      gsap.to(this.camera.position, { x: pos.x, y: pos.y, z: pos.z, duration: 0.8, ease: 'power2.inOut' })
-      gsap.to(this.controls.target, {
-        x: center.x,
-        y: center.y,
-        z: center.z,
-        duration: 0.8,
-        ease: 'power2.inOut',
-        onComplete: () => resolve(),
-      })
-    })
+    await this.moveCamera(pose.position, pose.target, animate)
   }
 
-  private animateCamera(frame: AssemblyFrame, animate: boolean) {
-    const { position, target } = frame.camera
-    const fill = frame.fill ?? 0.72
-    const distScale = 1 / fill
-    const pos = new THREE.Vector3(
-      target[0] + (position[0] - target[0]) * distScale,
-      target[1] + (position[1] - target[1]) * distScale,
-      target[2] + (position[2] - target[2]) * distScale,
-    )
-    const tgt = new THREE.Vector3(target[0], target[1], target[2])
+  private moveCamera(position: THREE.Vector3, target: THREE.Vector3, animate: boolean) {
     if (!animate) {
-      this.camera.position.copy(pos)
-      this.controls.target.copy(tgt)
+      this.camera.position.copy(position)
+      this.controls.target.copy(target)
+      this.camera.lookAt(target)
       return Promise.resolve()
     }
     return new Promise<void>((resolve) => {
       gsap.to(this.camera.position, {
-        x: pos.x,
-        y: pos.y,
-        z: pos.z,
-        duration: 0.9,
+        x: position.x,
+        y: position.y,
+        z: position.z,
+        duration: 0.85,
         ease: 'power2.inOut',
       })
       gsap.to(this.controls.target, {
-        x: tgt.x,
-        y: tgt.y,
-        z: tgt.z,
-        duration: 0.9,
+        x: target.x,
+        y: target.y,
+        z: target.z,
+        duration: 0.85,
         ease: 'power2.inOut',
         onComplete: () => resolve(),
       })
@@ -416,12 +744,10 @@ export class ManualViewer {
   }
 
   finishShowcase() {
-    const f = assemblyFrames[this.maxFrame]
     void this.goToFrame(this.maxFrame, false)
-    this.drawerPull.lower = 0.2
-    this.drawerPull.upper = 0.2
+    this.drawerPull.lower = 0.16
+    this.drawerPull.upper = 0.16
     this.applyDrawerPull()
-    void this.animateCamera(f, false)
   }
 
   play(on: boolean) {
@@ -449,9 +775,16 @@ export class ManualViewer {
 
   private loop() {
     this.pulseT += 0.05
-    this.controls.update()
-    renderOverlays(this.overlaySvg, this.container.clientWidth, this.container.clientHeight, this.camera, this.overlay)
-    this.renderer.render(this.scene, this.camera)
+    if (this.renderCamera === this.camera) this.camera.lookAt(this.controls.target)
+    this.renderCamera.updateMatrixWorld(true)
+    renderOverlays(
+      this.overlaySvg,
+      this.container.clientWidth,
+      this.container.clientHeight,
+      this.renderCamera,
+      this.overlay,
+    )
+    this.renderer.render(this.scene, this.renderCamera)
     requestAnimationFrame(() => this.loop())
   }
 }

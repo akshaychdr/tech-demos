@@ -24,6 +24,13 @@ export function hardwareLabel(name: string): string {
     '128918': 'Plug',
     '139434': 'Connector',
     '141413': 'Wall fitting',
+    '145568': 'Slide, left',
+    '145569': 'Slide, right',
+    '145572': 'Rail',
+    '147219': 'Slide end',
+    '147221': 'Slide end',
+    '147222': 'Slide clip',
+    '150594': 'Rod',
   }
   return map[id] ?? id
 }

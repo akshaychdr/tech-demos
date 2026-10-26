@@ -88,27 +88,45 @@ body,
 
 .viewport-overlay .pulse-ring {
   fill: none;
-  stroke: #c43c3c;
+  stroke: #e10600;
+  stroke-width: 6;
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+.viewport-overlay .hole-dot {
+  fill: #141414;
+  stroke: #fff;
   stroke-width: 2;
-  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .viewport-overlay .insert-line {
-  stroke: #1a1a1a;
-  stroke-width: 1.5;
-  stroke-dasharray: 6 4;
-  opacity: 0.75;
+  stroke: #111;
+  stroke-width: 7;
+  stroke-dasharray: 18 11;
+  stroke-linecap: round;
+}
+
+.viewport-overlay .insert-head {
+  fill: #111;
 }
 
 .viewport-overlay .rotate-arc {
   fill: none;
   stroke: #0058a3;
-  stroke-width: 2;
+  stroke-width: 7;
+  stroke-linecap: round;
 }
 
-.viewport-overlay .hw-badge {
-  fill: #1a1a1a;
-  font: 700 13px 'DM Sans', system-ui, sans-serif;
+.viewport-overlay .hw-badge,
+.viewport-overlay .tray-label {
+  fill: #111;
+  font: 700 16px 'DM Sans', system-ui, sans-serif;
+}
+
+.viewport-overlay .label-bg {
+  fill: #fffdf8;
+  stroke: #111;
+  stroke-width: 1.5;
 }
 
 .viewport-overlay .inset-bubble circle {
@@ -126,12 +144,12 @@ body,
 @keyframes pulse {
   0%,
   100% {
-    opacity: 0.35;
-    r: 12;
+    opacity: 0.55;
+    stroke-width: 5;
   }
   50% {
-    opacity: 0.95;
-    r: 18;
+    opacity: 1;
+    stroke-width: 9;
   }
 }
 

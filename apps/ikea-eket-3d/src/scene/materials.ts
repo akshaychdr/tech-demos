@@ -3,7 +3,7 @@ import { isHardwareName, partKind } from './partKind'
 import { partNameForMatch } from './partNames'
 
 const IKEA_WHITE = 0xf5f3f0
-const IKEA_EDGE = 0xe8e4de
+const IKEA_EDGE = 0x3a3836
 
 export function enhanceCatalogMaterials(partRoots: Map<string, THREE.Object3D>) {
   for (const [name, root] of partRoots) {
@@ -18,7 +18,7 @@ export function enhanceCatalogMaterials(partRoots: Map<string, THREE.Object3D>) 
       const mat = src.clone()
       if (isHardwareName(name)) {
         const id = name.split('_')[0]
-        const metal = ['109041', '110519', '128918', '139434', '141413', '145572'].includes(id)
+        const metal = ['109041', '110519', '128918', '139434', '141413', '145572', '147222'].includes(id)
         mat.color.setHex(metal ? 0x8a8a8a : 0xc4a574)
         mat.metalness = metal ? 0.55 : 0.08
         mat.roughness = metal ? 0.38 : 0.72
@@ -45,13 +45,14 @@ export function enhanceCatalogMaterials(partRoots: Map<string, THREE.Object3D>) 
 
 export function addPanelEdgeLines(partRoots: Map<string, THREE.Object3D>) {
   for (const [name, root] of partRoots) {
-    if (partKind(name) !== 'panel') continue
+    const kind = partKind(name)
+    if (kind !== 'panel' && kind !== 'drawer') continue
     root.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (!mesh.isMesh || !mesh.geometry) return
       const line = new THREE.LineSegments(
         new THREE.EdgesGeometry(mesh.geometry, 22),
-        new THREE.LineBasicMaterial({ color: IKEA_EDGE, transparent: true, opacity: 0.28 }),
+        new THREE.LineBasicMaterial({ color: IKEA_EDGE, transparent: true, opacity: 0.8 }),
       )
       mesh.add(line)
     })

@@ -14,7 +14,7 @@ const VIEWPORT = { width: 1920, height: 1080 }
 const BASE = process.env.DEMO_URL || 'http://localhost:5176'
 const URL = BASE.includes('?') ? BASE : `${BASE}?capture=1`
 
-const FRAME_HOLD_MS = Number(process.env.FRAME_HOLD_MS || 2400)
+const FRAME_HOLD_MS = Number(process.env.FRAME_HOLD_MS || 1400)
 const CLOSEUP_EXTRA_MS = 1200
 
 const PR_CLOSEUPS = ['3b', '6b', '7b', '9b', '11b', '12b']
@@ -27,8 +27,9 @@ function ffmpeg(args) {
 }
 
 async function gotoFrame(page, n) {
-  await page.locator('[data-timeline]').fill(String(n))
-  await page.locator('[data-timeline]').dispatchEvent('input')
+  await page.evaluate(async (frame) => {
+    await window.__eketViewer.goToFrame(frame, true)
+  }, n)
   await page.waitForTimeout(FRAME_HOLD_MS)
 }
 
@@ -47,7 +48,8 @@ async function main() {
   })
   const page = await context.newPage()
   await page.goto(URL, { waitUntil: 'networkidle', timeout: 180000 })
-  await page.waitForTimeout(6000)
+  await page.waitForFunction(() => window.__eketViewer?.goToFrame, null, { timeout: 180000 })
+  await page.waitForTimeout(1500)
 
   const maxFrame = Number(await page.locator('[data-timeline]').getAttribute('max'))
 
@@ -102,22 +104,36 @@ async function main() {
   const rawFiles = await readdir(rawDir)
   const webm = rawFiles.find((f) => f.endsWith('.webm'))
   if (!webm) throw new Error('No recorded webm')
-  const targetSeconds = Number(process.env.VIDEO_SECONDS || 90)
+  const webmPath = path.join(rawDir, webm)
+  const rawSeconds = await new Promise((resolve, reject) => {
+    const p = spawn('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', webmPath])
+    let out = ''
+    p.stdout.on('data', (d) => {
+      out += d
+    })
+    p.on('exit', (c) => (c === 0 ? resolve(Number(out.trim())) : reject(new Error(`ffprobe ${c}`))))
+  })
+  const targetSeconds = Math.min(120, Math.max(60, Number(process.env.VIDEO_SECONDS || 90)))
+  const speed = rawSeconds > targetSeconds + 0.5 ? targetSeconds / rawSeconds : 1
   const mp4Path = path.join(OUT, 'video', 'app-demo.mp4')
   await ffmpeg([
     '-y',
     '-i',
-    path.join(rawDir, webm),
-    '-t',
-    String(targetSeconds),
-    '-c:v',
-    'libx264',
-    '-pix_fmt',
-    'yuv420p',
+    webmPath,
+    '-vf',
+    `setpts=${speed.toFixed(4)}*PTS,scale=1920:1080`,
     '-r',
     '60',
-    '-vf',
-    'scale=1920:1080',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '20',
+    '-pix_fmt',
+    'yuv420p',
+    '-movflags',
+    '+faststart',
     mp4Path,
   ])
   console.log('Wrote', mp4Path)

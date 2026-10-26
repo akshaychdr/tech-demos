@@ -126,15 +126,15 @@ export const assemblyFrames: AssemblyFrame[] = [
   ctx(2, '2', 'Side panels — upright', 13, 1, ['side panel left dr ut 70x35_01', 'side panel right dr ut 70x35_05'], CAM.front34, {
     manualRegion: { x: 0.05, y: 0.08, w: 0.9, h: 0.45 },
   }),
-  ctx(3, '3a', 'Dowels — where they go', 11, 2, ['100349_01', '100349_02', '100349_03', '100349_04'], CAM.front34, {
+  ctx(3, '3a', 'Dowels — where they go', 13, 2, ['100349_01', '100349_02', '100349_03', '100349_04'], CAM.front34, {
     pulseNodes: ['100349_01', '100349_02', '100349_03', '100349_04'],
-    manualRegion: { x: 0.04, y: 0.02, w: 0.92, h: 0.48 },
+    manualRegion: { x: 0.02, y: 0.55, w: 0.5, h: 0.4 },
   }),
   cu(
     3,
     '3b',
     'Dowel — press in',
-    11,
+    13,
     2,
     {
       partId: '100349',
@@ -145,7 +145,7 @@ export const assemblyFrames: AssemblyFrame[] = [
       insertM: 0.028,
     },
     { position: [0.14, 0.12, 0.18], target: [0.06, 0.07, 0.04] },
-    { x: 0.12, y: 0.05, w: 0.76, h: 0.42 },
+    { x: 0.0, y: 0.55, w: 0.48, h: 0.4 },
   ),
   ctx(4, '4', 'Back panel — rear view', 13, 3, ['back panel 35x25 dr_01'], CAM.back34, {
     manualRegion: { x: 0.05, y: 0.12, w: 0.9, h: 0.55 },
@@ -172,15 +172,15 @@ export const assemblyFrames: AssemblyFrame[] = [
     { position: [-0.12, 0.11, -0.2], target: [-0.04, 0.07, -0.08] },
     { x: 0.1, y: 0.55, w: 0.35, h: 0.35 },
   ),
-  ctx(7, '7a', 'Wall fittings — back', 23, 6, ['141413_01', '141413_02'], CAM.back34, {
+  ctx(7, '7a', 'Wall fittings — back', 19, 6, ['141413_01', '141413_02'], CAM.back34, {
     pulseNodes: ['141413_01', '141413_02'],
-    manualRegion: { x: 0.05, y: 0.1, w: 0.9, h: 0.55 },
+    manualRegion: { x: 0.04, y: 0.32, w: 0.92, h: 0.32 },
   }),
   cu(
     7,
     '7b',
     'Wall fitting — screw',
-    23,
+    20,
     6,
     {
       partId: '141413',
@@ -192,6 +192,7 @@ export const assemblyFrames: AssemblyFrame[] = [
       rotate: { axis: 'z', turns: 2, clockwise: true },
     },
     { position: [-0.14, 0.14, -0.18], target: [-0.05, 0.09, -0.07] },
+    { x: 0.5, y: 0.48, w: 0.46, h: 0.36 },
   ),
   ctx(8, '8', 'Drawer 1 — box parts', 19, 7, [
     '109041_01',
@@ -204,14 +205,15 @@ export const assemblyFrames: AssemblyFrame[] = [
     'drawer bottom 70x35_01',
     'drawer front small 70x35_01',
   ], CAM.drawerFront),
-  ctx(9, '9a', 'Drawer 1 — screw locations', 20, 8, ['110519_01', '128918_01'], CAM.drawerFront, {
+  ctx(9, '9a', 'Drawer 1 — screw locations', 11, 8, ['110519_01', '128918_01'], CAM.drawerFront, {
     pulseNodes: ['110519_01', '128918_01'],
+    manualRegion: { x: 0.06, y: 0.06, w: 0.88, h: 0.42 },
   }),
   cu(
     9,
     '9b',
     'Screw — tighten',
-    20,
+    11,
     8,
     {
       partId: '110519',
@@ -223,7 +225,7 @@ export const assemblyFrames: AssemblyFrame[] = [
       rotate: { axis: 'y', turns: 1.5, clockwise: true },
     },
     { position: [0.28, 0.14, 0.32], target: [0.14, 0.07, 0.1] },
-    { x: 0.08, y: 0.04, w: 0.84, h: 0.46 },
+    { x: 0.06, y: 0.08, w: 0.88, h: 0.4 },
   ),
   ctx(10, '10', 'Drawer 2 — box', 21, 9, [
     '109041_05',
@@ -255,16 +257,17 @@ export const assemblyFrames: AssemblyFrame[] = [
   ),
   ctx(12, '12a', 'Slides — lay out', 8, 11, ['145568_01', '145569_01', '147222_01'], CAM.sideRight, {
     manualRegion: { x: 0.05, y: 0.15, w: 0.9, h: 0.7 },
+    pulseNodes: ['145568_01', '145569_01', '147222_01'],
   }),
   cu(
     12,
     '12b',
     'Slide rail — fix',
-    8,
+    9,
     11,
     {
       partId: '147222',
-      label: 'Slide screw',
+      label: 'Slide clip',
       count: 4,
       nodes: ['147222_01'],
       insertAxis: 'x',
@@ -272,13 +275,19 @@ export const assemblyFrames: AssemblyFrame[] = [
       rotate: { axis: 'x', turns: 1, clockwise: false },
     },
     { position: [0.32, 0.1, 0.06], target: [0.14, 0.06, 0.02] },
+    { x: 0.02, y: 0.06, w: 0.55, h: 0.38 },
   ),
   ctx(13, '13', 'Mount slides to carcass', 9, 12, [
     'Drawer_slide_L_Cabinet-01721866__150592_1_01',
     'Drawer_slide_L_Cabinet-01721866__150592_1_02',
     'Drawer_slide_R_Cabinet-01721810_150593_1_01',
     'Drawer_slide_R_Cabinet-01721810_150593_1_02',
-  ], CAM.sideRight),
+  ], CAM.sideRight, {
+    pulseNodes: [
+      'Drawer_slide_L_Cabinet-01721866__150592_1_01',
+      'Drawer_slide_R_Cabinet-01721810_150593_1_01',
+    ],
+  }),
   ctx(14, '14', 'Secure to wall — back', 25, 13, [], CAM.back34),
   ctx(15, '15a', 'Finished cabinet — front', 22, 14, [], CAM.front34, { fill: 0.78 }),
   {
