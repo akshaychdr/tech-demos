@@ -1,7 +1,7 @@
 {
   "version": 1,
   "historyId": "7c1d9a90-b522-4d13-b5e1-12faf2a37bf5",
-  "currentRevision": "9db164ad-71b8-4bb2-a545-a3feea6d472a",
+  "currentRevision": "5e7e9dad-c8a6-451e-b106-7546727dbcd3",
   "pendingChanges": false,
   "files": {
     "hyperframes.json": {
@@ -9,8 +9,8 @@
       "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/53/53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50"
     },
     "index.html": {
-      "hash": "9351fa224b18a701e15e7eb761b1ed79b477496cc3c356f193243a4acb4a2c25",
-      "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/93/9351fa224b18a701e15e7eb761b1ed79b477496cc3c356f193243a4acb4a2c25"
+      "hash": "7cc0bfa7309acd2266fb76c1b216c09ce6cc9ca73ccc693c239e2beeb45bd866",
+      "content": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/7c/7cc0bfa7309acd2266fb76c1b216c09ce6cc9ca73ccc693c239e2beeb45bd866"
     },
     "scene.js": {
       "hash": "0011d9355208c75167f09069ad5a626e746a84db2b9bf50c4c74a1431a3ecdee",
@@ -146,6 +146,21 @@
           "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/00/0011d9355208c75167f09069ad5a626e746a84db2b9bf50c4c74a1431a3ecdee"
         }
       }
+    },
+    "5e7e9dad-c8a6-451e-b106-7546727dbcd3": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793000648992,
+      "endedAt": 1793000648993,
+      "files": {
+        "index.html": {
+          "before": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/93/9351fa224b18a701e15e7eb761b1ed79b477496cc3c356f193243a4acb4a2c25",
+          "after": "/home/ubuntu/.cache/hyperframes/history/7c1d9a90-b522-4d13-b5e1-12faf2a37bf5/blobs/7c/7cc0bfa7309acd2266fb76c1b216c09ce6cc9ca73ccc693c239e2beeb45bd866"
+        }
+      }
     }
   },
   "checks": {
@@ -160,15 +175,15 @@
   },
   "renders": {
     "latest": {
-      "id": "9e7b69a7-7e34-42bd-9993-39c72bdbfdcb",
-      "completedAt": 1793000581896,
+      "id": "92d52db5-1451-40e5-b9b3-d1d45664a3f8",
+      "completedAt": 1793001044659,
       "output": "/workspace/apps/elevator-install-3d/out/elevator-install-3d-reel.mp4",
       "status": "completed",
-      "revision": "9db164ad-71b8-4bb2-a545-a3feea6d472a"
+      "revision": "5e7e9dad-c8a6-451e-b106-7546727dbcd3"
     },
     "retainedRevisions": [
-      "9db164ad-71b8-4bb2-a545-a3feea6d472a",
-      "9aaf0530-333b-46b5-82e5-2adee14770e5"
+      "5e7e9dad-c8a6-451e-b106-7546727dbcd3",
+      "9db164ad-71b8-4bb2-a545-a3feea6d472a"
     ]
   },
   "pendingArtifactCleanup": []
