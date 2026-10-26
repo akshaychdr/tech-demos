@@ -1,0 +1,110 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build demos into _site
+        run: |
+          set -euo pipefail
+          REPO_BASE="/tech-demos"
+          mkdir -p _site
+          cp .github/pages/index.html _site/index.html
+          BUILT=""
+          for app_dir in apps/*/; do
+            slug="$(basename "$app_dir")"
+            if [ ! -f "${app_dir}package.json" ]; then
+              continue
+            fi
+            if ! grep -q '"build"' "${app_dir}package.json"; then
+              echo "Skip ${slug}: no build script"
+              continue
+            fi
+            echo "=== Building ${slug} ==="
+            (
+              cd "$app_dir"
+              bun install
+              VITE_BASE_PATH="${REPO_BASE}/${slug}/" bun run build
+            ) && {
+              mkdir -p "_site/${slug}"
+              cp -r "${app_dir}dist/." "_site/${slug}/"
+              BUILT="${BUILT}${slug}\n"
+              echo "OK: ${slug}"
+            } || {
+              echo "WARN: ${slug} build failed — skipping"
+            }
+          done
+          if ! echo -e "$BUILT" | grep -q '^elevator-install-3d$'; then
+            echo "Required demo elevator-install-3d did not build"
+            exit 1
+          fi
+          # Refresh demo list in index
+          python3 << 'PY'
+          import os, html
+          slugs = sorted(
+            d for d in os.listdir("_site")
+            if os.path.isdir(os.path.join("_site", d)) and d != ".git"
+          )
+          labels = {
+            "elevator-install-3d": "Federal install 3D guide",
+            "diagram-design": "Diagram design gallery",
+            "airllm": "AirLLM UI",
+            "elevator-selective-collective": "Selective collective (HyperFrames)",
+          }
+          items = "\n".join(
+            f'      <li><a href="./{html.escape(s)}/">{html.escape(s)}</a>'
+            + (f" — {html.escape(labels[s])}" if s in labels else "")
+            + "</li>"
+            for s in slugs
+          )
+          with open("_site/index.html") as f:
+            page = f.read()
+          start = page.index("<ul id=\"demo-list\">")
+          end = page.index("</ul>", start) + len("</ul>")
+          new_ul = f'<ul id="demo-list">\n{items}\n    </ul>'
+          page = page[:start] + new_ul + page[end:]
+          with open("_site/index.html", "w") as f:
+            f.write(page)
+          PY
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
