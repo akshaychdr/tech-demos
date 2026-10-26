@@ -1,0 +1,65 @@
+{
+  "disclaimer": "Illustrative demo, not for installation",
+  "steps": [
+    {
+      "id": "s2-1",
+      "scene": 2,
+      "title": "Angle brackets (A)",
+      "caption": "Install three angle brackets (A) — 51 × 25 × 32 mm each.",
+      "parts": ["bracketA_1", "bracketA_2", "bracketA_3"],
+      "dims": ["bracket_l", "bracket_w", "bracket_h"],
+      "explode": 0.35,
+      "durationS": 5
+    },
+    {
+      "id": "s2-2",
+      "scene": 2,
+      "title": "Fasteners (B)",
+      "caption": "Secure each bracket to the platform with screws (B). Screw detail TBD/illustrative.",
+      "parts": ["screwB_1", "screwB_2", "screwB_3"],
+      "dims": [],
+      "explode": 0.15,
+      "durationS": 4
+    },
+    {
+      "id": "s2-3",
+      "scene": 2,
+      "title": "Control-wall curtain",
+      "caption": "Mount the infrared curtain on the control wall at 225 / 953 / 248 mm bracket spacing.",
+      "parts": ["curtain_control"],
+      "dims": ["curtain_top_spacing", "curtain_mid_spacing", "curtain_bot_spacing"],
+      "explode": 0.2,
+      "durationS": 6
+    },
+    {
+      "id": "s2-4",
+      "scene": 2,
+      "title": "Side-wall curtain",
+      "caption": "Mount the matching curtain assembly on the side wall.",
+      "parts": ["curtain_side"],
+      "dims": [],
+      "explode": 0.2,
+      "durationS": 5
+    },
+    {
+      "id": "s2-5",
+      "scene": 2,
+      "title": "IR controller",
+      "caption": "Place the infrared controller box on the cab top (position illustrative).",
+      "parts": ["ir_controller"],
+      "dims": [],
+      "explode": 0.25,
+      "durationS": 5
+    },
+    {
+      "id": "s2-6",
+      "scene": 2,
+      "title": "Beam check",
+      "caption": "Break the infrared beam lattice — door reopen behaviour is illustrative only.",
+      "parts": ["beam_lattice"],
+      "dims": [],
+      "explode": 0,
+      "durationS": 6
+    }
+  ]
+}

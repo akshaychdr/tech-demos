@@ -1,0 +1,26 @@
+{
+  "name": "elevator-install-3d",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "render:mp4": "mkdir -p out public/docs/video && npx hyperframes@0.8.181 render composition -o out/elevator-install-3d-reel.mp4 -f 60 -q looks && cp out/elevator-install-3d-reel.mp4 public/docs/video/elevator-install-3d-reel.mp4 && bash scripts/qa-reel-frames.sh out/elevator-install-3d-reel.mp4",
+    "capture:artifacts": "node scripts/capture-artifacts.mjs",
+    "qa:reel": "bash scripts/qa-reel-frames.sh out/elevator-install-3d-reel.mp4"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "playwright": "^1.64.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "three": "^0.186.1"
+  }
+}

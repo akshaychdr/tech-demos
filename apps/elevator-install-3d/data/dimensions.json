@@ -1,0 +1,149 @@
+{
+  "units": "mm",
+  "source_units": "in",
+  "product": "Federal Panorama/Renaissance hydraulic residential",
+  "defaultConfigId": "type-a-accordion-right-36x48",
+  "maxTravelMm": 15240,
+  "items": [
+    {
+      "id": "pit_depth_min",
+      "label": "Pit depth (minimum)",
+      "source": "federal-planning-guide-2023 p.4",
+      "in": 8,
+      "mm": 203,
+      "derived": false,
+      "tbd": false,
+      "scene": 1
+    },
+    {
+      "id": "overhead_min",
+      "label": "Overhead clearance (minimum)",
+      "source": "federal-planning-guide-2023 p.4",
+      "in": 96,
+      "mm": 2438,
+      "derived": false,
+      "tbd": false,
+      "scene": 1
+    },
+    {
+      "id": "wall_to_rail_cl",
+      "label": "Wall to rail centreline",
+      "source": "federal-planning-guide-2023 p.6",
+      "in": 5.5,
+      "mm": 140,
+      "derived": false,
+      "tbd": false,
+      "scene": 1
+    },
+    {
+      "id": "wall_to_cylinder_cl",
+      "label": "Wall to cylinder centreline",
+      "source": "federal-planning-guide-2023 p.6",
+      "in": 5.5,
+      "mm": 140,
+      "derived": false,
+      "tbd": false,
+      "scene": 1
+    },
+    {
+      "id": "wall_to_cab",
+      "label": "Wall to cab",
+      "source": "federal-planning-guide-2023 p.6",
+      "in": 10,
+      "mm": 254,
+      "derived": false,
+      "tbd": false,
+      "scene": 1
+    },
+    {
+      "id": "curtain_top_spacing",
+      "label": "Curtain top to bracket 1",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": 8.875,
+      "mm": 225,
+      "derived": false,
+      "tbd": false,
+      "scene": 2
+    },
+    {
+      "id": "curtain_mid_spacing",
+      "label": "Bracket 1 to bracket 2",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": 37.5,
+      "mm": 953,
+      "derived": false,
+      "tbd": false,
+      "scene": 2
+    },
+    {
+      "id": "curtain_bot_spacing",
+      "label": "Bracket 3 to curtain bottom",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": 9.75,
+      "mm": 248,
+      "derived": false,
+      "tbd": false,
+      "scene": 2
+    },
+    {
+      "id": "bracket_l",
+      "label": "Angle bracket A length",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": 2,
+      "mm": 51,
+      "derived": false,
+      "tbd": false,
+      "scene": 2
+    },
+    {
+      "id": "bracket_w",
+      "label": "Angle bracket A return leg",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": 1,
+      "mm": 25,
+      "derived": false,
+      "tbd": false,
+      "scene": 2
+    },
+    {
+      "id": "bracket_h",
+      "label": "Angle bracket A height",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": 1.25,
+      "mm": 32,
+      "derived": false,
+      "tbd": false,
+      "scene": 2
+    },
+    {
+      "id": "platform_side_gap",
+      "label": "Side wall to platform gap",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": 0.25,
+      "mm": null,
+      "derived": false,
+      "tbd": true,
+      "scene": 2
+    },
+    {
+      "id": "curtain_length",
+      "label": "Curtain strip length",
+      "source": "federal-hydraulic-residential-install appx5 p.30",
+      "in": null,
+      "mm": null,
+      "derived": false,
+      "tbd": true,
+      "scene": 2
+    },
+    {
+      "id": "cab_height_std",
+      "label": "Standard cab height (illustrative)",
+      "source": "illustrative",
+      "in": 79,
+      "mm": 2007,
+      "derived": true,
+      "tbd": false,
+      "scene": 1
+    }
+  ]
+}

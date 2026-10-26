@@ -1,0 +1,50 @@
+{
+  "disclaimer": "Illustrative demo, not for installation",
+  "nodes": [
+    { "id": "aux110", "type": "disconnect", "label": "110 VAC aux disconnect", "rating": "15A fuse" },
+    { "id": "mainSw", "type": "disconnect", "label": "3-pole main disconnect", "rating": "30A fuses" },
+    { "id": "aux13", "type": "auxContact", "label": "AUX NO (linked)", "rating": null },
+    { "id": "contactor1", "type": "contactor", "label": "Contactor 1" },
+    { "id": "contactor2", "type": "contactor", "label": "Contactor 2" },
+    { "id": "overload", "type": "overload", "label": "Overload" },
+    { "id": "motor", "type": "motor", "label": "Hydraulic pump motor" },
+    { "id": "ground", "type": "ground", "label": "10 AWG ground", "gauge": "10 AWG" }
+  ],
+  "edges": [
+    { "id": "aux-h", "from": "aux110.H", "to": "controller.AC1", "phase": "H", "gauge": null },
+    { "id": "aux-n", "from": "aux110.N", "to": "controller.AC2", "phase": "N", "gauge": null },
+    { "id": "L1-fuse", "from": "mainSw.1", "to": "fuseL1", "phase": "L1", "gauge": null },
+    { "id": "L1-c1", "from": "fuseL1", "to": "contactor1.1", "phase": "L1", "gauge": null },
+    { "id": "L1-c1out", "from": "contactor1.2", "to": "contactor2.1", "phase": "L1", "gauge": null },
+    { "id": "L1-c2out", "from": "contactor2.2", "to": "overload.L1", "phase": "L1", "gauge": null },
+    { "id": "L1-motor", "from": "overload.T1", "to": "motor.T1", "phase": "L1", "gauge": null },
+    { "id": "L2-fuse", "from": "mainSw.2", "to": "fuseL2", "phase": "L2", "gauge": null },
+    { "id": "L2-chain", "from": "fuseL2", "to": "motor.T2", "phase": "L2", "gauge": null },
+    { "id": "L3-fuse", "from": "mainSw.3", "to": "fuseL3", "phase": "L3", "gauge": null },
+    { "id": "L3-chain", "from": "fuseL3", "to": "motor.T3", "phase": "L3", "gauge": null },
+    { "id": "gnd-run", "from": "mainSw.gnd", "to": "controller.gnd", "phase": "GND", "gauge": "10 AWG" }
+  ],
+  "switches": [
+    { "id": "aux110", "closed": false, "rating": "15A" },
+    { "id": "main", "closed": false, "poles": ["L1", "L2", "L3"], "aux": { "id": "aux13", "type": "NO", "linked": true } }
+  ],
+  "ampTable": {
+    "cols": ["220/1", "208/3", "600/3"],
+    "rows": [
+      { "hp": 2, "A": [30, 20, 7] },
+      { "hp": 3, "A": [40, 30, 10] },
+      { "hp": 4, "A": [50, 40, 15] },
+      { "hp": 5, "A": [60, 40, 15] }
+    ]
+  },
+  "motorConnections": {
+    "single": { "links": "TBD-terminals", "pattern": "two-link variants per Appendix 3" },
+    "delta": { "links": "TBD-terminals", "pattern": "three vertical links (low voltage Δ)" },
+    "wye": { "links": "TBD-terminals", "pattern": "horizontal link across bottom row (high voltage Y)" }
+  },
+  "sequence": [
+    { "t": 0, "event": "close", "switch": "aux110" },
+    { "t": 1.2, "event": "close", "switch": "main" },
+    { "t": 4.5, "event": "open", "switch": "main" }
+  ]
+}

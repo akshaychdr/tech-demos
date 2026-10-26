@@ -1,0 +1,427 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;600&display=swap');
+
+:root {
+  --bg: #0a1628;
+  --grid: #12284a;
+  --line: #38d6ff;
+  --highlight: #ff8a3d;
+  --ground: #3dff9a;
+  --text: #e6f1ff;
+  --muted: #8ba4c7;
+  --panel: rgba(18, 40, 74, 0.72);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+}
+
+body {
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.disclaimer {
+  background: rgba(255, 138, 61, 0.15);
+  border-bottom: 1px solid var(--highlight);
+  color: var(--highlight);
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.45rem 1rem;
+}
+
+header.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--grid);
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+}
+
+header.app-header h1 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.tab-bar button {
+  font-family: inherit;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 0.4rem 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.tab-bar button.active,
+.tab-bar button:hover {
+  background: rgba(56, 214, 255, 0.12);
+}
+
+.tab-bar button.active {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.scene-panel {
+  flex: 1;
+  display: none;
+  padding: 1rem 1.25rem 1.5rem;
+}
+
+.scene-panel.active {
+  display: grid;
+  gap: 1rem;
+}
+
+.scene-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: end;
+}
+
+.scene-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.scene-controls select,
+.scene-controls input[type='number'],
+.scene-controls button {
+  font-family: 'IBM Plex Mono', monospace;
+  background: rgba(10, 22, 40, 0.9);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+}
+
+.scene-controls button.primary {
+  border-color: var(--highlight);
+  color: var(--highlight);
+  cursor: pointer;
+}
+
+.split-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  min-height: 420px;
+}
+
+.layout-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.layout-toolbar button {
+  font-family: inherit;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.layout-toolbar button.active {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.layout-view {
+  display: grid;
+  gap: 0.75rem;
+  min-height: min(72vh, 820px);
+}
+
+.layout-view--split {
+  grid-template-columns: 1fr 1fr;
+}
+
+.layout-view--2d {
+  grid-template-columns: 1fr;
+}
+
+.layout-view--2d .layout-panel--3d {
+  display: none;
+}
+
+.layout-view--3d {
+  grid-template-columns: 1fr;
+}
+
+.layout-view--3d .layout-panel--plan {
+  display: none;
+}
+
+.layout-panel {
+  min-height: min(68vh, 760px);
+  border: 1px solid var(--grid);
+  border-radius: 6px;
+  background: rgba(10, 22, 40, 0.55);
+  overflow: hidden;
+}
+
+.layout-panel--plan svg.layout-plan-svg {
+  width: 100%;
+  height: 100%;
+  min-height: min(68vh, 760px);
+  display: block;
+}
+
+.layout-panel--3d canvas {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: min(68vh, 760px);
+  display: block;
+}
+
+@media (max-width: 960px) {
+  .split-view {
+    grid-template-columns: 1fr;
+  }
+}
+
+.canvas-wrap,
+.svg-wrap {
+  position: relative;
+  border: 1px solid var(--grid);
+  border-radius: 6px;
+  background: rgba(10, 22, 40, 0.55);
+  overflow: hidden;
+  min-height: 360px;
+}
+
+.canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.svg-wrap svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.caption {
+  font-size: 0.9rem;
+  color: var(--muted);
+  max-width: 52ch;
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--line);
+}
+
+.highlight {
+  color: var(--highlight);
+}
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.7rem;
+  font-family: 'IBM Plex Mono', monospace;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.tooltip.visible {
+  opacity: 1;
+}
+
+.step-rail {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.step-rail button {
+  font-family: inherit;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.step-rail .step-label {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--highlight);
+}
+
+.curtain-split {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 1rem;
+  min-height: 400px;
+}
+
+.curtain-3d {
+  min-height: 400px;
+}
+
+.callouts svg {
+  height: 100%;
+}
+
+.scene3-grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.scene3-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.schematic-wrap {
+  min-height: 480px;
+  overflow: auto;
+}
+
+.schematic-wrap svg.wiring-schematic {
+  width: 100%;
+  height: auto;
+  min-height: 460px;
+  display: block;
+  transform: scale(1.08);
+  transform-origin: top center;
+}
+
+.wiring-schematic .wire {
+  stroke: #2a5a7a;
+  stroke-linecap: round;
+}
+
+.wiring-schematic .wire.energised.wire-l1,
+.wiring-schematic .wire.energised.wire-h {
+  stroke: #ff8a3d;
+  filter: url(#glow);
+}
+
+.wiring-schematic .wire.energised.wire-l2 {
+  stroke: #38d6ff;
+}
+
+.wiring-schematic .wire.energised.wire-l3 {
+  stroke: #a78bfa;
+}
+
+.wiring-schematic .wire.ground.energised {
+  stroke: #3dff9a;
+}
+
+.motor-card {
+  opacity: 0.65;
+  transition: opacity 0.2s;
+}
+
+.motor-card.active {
+  opacity: 1;
+}
+
+.motor-card svg {
+  width: 100%;
+  height: auto;
+}
+
+.amp-table {
+  border-collapse: collapse;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+}
+
+.amp-table th,
+.amp-table td {
+  border: 1px solid var(--grid);
+  padding: 0.35rem 0.6rem;
+}
+
+.amp-table tr.active td {
+  background: rgba(255, 138, 61, 0.2);
+  color: var(--highlight);
+}
+
+.motor-views {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.motor-views svg {
+  width: 200px;
+  height: 140px;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+}
+
+.flow-pulse {
+  stroke: var(--highlight);
+  stroke-width: 3;
+  fill: none;
+  opacity: 0;
+}
+
+.flow-pulse.on {
+  opacity: 1;
+  filter: drop-shadow(0 0 6px var(--highlight));
+}
+
+.ground-wire.on {
+  stroke: var(--ground);
+}
+
+.credits {
+  font-size: 0.7rem;
+  color: var(--muted);
+  padding: 0.75rem 1.25rem 1.25rem;
+  border-top: 1px solid var(--grid);
+}
