@@ -21,4 +21,4 @@ bun run dev
 | elevator-selective-collective | HyperFrames ([heygen-com](https://github.com/heygen-com/hyperframes)) | 2026-10-21 | [#3](https://github.com/akshaychdr/tech-demos/pull/3) |
 | elevator-install-3d | Federal Panorama/Renaissance install guide (3D + HyperFrames reel) | 2026-10-26 | TBD |
 | ikea-eket-3d | IKEA 3D Assembly Dataset — EKET 2-drawer cabinet (00333947) | 2026-10-26 | TBD |
-| backchannel-cue | Backchannel Cue 32M — wall vs listener ([KoljaB/backchannel-cue-32m](https://huggingface.co/KoljaB/backchannel-cue-32m)) | 2026-11-02 | [#8](https://github.com/akshaychdr/tech-demos/pull/8) |
+| backchannel-cue | Backchannel Cue 32M — a listener answers the pauses ([KoljaB/backchannel-cue-32m](https://huggingface.co/KoljaB/backchannel-cue-32m)) | 2026-11-02 | [#8](https://github.com/akshaychdr/tech-demos/pull/8) |

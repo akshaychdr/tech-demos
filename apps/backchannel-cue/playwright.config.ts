@@ -5,10 +5,10 @@ export default defineConfig({
   timeout: 180_000,
   expect: { timeout: 90_000 },
   use: {
+    ...devices["Desktop Chrome"],
     baseURL: "http://127.0.0.1:5173",
     video: "on",
-    viewport: { width: 1280, height: 860 },
-    ...devices["Desktop Chrome"],
+    viewport: { width: 1100, height: 800 },
   },
   webServer: {
     command: "bun run dev --host 127.0.0.1 --port 5173",
