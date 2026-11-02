@@ -13,11 +13,11 @@ const FIELDS: {
   step: number
   digits: number
 }[] = [
-  { key: "clauseGateBar", label: "Clause-end gate", hint: "Card uses 0.09. This demo starts at 0.10.", min: 0.02, max: 0.3, step: 0.005, digits: 3 },
+  { key: "clauseGateBar", label: "Clause-end gate", hint: "Card rule: 0.09.", min: 0.02, max: 0.3, step: 0.005, digits: 3 },
   { key: "openGateBar", label: "Mid-sentence gate", hint: "Unfinished clauses score lower.", min: 0.005, max: 0.08, step: 0.001, digits: 3 },
   { key: "echoBar", label: "Echo bar", hint: "Ask-back only at or above this.", min: 0.4, max: 0.95, step: 0.05, digits: 2 },
   { key: "minSpacingSec", label: "Seconds between cues", hint: "Card rule: at least 6.", min: 2, max: 12, step: 0.5, digits: 1 },
-  { key: "maxCuesPerMinute", label: "Cues per minute", hint: "Card rule: about 4.", min: 1, max: 8, step: 1, digits: 0 },
+  { key: "maxCuesPerMinute", label: "Cues per minute", hint: "Raised so a long story can answer every pause. The card suggests about 4.", min: 1, max: 16, step: 1, digits: 0 },
   { key: "badMoodBlock", label: "Bad-mood block", hint: "No laugh, praise, or wow above this bad score.", min: 0.1, max: 0.8, step: 0.05, digits: 2 },
   { key: "pauseDelaySec", label: "Pause before scoring", hint: "Call the model this far into the silence.", min: 0.2, max: 1, step: 0.05, digits: 2 },
 ]

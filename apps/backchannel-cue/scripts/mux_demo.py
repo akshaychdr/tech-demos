@@ -39,7 +39,7 @@ def main() -> None:
         labels.append(f"[a{index}]")
     filters.append(
         f"{''.join(labels)}amix=inputs={len(labels)}:duration=longest:dropout_transition=0:normalize=0,"
-        f"apad=whole_dur={video_dur:.3f},alimiter=limit=0.95[a]"
+        f"apad=whole_dur={video_dur:.3f},loudnorm=I=-16:TP=-1.5:LRA=11[a]"
     )
     video_index = 1 + len(cues)
     cmd = [

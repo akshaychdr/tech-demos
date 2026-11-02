@@ -3,7 +3,6 @@ import { Tokenizer } from "tokenizers-wasm"
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url"
 import mjsUrl from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url"
 import meta from "@/data/meta.json"
-import tokenizerJson from "@/data/tokenizer.json"
 import {
   clean,
   historyFromClock,
@@ -13,6 +12,7 @@ import {
 } from "@/lib/policy"
 
 const MODEL_URL = "https://huggingface.co/KoljaB/backchannel-cue-32m/resolve/main/model.onnx"
+const TOKENIZER_URL = "https://huggingface.co/KoljaB/backchannel-cue-32m/resolve/main/tokenizer.json"
 const CACHE_NAME = "backchannel-cue-model-v1"
 const EXPECTED_BYTES = 128_735_292
 
@@ -30,6 +30,17 @@ export function configureOrt() {
 }
 
 export type LoadPhase = "download" | "start"
+
+async function loadTokenizerJson(): Promise<string> {
+  const cache = await caches.open(CACHE_NAME)
+  const hit = await cache.match(TOKENIZER_URL)
+  if (hit) return hit.text()
+  const response = await fetch(TOKENIZER_URL)
+  if (!response.ok) throw new Error(`Could not download the tokenizer (${response.status})`)
+  const text = await response.text()
+  await cache.put(TOKENIZER_URL, new Response(text, { headers: { "Content-Type": "application/json" } }))
+  return text
+}
 
 export async function fetchModelBytes(onProgress: (ratio: number) => void): Promise<ArrayBuffer> {
   const cache = await caches.open(CACHE_NAME)
@@ -86,11 +97,14 @@ export class CueEngine {
     configureOrt()
     const bytes = await fetchModelBytes((ratio) => onProgress(ratio, "download"))
     onProgress(1, "start")
-    const session = await ort.InferenceSession.create(bytes, {
-      executionProviders: ["wasm"],
-      graphOptimizationLevel: "basic",
-    })
-    const tokenizer = Tokenizer.from_json(JSON.stringify(tokenizerJson))
+    const [session, tokenizerJson] = await Promise.all([
+      ort.InferenceSession.create(bytes, {
+        executionProviders: ["wasm"],
+        graphOptimizationLevel: "basic",
+      }),
+      loadTokenizerJson(),
+    ])
+    const tokenizer = Tokenizer.from_json(tokenizerJson)
     return new CueEngine(session, tokenizer)
   }
 

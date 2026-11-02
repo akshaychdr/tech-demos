@@ -9,11 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 META = json.loads((ROOT / "src/data/meta.json").read_text())
 
 DEFAULTS = {
-    "clauseGateBar": 0.10,
+    "clauseGateBar": 0.09,
     "openGateBar": 0.018,
     "echoBar": 0.7,
     "minSpacingSec": 6.0,
-    "maxCuesPerMinute": 4,
+    "maxCuesPerMinute": 12,
     "badMoodBlock": 0.3,
     "pauseDelaySec": 0.45,
 }

@@ -2,10 +2,8 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import type { CueEngine } from "@/lib/model"
 import { cueSlug, explainVerdict, presentCue, type PolicySettings } from "@/lib/policy"
-import { assetUrl, buildTrace, stories, type Story, type TraceStep } from "@/lib/replay"
+import { assetUrl, buildTrace, stories, type TraceStep } from "@/lib/replay"
 import { Pause, Play } from "lucide-react"
-
-const PLAYLIST = ["bad-morning", "hard-news", "dont-answer"]
 
 type Buffers = {
   narration: AudioBuffer
@@ -25,8 +23,7 @@ export function ReplayDeck({
   engine: CueEngine
   settings: PolicySettings
 }) {
-  const playlist = PLAYLIST.map((id) => stories.find((story) => story.id === id)).filter((story): story is Story => Boolean(story))
-  const [story, setStory] = useState<Story>(playlist[0] ?? stories[0]!)
+  const story = stories[0]!
   const [trace, setTrace] = useState<TraceStep[] | null>(null)
   const [audioReady, setAudioReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -176,19 +173,6 @@ export function ReplayDeck({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Stories">
-        {playlist.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setStory(item)}
-            className={`rounded-full px-3 py-1 text-sm ${item.id === story.id ? "bg-foreground text-background" : "bg-muted text-muted-foreground"}`}
-          >
-            {item.title}
-          </button>
-        ))}
-      </div>
-
       <div className="flex items-center gap-4">
         <Button
           type="button"

@@ -8,9 +8,12 @@ import {
   decideFromScores,
   freshClock,
   isDirectQuestion,
+  type PolicySettings,
   type Scores,
   wordCount,
 } from "../src/lib/policy"
+
+const settings = fixture.settings as PolicySettings
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -30,7 +33,7 @@ type PyVerdict = {
 function walk(steps: Step[]) {
   let clock = freshClock()
   return steps.map((step) => {
-    const { verdict, clock: next } = decideFromScores(step.text, step, clock, step.t ?? 0)
+    const { verdict, clock: next } = decideFromScores(step.text, step, clock, step.t ?? 0, settings)
     clock = next
     return { id: step.id, verdict }
   })
@@ -66,7 +69,7 @@ describe("python policy parity", () => {
   it("matches python on every prototype sentence", () => {
     expect(report).not.toBeNull()
     const ts = (fixture.sentences as Step[]).map((step) => {
-      const { verdict } = decideFromScores(step.text, step, freshClock(), 0)
+      const { verdict } = decideFromScores(step.text, step, freshClock(), 0, settings)
       return { id: step.id, verdict, clean: clean(step.text) }
     })
     expect(ts.map((row) => row.id)).toEqual(report!.sentences.map((row) => row.id))
@@ -103,7 +106,7 @@ describe("prototype behavior", () => {
   function cueFor(text: string) {
     const step = (fixture.sentences as Step[]).find((row) => row.text === text)
     if (!step) throw new Error(`missing fixture sentence: ${text}`)
-    return decideFromScores(text, step, freshClock(), 0).verdict
+    return decideFromScores(text, step, freshClock(), 0, settings).verdict
   }
 
   it("answers sad news with oh no, not a laugh", () => {

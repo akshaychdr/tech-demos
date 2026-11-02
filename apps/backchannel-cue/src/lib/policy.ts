@@ -1,12 +1,12 @@
 import meta from "@/data/meta.json"
 
-/** Card defaults, with the clause-end gate lifted from 0.09 to 0.10. */
+/** Card defaults: 0.09 at a clause end, 0.018 mid-sentence, 6 seconds apart. */
 export const defaultSettings = {
-  clauseGateBar: 0.1,
+  clauseGateBar: 0.09,
   openGateBar: 0.018,
   echoBar: 0.7,
   minSpacingSec: 6,
-  maxCuesPerMinute: 4,
+  maxCuesPerMinute: 12,
   badMoodBlock: 0.3,
   pauseDelaySec: 0.45,
 }
