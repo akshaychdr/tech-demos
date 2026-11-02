@@ -27,3 +27,5 @@ public/vad/
 test-results/
 playwright-report/
 blob-report/
+__pycache__/
+*.pyc
