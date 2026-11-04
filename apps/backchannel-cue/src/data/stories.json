@@ -1,0 +1,473 @@
+[
+  {
+    "id": "long-day",
+    "title": "A long day",
+    "kicker": "A morning that will not sit still.",
+    "audio": "audio/stories/long-day.opus",
+    "duration": 73.283,
+    "words": [
+      {
+        "text": "so",
+        "start": 0.39,
+        "end": 0.493
+      },
+      {
+        "text": "this",
+        "start": 0.493,
+        "end": 0.7
+      },
+      {
+        "text": "morning",
+        "start": 0.7,
+        "end": 1.062
+      },
+      {
+        "text": "my",
+        "start": 1.062,
+        "end": 1.166
+      },
+      {
+        "text": "car",
+        "start": 1.166,
+        "end": 1.321
+      },
+      {
+        "text": "wouldn't",
+        "start": 1.321,
+        "end": 1.735
+      },
+      {
+        "text": "start",
+        "start": 1.735,
+        "end": 1.993
+      },
+      {
+        "text": "so",
+        "start": 7.851,
+        "end": 7.971
+      },
+      {
+        "text": "yesterday",
+        "start": 7.971,
+        "end": 8.512
+      },
+      {
+        "text": "i",
+        "start": 8.512,
+        "end": 8.572
+      },
+      {
+        "text": "was",
+        "start": 8.572,
+        "end": 8.752
+      },
+      {
+        "text": "walking",
+        "start": 8.752,
+        "end": 9.173
+      },
+      {
+        "text": "down",
+        "start": 9.173,
+        "end": 9.413
+      },
+      {
+        "text": "the",
+        "start": 9.413,
+        "end": 9.593
+      },
+      {
+        "text": "side",
+        "start": 10.923,
+        "end": 11.23
+      },
+      {
+        "text": "street",
+        "start": 11.23,
+        "end": 11.691
+      },
+      {
+        "text": "octopuses",
+        "start": 15.137,
+        "end": 15.716
+      },
+      {
+        "text": "actually",
+        "start": 15.716,
+        "end": 16.23
+      },
+      {
+        "text": "have",
+        "start": 16.23,
+        "end": 16.487
+      },
+      {
+        "text": "three",
+        "start": 16.487,
+        "end": 16.808
+      },
+      {
+        "text": "hearts",
+        "start": 16.808,
+        "end": 17.193
+      },
+      {
+        "text": "it",
+        "start": 22.261,
+        "end": 22.391
+      },
+      {
+        "text": "turns",
+        "start": 22.391,
+        "end": 22.716
+      },
+      {
+        "text": "out",
+        "start": 22.716,
+        "end": 22.91
+      },
+      {
+        "text": "my",
+        "start": 22.91,
+        "end": 23.04
+      },
+      {
+        "text": "neighbor",
+        "start": 23.04,
+        "end": 23.56
+      },
+      {
+        "text": "is",
+        "start": 23.56,
+        "end": 23.69
+      },
+      {
+        "text": "a",
+        "start": 23.69,
+        "end": 23.755
+      },
+      {
+        "text": "retired",
+        "start": 23.755,
+        "end": 24.209
+      },
+      {
+        "text": "astronaut",
+        "start": 24.209,
+        "end": 24.793
+      },
+      {
+        "text": "he",
+        "start": 30.256,
+        "end": 30.385
+      },
+      {
+        "text": "pulled",
+        "start": 30.385,
+        "end": 30.774
+      },
+      {
+        "text": "a",
+        "start": 30.774,
+        "end": 30.839
+      },
+      {
+        "text": "rabbit",
+        "start": 30.839,
+        "end": 31.228
+      },
+      {
+        "text": "out",
+        "start": 31.228,
+        "end": 31.422
+      },
+      {
+        "text": "of",
+        "start": 31.422,
+        "end": 31.551
+      },
+      {
+        "text": "his",
+        "start": 31.551,
+        "end": 31.746
+      },
+      {
+        "text": "hat",
+        "start": 31.746,
+        "end": 31.94
+      },
+      {
+        "text": "on",
+        "start": 31.94,
+        "end": 32.07
+      },
+      {
+        "text": "stage",
+        "start": 32.07,
+        "end": 32.393
+      },
+      {
+        "text": "i",
+        "start": 39.133,
+        "end": 39.187
+      },
+      {
+        "text": "just",
+        "start": 39.187,
+        "end": 39.402
+      },
+      {
+        "text": "got",
+        "start": 39.402,
+        "end": 39.563
+      },
+      {
+        "text": "promoted",
+        "start": 39.563,
+        "end": 39.993
+      },
+      {
+        "text": "i",
+        "start": 46.431,
+        "end": 46.487
+      },
+      {
+        "text": "wanted",
+        "start": 46.487,
+        "end": 46.819
+      },
+      {
+        "text": "to",
+        "start": 46.819,
+        "end": 46.929
+      },
+      {
+        "text": "tell",
+        "start": 46.929,
+        "end": 47.151
+      },
+      {
+        "text": "you",
+        "start": 47.151,
+        "end": 47.317
+      },
+      {
+        "text": "about",
+        "start": 47.317,
+        "end": 47.593
+      },
+      {
+        "text": "the",
+        "start": 48.923,
+        "end": 49.08
+      },
+      {
+        "text": "new",
+        "start": 49.08,
+        "end": 49.237
+      },
+      {
+        "text": "office",
+        "start": 49.237,
+        "end": 49.551
+      },
+      {
+        "text": "by",
+        "start": 49.551,
+        "end": 49.656
+      },
+      {
+        "text": "the",
+        "start": 49.656,
+        "end": 49.813
+      },
+      {
+        "text": "river",
+        "start": 49.813,
+        "end": 50.074
+      },
+      {
+        "text": "i",
+        "start": 54.159,
+        "end": 54.216
+      },
+      {
+        "text": "couldn't",
+        "start": 54.216,
+        "end": 54.676
+      },
+      {
+        "text": "go",
+        "start": 54.676,
+        "end": 54.791
+      },
+      {
+        "text": "because",
+        "start": 54.791,
+        "end": 55.193
+      },
+      {
+        "text": "the",
+        "start": 56.523,
+        "end": 56.679
+      },
+      {
+        "text": "car",
+        "start": 56.679,
+        "end": 56.835
+      },
+      {
+        "text": "was",
+        "start": 56.835,
+        "end": 56.99
+      },
+      {
+        "text": "still",
+        "start": 56.99,
+        "end": 57.249
+      },
+      {
+        "text": "sitting",
+        "start": 57.249,
+        "end": 57.612
+      },
+      {
+        "text": "there",
+        "start": 57.612,
+        "end": 57.871
+      },
+      {
+        "text": "i",
+        "start": 60.853,
+        "end": 60.907
+      },
+      {
+        "text": "usually",
+        "start": 60.907,
+        "end": 61.284
+      },
+      {
+        "text": "take",
+        "start": 61.284,
+        "end": 61.5
+      },
+      {
+        "text": "the",
+        "start": 61.5,
+        "end": 61.662
+      },
+      {
+        "text": "bus",
+        "start": 61.662,
+        "end": 61.823
+      },
+      {
+        "text": "to",
+        "start": 61.823,
+        "end": 61.931
+      },
+      {
+        "text": "work",
+        "start": 61.931,
+        "end": 62.147
+      },
+      {
+        "text": "in",
+        "start": 62.147,
+        "end": 62.255
+      },
+      {
+        "text": "the",
+        "start": 62.255,
+        "end": 62.416
+      },
+      {
+        "text": "morning",
+        "start": 62.416,
+        "end": 62.793
+      },
+      {
+        "text": "can",
+        "start": 69.684,
+        "end": 69.809
+      },
+      {
+        "text": "you",
+        "start": 69.809,
+        "end": 69.934
+      },
+      {
+        "text": "believe",
+        "start": 69.934,
+        "end": 70.227
+      },
+      {
+        "text": "that",
+        "start": 70.227,
+        "end": 70.393
+      }
+    ],
+    "pauses": [
+      {
+        "id": "long-day-0",
+        "phraseEnd": 2.033,
+        "nextStart": 7.811,
+        "wordIndex": 6
+      },
+      {
+        "id": "long-day-1",
+        "phraseEnd": 9.633,
+        "nextStart": 10.883,
+        "wordIndex": 13
+      },
+      {
+        "id": "long-day-3",
+        "phraseEnd": 17.233,
+        "nextStart": 22.221,
+        "wordIndex": 20
+      },
+      {
+        "id": "long-day-4",
+        "phraseEnd": 24.833,
+        "nextStart": 30.216,
+        "wordIndex": 29
+      },
+      {
+        "id": "long-day-5",
+        "phraseEnd": 32.433,
+        "nextStart": 39.093,
+        "wordIndex": 39
+      },
+      {
+        "id": "long-day-6",
+        "phraseEnd": 40.033,
+        "nextStart": 46.391,
+        "wordIndex": 43
+      },
+      {
+        "id": "long-day-7",
+        "phraseEnd": 47.633,
+        "nextStart": 48.883,
+        "wordIndex": 49
+      },
+      {
+        "id": "long-day-9",
+        "phraseEnd": 55.233,
+        "nextStart": 56.483,
+        "wordIndex": 59
+      },
+      {
+        "id": "long-day-11",
+        "phraseEnd": 62.833,
+        "nextStart": 69.644,
+        "wordIndex": 75
+      },
+      {
+        "id": "long-day-12",
+        "phraseEnd": 70.433,
+        "nextStart": null,
+        "wordIndex": 79
+      }
+    ]
+  }
+]
