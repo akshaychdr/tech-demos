@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    "brain",
+    "corrugator",
+    "frontal",
+    "frontalis",
+    "mandible",
+    "masseter",
+    "maxilla",
+    "nasal",
+    "occipital",
+    "orbicularis",
+    "parietal",
+    "temporal",
+    "zygomatic",
+    "zygomaticus"
+  ],
+  "bytes": 457764
+}
