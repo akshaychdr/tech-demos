@@ -22,3 +22,4 @@ bun run dev
 | elevator-install-3d | Federal Panorama/Renaissance install guide (3D + HyperFrames reel) | 2026-10-26 | TBD |
 | ikea-eket-3d | IKEA 3D Assembly Dataset — EKET 2-drawer cabinet (00333947) | 2026-10-26 | TBD |
 | backchannel-cue | Backchannel Cue 32M — a listener answers the pauses ([KoljaB/backchannel-cue-32m](https://huggingface.co/KoljaB/backchannel-cue-32m)) | 2026-11-02 | [#8](https://github.com/akshaychdr/tech-demos/pull/8) |
+| anatomy-mirror | Anatomy Mirror v2 — face bones and muscles in the browser | 2026-11-21 | TBD |

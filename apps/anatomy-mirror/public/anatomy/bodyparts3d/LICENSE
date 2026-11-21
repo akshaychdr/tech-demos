@@ -1,0 +1,19 @@
+Anatomy Mirror derived meshes
+Creative Commons Attribution-ShareAlike 2.1 Japan (CC BY-SA 2.1 JP)
+
+The bone meshes and the brain shell in anatomy.glb are adapted from
+BodyParts3D / Anatomography, copyright Database Center for Life Science (DBCLS).
+BodyParts3D is licensed under CC BY-SA 2.1 Japan:
+https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en
+
+You may copy, share, and adapt these meshes provided you give credit, link the
+licence, and distribute adaptations under the same licence.
+
+The five muscle shapes (frontalis, corrugator supercilii, orbicularis oculi,
+zygomaticus major, masseter) are original schematic surfaces made for this app,
+because BodyParts3D release 4.3 does not contain those muscles. They are included
+in anatomy.glb and released under the same CC BY-SA 2.1 Japan licence so the
+file has one licence.
+
+The canonical face coordinates used only to align the meshes come from the
+MediaPipe canonical face model (Apache License 2.0).
