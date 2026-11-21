@@ -5,7 +5,7 @@ export function Credits({ onClose }: { onClose: () => void }) {
         <p className="eyebrow">Credits</p>
         <h2 id="credits-title">Where the anatomy comes from</h2>
         <p>
-          Skull bones and the brain shell are simplified meshes derived from{' '}
+          The skull, the brain, and the hand bones are simplified meshes derived from{' '}
           <a href="https://lifesciencedb.jp/bp3d/">BodyParts3D</a>, © Database Center for Life Science (DBCLS),
           licensed{' '}
           <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en">CC BY-SA 2.1 Japan</a>.

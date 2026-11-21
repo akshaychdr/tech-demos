@@ -1,31 +1,30 @@
-# Anatomy Mirror v2
+# Anatomy Mirror — x-ray rebuild
 
 ## Goal
 
-A 12–16-year-old opens one GitHub Pages link and learns 8 skull bones and 5 face muscles on their own face, in the browser, with nothing recorded or uploaded.
+A student opens the same static Pages app and sees a Hashem-style x-ray of their own head: a smooth BodyParts3D skull (separate jaw), brain, and face muscles tracked with MediaPipe’s facial matrix, with the existing welcome, touch, expressions, quiz, share, and credits still working.
 
 ## MVP
 
-In: welcome with privacy note, `?beat=` banner, and three first-launch tips; Explore (bones, muscles, brain, labels, optional hand sketch); Touch and tell for 8 bones; Make a face for 5 muscles; a 5-question quiz (3 touch + 2 show-me) with timer, score, review, share card, and play again; phone-first layout; credits and licences.
+In: higher-detail skull, mandible, and brain aligned to the MediaPipe canonical face; original muscle sheets where BodyParts3D 4.3 has no face-muscle meshes; x-ray and solid looks; feathered lens, whole-head, half, top, and lower-face reveals; independent skull, muscle, brain, and hand-bone layers; jaw driven by `jawOpen`; hand bones posed on HandLandmarker joints; leader-line labels; glow highlights and a small frosted fact card; one sans-serif UI with a phone bottom sheet.
 
-Out: accounts, analytics, teacher mode, extra anatomy, offline install, welcome video, recording.
+Out: a demo video, accounts, extra quiz anatomy, editing `.github`, copying the reference app’s source.
 
 ## Stack
 
-- Vite + React + TypeScript — static Pages app, same `VITE_BASE_PATH` pattern as the other demos. No workflow edit.
-- Tailwind + shadcn/ui — minimal UI primitives, custom theater styling on top.
-- MediaPipe Tasks Vision (`FaceLandmarker` blendshapes + `HandLandmarker`) from the CDN, loaded only after Start.
-- three.js — one lazy GLB, fit to the live face with a similarity transform.
-- Bun test — region, expression, hold, and quiz scoring only.
+- Keep the Vite + React + TypeScript app. This is a visual rebuild, not a new scaffold.
+- three.js ShaderMaterial for the fresnel x-ray and the solid look. MediaPipe Tasks Vision stays, now requesting the facial transformation matrix.
+- Meshes are rebuilt by `scripts/build_anatomy.py` from BodyParts3D 4.3 element OBJs, decimated only enough to stay a lazy-loaded GLB. CC BY-SA 2.1 JP.
+- Bun test covers the screen-fit math plus the existing touch, expression, and quiz checks.
 
 ## Tasks
 
-1. Measure touch regions (6 quiz bones) and expression scores (5 muscles) on synthetic landmark and blendshape inputs before building the UI.
-2. Export decimated BodyParts3D bones and a brain shell. Muscle surfaces are original schematics because BodyParts3D 4.3 has no meshes for those five muscles; the anatomy file stays CC BY-SA 2.1 JP.
-3. Ship welcome, explore, touch, faces, quiz, share, and error states.
-4. Prove it with a fake camera feed, screenshots, and a video at laptop and phone sizes.
+1. Export a smoother skull, jaw, brain, shell, and hand-bone templates, and check alignment against the canonical face.
+2. Drive the head from the facial matrix plus a per-frame landmark scale fit. Articulate the jaw. Pose hand-bone segments.
+3. Restyle the stage: frosted panels, pill toggles, collapsible phone sheet, 16px type, no heavy bars.
+4. `bun test` and `VITE_BASE_PATH=/tech-demos/anatomy-mirror/ bun run build` must pass.
 
 ## Deferred
 
-- Real-device iOS pass (this environment has no camera).
-- Teacher review of the fun facts (drafted in the app and listed on the PR).
+- Real iOS camera pass (this environment has no camera). A `?preview=1` pose is only for checking the render.
+- Teacher review of the fun facts.
