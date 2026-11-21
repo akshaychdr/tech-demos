@@ -39,8 +39,6 @@ export class AnatomyScene {
     quat: new THREE.Quaternion(),
     scale: 1,
   }
-  private viewW = 1
-  private viewH = 1
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: 'high-performance' })
@@ -106,8 +104,6 @@ export class AnatomyScene {
   }
 
   setSize(viewW: number, viewH: number, dpr: number): void {
-    this.viewW = viewW
-    this.viewH = viewH
     this.renderer.setPixelRatio(dpr)
     this.renderer.setSize(viewW, viewH, false)
     this.camera.left = -viewW / 2
