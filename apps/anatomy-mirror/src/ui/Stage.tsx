@@ -14,11 +14,12 @@ import {
 import {
   CameraError,
   MirrorEngine,
+  type Appearance,
   type EngineMode,
   type EngineSnapshot,
   type HoldEvent,
 } from '../engine/MirrorEngine.ts'
-import type { SceneLayers } from '../scene/AnatomyScene.ts'
+import type { LookMode, RevealMode, SceneLayers } from '../scene/AnatomyScene.ts'
 import type { StructureId } from '../domain/types.ts'
 import { Credits } from './Credits.tsx'
 import { drawScoreCard } from './scoreImage.ts'
@@ -34,17 +35,39 @@ const emptySnap = (): EngineSnapshot => ({
   lowFps: false,
 })
 
+const LOOKS: { id: LookMode; label: string }[] = [
+  { id: 'xray', label: 'X-ray' },
+  { id: 'solid', label: 'Solid' },
+]
+
+const REVEALS: { id: RevealMode; label: string }[] = [
+  { id: 'lens', label: 'Lens' },
+  { id: 'whole', label: 'Whole' },
+  { id: 'left', label: 'Left' },
+  { id: 'right', label: 'Right' },
+  { id: 'top', label: 'Top' },
+  { id: 'bottom', label: 'Lower' },
+]
+
 export default function Stage() {
   const host = useRef<HTMLDivElement>(null)
   const engine = useRef<MirrorEngine | null>(null)
   const onHold = useRef<(event: HoldEvent) => void>(() => {})
+  const preview = new URLSearchParams(window.location.search).get('preview') === '1'
   const [status, setStatus] = useState<'loading' | 'live' | 'error'>('loading')
   const [progress, setProgress] = useState({ value: 0.05, label: 'Starting' })
   const [error, setError] = useState<CameraError | null>(null)
   const [snap, setSnap] = useState<EngineSnapshot>(emptySnap)
   const [mode, setMode] = useState<EngineMode>('explore')
-  const [layers, setLayers] = useState<SceneLayers>({ bones: true, muscles: false, brain: false, hand: false })
-  const [labelsOn, setLabelsOn] = useState(false)
+  const [layers, setLayers] = useState<SceneLayers>({ skull: true, muscles: false, brain: false, hand: false })
+  const [labelsOn, setLabelsOn] = useState(true)
+  const [look, setLook] = useState<LookMode>('xray')
+  const [reveal, setReveal] = useState<RevealMode>('lens')
+  const [cut, setCut] = useState(0.42)
+  const [feather, setFeather] = useState(0.22)
+  const [skin, setSkin] = useState(0.32)
+  const [lensPinned, setLensPinned] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(() => !window.matchMedia('(max-width: 800px)').matches)
   const [credits, setCredits] = useState(false)
   const [card, setCard] = useState<StructureId | null>(null)
   const [faceStep, setFaceStep] = useState(0)
@@ -91,11 +114,18 @@ export default function Stage() {
         if (!dead) onHold.current(event)
       },
     )
+    eng.onLensPinned = (pinned) => {
+      if (!dead) setLensPinned(pinned)
+    }
     engine.current = eng
     void eng
-      .start(node, (value, label) => {
-        if (!dead) setProgress({ value, label })
-      })
+      .start(
+        node,
+        (value, label) => {
+          if (!dead) setProgress({ value, label })
+        },
+        preview,
+      )
       .then(() => {
         if (!dead) setStatus('live')
       })
@@ -108,7 +138,7 @@ export default function Stage() {
       dead = true
       eng.dispose()
     }
-  }, [])
+  }, [preview])
 
   useEffect(() => {
     const eng = engine.current
@@ -130,6 +160,33 @@ export default function Stage() {
   }, [mode, layers, labelsOn, faceStep, quiz])
 
   useEffect(() => {
+    const appearance: Appearance = { look, reveal, cut, feather, skin }
+    engine.current?.setAppearance(appearance)
+  }, [look, reveal, cut, feather, skin, status])
+
+  useEffect(() => {
+    const eng = engine.current
+    if (!eng || status !== 'live') return
+    if (mode === 'quiz' && quiz?.phase === 'reveal') {
+      eng.setHighlight(quiz.questions[quiz.index]?.id ?? null)
+      return
+    }
+    if (mode === 'faces') {
+      eng.setHighlight(FACE_PROMPTS[faceStep]?.id ?? null)
+      return
+    }
+    if (mode === 'touch' && card) {
+      eng.setHighlight(card)
+      return
+    }
+    eng.setHighlight(null)
+  }, [mode, quiz, faceStep, card, status])
+
+  useEffect(() => {
+    if (card) setSheetOpen(true)
+  }, [card])
+
+  useEffect(() => {
     if (!quiz || quiz.phase === 'done') return
     const timer = window.setInterval(() => setNow(performance.now()), 100)
     return () => window.clearInterval(timer)
@@ -145,12 +202,7 @@ export default function Stage() {
   }, [quiz])
 
   useEffect(() => {
-    if (!quiz || quiz.phase !== 'reveal') {
-      engine.current?.setHighlight(null)
-      return
-    }
-    const question = quiz.questions[quiz.index]
-    engine.current?.setHighlight(question?.id ?? null)
+    if (!quiz || quiz.phase !== 'reveal') return
     const wait = quiz.revealCorrect ? 1200 : 2000
     const timer = window.setTimeout(() => {
       setQuiz((current) => (current ? advanceQuiz(current, performance.now()) : current))
@@ -182,6 +234,9 @@ export default function Stage() {
     setMode(next)
     setFallback(false)
     setNote('')
+    setSheetOpen(true)
+    if (next === 'touch') setLayers((value) => ({ ...value, skull: true }))
+    if (next === 'faces') setLayers((value) => ({ ...value, muscles: true }))
     if (next === 'quiz' && (!quiz || quiz.phase === 'done')) setQuiz(startQuiz(performance.now()))
     if (next !== 'touch' && next !== 'faces') setCard(null)
   }
@@ -214,7 +269,6 @@ export default function Stage() {
     setNote('Link copied')
   }
 
-  const sheetTop = snap.faceBottom ?? Math.round(window.innerHeight * 0.58)
   const question = quiz?.questions[quiz.index]
   const prompt = FACE_PROMPTS[faceStep]
   const info = card ? structure(card) : null
@@ -226,13 +280,14 @@ export default function Stage() {
         challengeUrl(window.location.origin, import.meta.env.BASE_URL, quiz.score),
       )
     : ''
+  const cutLabel = reveal === 'lens' ? 'Lens size' : 'How much to show'
 
   return (
     <div className="stage-shell">
       <div className="stage-host" ref={host} />
-      <header className="stage-top">
+      <header className="top-chip">
         <p>Anatomy Mirror</p>
-        <p className="fps">{status === 'live' ? `${snap.fps} fps` : ''}</p>
+        {status === 'live' && <p className="fps">{snap.fps} fps</p>}
         <button type="button" className="text-link" onClick={() => setCredits(true)}>
           Credits
         </button>
@@ -247,7 +302,7 @@ export default function Stage() {
       {status === 'loading' && (
         <div className="overlay-card">
           <p className="eyebrow">Getting the mirror ready</p>
-          <h2>{progress.label}</h2>
+          <p className="panel-title">{progress.label}</p>
           <div className="bar" aria-valuenow={Math.round(progress.value * 100)} aria-valuemin={0} aria-valuemax={100} role="progressbar">
             <span style={{ width: `${Math.round(progress.value * 100)}%` }} />
           </div>
@@ -256,13 +311,15 @@ export default function Stage() {
 
       {status === 'error' && error && (
         <div className="overlay-card">
-          <h2>{error.reason === 'denied' ? 'Camera is blocked' : error.reason === 'missing' ? 'No camera was found' : 'The camera did not start'}</h2>
+          <p className="panel-title">
+            {error.reason === 'denied' ? 'Camera is blocked' : error.reason === 'missing' ? 'No camera was found' : 'Something went wrong'}
+          </p>
           <p>
             {error.reason === 'denied'
               ? 'In the address bar, open the site settings, set Camera to Allow, then try again.'
               : error.reason === 'missing'
                 ? 'Plug in a webcam, or open this page on a phone with a front camera.'
-                : 'Check that no other app is using the camera, then try again.'}
+                : error.message}
           </p>
           <Button className="start-btn" size="lg" onClick={() => window.location.reload()}>
             Try again
@@ -271,116 +328,182 @@ export default function Stage() {
       )}
 
       {status === 'live' && (
-        <section className="sheet" style={{ maxHeight: `max(11rem, min(36vh, calc(100% - ${sheetTop}px - 88px)))` }}>
-          {mode === 'explore' && (
-            <>
-              <div className="chip-row">
-                <Chip on={layers.bones} onClick={() => setLayers((value) => ({ ...value, bones: !value.bones }))}>Bones</Chip>
-                <Chip on={layers.muscles} onClick={() => setLayers((value) => ({ ...value, muscles: !value.muscles }))}>Muscles</Chip>
-                <Chip on={layers.brain} onClick={() => setLayers((value) => ({ ...value, brain: !value.brain }))}>Brain</Chip>
-                <Chip on={layers.hand} onClick={() => setLayers((value) => ({ ...value, hand: !value.hand }))}>Hand</Chip>
-                <Chip on={labelsOn} onClick={() => setLabelsOn((value) => !value)}>Labels</Chip>
-              </div>
-              {layers.brain && <p>{structure('brain').fact}</p>}
-              {layers.hand && <p>The hand sketch follows the joints the camera can see. It is a fun extra, not part of the quiz.</p>}
-            </>
-          )}
-
-          {mode === 'touch' && (
-            info ? (
-              <Fact infoId={info.id} />
-            ) : (
-              <p>Touch a bone with one fingertip and hold still. The top and back of the skull count too.</p>
-            )
-          )}
-
-          {mode === 'faces' && (
-            prompt ? (
-              <>
-                <p className="prompt">{prompt.prompt}</p>
-                {snap.muscle && <p>That is your {structure(snap.muscle).everyday.toLowerCase()} ({structure(snap.muscle).science}).</p>}
-                {info && snap.muscle === info.id && <p>{info.fact}</p>}
-              </>
-            ) : (
-              <>
-                <h2>You found all five muscles.</h2>
-                <Button className="start-btn" size="lg" onClick={() => { setFaceStep(0); setCard(null) }}>
-                  Practice again
-                </Button>
-              </>
-            )
-          )}
-
-          {mode === 'quiz' && quiz && quiz.phase === 'ask' && question && (
-            <div className="quiz-row">
-              <p className="prompt">{question.prompt}</p>
-              <Ring remaining={remainingMs(quiz, now)} />
-            </div>
-          )}
-
-          {mode === 'quiz' && quiz && quiz.phase === 'reveal' && question && (
-            <>
-              <p className="eyebrow">{quiz.revealCorrect ? 'Yes' : 'Here it is'}</p>
-              <h2>{structure(question.id).everyday}</h2>
-              <p>{structure(question.id).science}. {structure(question.id).fact}</p>
-            </>
-          )}
-
-          {mode === 'quiz' && quiz && quiz.phase === 'done' && (
-            <div className="score-end">
-              <p className="eyebrow">Score</p>
-              <h2>{formatScore(quiz.score)}/10</h2>
-              <p>Time {Math.round(quiz.elapsedMs / 1000)}s{best > 0 ? ` · Best this session ${formatScore(best)}` : ''}</p>
-              {quiz.misses.length > 0 ? (
-                <div className="chip-row">
-                  {quiz.misses.map((miss) => (
-                    <button
-                      key={miss.id}
-                      type="button"
-                      className="chip"
-                      onClick={() => {
-                        setCard(miss.id)
-                        setMode(structure(miss.id).layer === 'muscles' ? 'faces' : 'touch')
-                      }}
-                    >
-                      Revisit {structure(miss.id).everyday.toLowerCase()}
-                    </button>
-                  ))}
-                </div>
+        <aside className={sheetOpen ? 'panel' : 'panel collapsed'}>
+          <div className="panel-body">
+            {mode === 'touch' &&
+              (info ? (
+                <Fact infoId={info.id} />
               ) : (
-                <p>You named every one in this round.</p>
-              )}
-              {scoreUrl && <img className="score-preview" alt="Score card with a skull drawing and your points" src={scoreUrl} />}
-              <div className="chip-row">
-                <Button size="lg" onClick={() => void share()}>Share score</Button>
-                <Button size="lg" variant="secondary" onClick={() => { setQuiz(startQuiz(performance.now())); setFallback(false) }}>
-                  Play again
-                </Button>
-              </div>
-              {(fallback || typeof navigator.share !== 'function') && (
-                <div className="chip-row">
-                  <a className="chip" href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">WhatsApp</a>
-                  <a className="chip" href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">X</a>
-                  <a className="chip" href={`mailto:?subject=${encodeURIComponent('Anatomy Mirror')}&body=${encodeURIComponent(shareText)}`}>Email</a>
-                  <button type="button" className="chip" onClick={() => void copyLink()}>Copy link</button>
-                  {scoreUrl && (
-                    <a className="chip" href={scoreUrl} download="anatomy-mirror-score.png">Save image</a>
-                  )}
-                </div>
-              )}
-              {note && <p>{note}</p>}
-            </div>
-          )}
-        </section>
-      )}
+                <p>Touch a bone with one fingertip and hold still. The part you touch lights up.</p>
+              ))}
 
-      {status === 'live' && (
-        <nav className="thumb-bar" aria-label="Activities">
-          <NavButton icon={<Layers />} label="Explore" on={mode === 'explore'} onClick={() => chooseMode('explore')} />
-          <NavButton icon={<Hand />} label="Touch" on={mode === 'touch'} onClick={() => chooseMode('touch')} />
-          <NavButton icon={<Smile />} label="Faces" on={mode === 'faces'} onClick={() => chooseMode('faces')} />
-          <NavButton icon={<Timer />} label="Quiz" on={mode === 'quiz'} onClick={() => chooseMode('quiz')} />
-        </nav>
+            {mode === 'faces' &&
+              (prompt ? (
+                <>
+                  <p className="prompt">{prompt.prompt}</p>
+                  {snap.muscle && (
+                    <p>
+                      That is your {structure(snap.muscle).everyday.toLowerCase()} ({structure(snap.muscle).science}).
+                    </p>
+                  )}
+                  {info && snap.muscle === info.id && <p>{info.fact}</p>}
+                </>
+              ) : (
+                <>
+                  <p className="panel-title">You found all five muscles.</p>
+                  <Button
+                    className="start-btn"
+                    size="lg"
+                    onClick={() => {
+                      setFaceStep(0)
+                      setCard(null)
+                    }}
+                  >
+                    Practice again
+                  </Button>
+                </>
+              ))}
+
+            {mode === 'quiz' && quiz && quiz.phase === 'ask' && question && (
+              <div className="quiz-row">
+                <p className="prompt">{question.prompt}</p>
+                <Ring remaining={remainingMs(quiz, now)} />
+              </div>
+            )}
+
+            {mode === 'quiz' && quiz && quiz.phase === 'reveal' && question && (
+              <>
+                <p className="eyebrow">{quiz.revealCorrect ? 'Yes' : 'Here it is'}</p>
+                <p className="panel-title">{structure(question.id).everyday}</p>
+                <p>
+                  {structure(question.id).science}. {structure(question.id).fact}
+                </p>
+              </>
+            )}
+
+            {mode === 'quiz' && quiz && quiz.phase === 'done' && (
+              <div className="score-end">
+                <p className="eyebrow">Score</p>
+                <p className="panel-title">{formatScore(quiz.score)}/10</p>
+                <p>
+                  Time {Math.round(quiz.elapsedMs / 1000)}s{best > 0 ? ` · Best this session ${formatScore(best)}` : ''}
+                </p>
+                {quiz.misses.length > 0 ? (
+                  <div className="chip-row">
+                    {quiz.misses.map((miss) => (
+                      <button
+                        key={miss.id}
+                        type="button"
+                        className="pill"
+                        onClick={() => {
+                          setCard(miss.id)
+                          setSheetOpen(true)
+                          if (structure(miss.id).layer === 'muscles') {
+                            setMode('faces')
+                            setLayers((value) => ({ ...value, muscles: true }))
+                          } else {
+                            setMode('touch')
+                            setLayers((value) => ({ ...value, skull: true }))
+                          }
+                        }}
+                      >
+                        Revisit {structure(miss.id).everyday.toLowerCase()}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p>You named every one in this round.</p>
+                )}
+                {scoreUrl && <img className="score-preview" alt="Score card with a skull drawing and your points" src={scoreUrl} />}
+                <div className="chip-row">
+                  <Button size="lg" onClick={() => void share()}>
+                    Share score
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="secondary"
+                    onClick={() => {
+                      setQuiz(startQuiz(performance.now()))
+                      setFallback(false)
+                    }}
+                  >
+                    Play again
+                  </Button>
+                </div>
+                {(fallback || typeof navigator.share !== 'function') && (
+                  <div className="chip-row">
+                    <a className="pill" href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">
+                      WhatsApp
+                    </a>
+                    <a className="pill" href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">
+                      X
+                    </a>
+                    <a className="pill" href={`mailto:?subject=${encodeURIComponent('Anatomy Mirror')}&body=${encodeURIComponent(shareText)}`}>
+                      Email
+                    </a>
+                    <button type="button" className="pill" onClick={() => void copyLink()}>
+                      Copy link
+                    </button>
+                    {scoreUrl && (
+                      <a className="pill" href={scoreUrl} download="anatomy-mirror-score.png">
+                        Save image
+                      </a>
+                    )}
+                  </div>
+                )}
+                {note && <p>{note}</p>}
+              </div>
+            )}
+
+            <Pills label="Look" value={look} options={LOOKS} onChange={setLook} />
+            <Pills label="Reveal" value={reveal} options={REVEALS} onChange={setReveal} />
+            {reveal !== 'whole' && <Slider label={cutLabel} value={cut} onChange={setCut} />}
+            {reveal === 'lens' && (
+              <button
+                type="button"
+                className={lensPinned ? 'pill' : 'pill on'}
+                onClick={() => {
+                  engine.current?.followLens()
+                  setLensPinned(false)
+                }}
+              >
+                {lensPinned ? 'Follow face' : 'Following the face'}
+              </button>
+            )}
+            <Slider label="Skin" value={skin} onChange={setSkin} />
+            <Slider label="Soft edge" value={feather} onChange={setFeather} />
+
+            <div className="chip-row" role="group" aria-label="Layers">
+              <Chip on={layers.skull} onClick={() => setLayers((value) => ({ ...value, skull: !value.skull }))}>
+                Skull
+              </Chip>
+              <Chip on={layers.muscles} onClick={() => setLayers((value) => ({ ...value, muscles: !value.muscles }))}>
+                Muscles
+              </Chip>
+              <Chip on={layers.brain} onClick={() => setLayers((value) => ({ ...value, brain: !value.brain }))}>
+                Brain
+              </Chip>
+              <Chip on={layers.hand} onClick={() => setLayers((value) => ({ ...value, hand: !value.hand }))}>
+                Hand bones
+              </Chip>
+              <Chip on={labelsOn} onClick={() => setLabelsOn((value) => !value)}>
+                Labels
+              </Chip>
+            </div>
+            {layers.hand && <p>Hand bones follow the joints the camera can see.</p>}
+          </div>
+          <div className="panel-bar">
+            <button type="button" className="sheet-toggle" aria-expanded={sheetOpen} onClick={() => setSheetOpen((value) => !value)}>
+              {sheetOpen ? 'Hide controls' : 'Show controls'}
+            </button>
+            <nav className="mode-row" aria-label="Activities">
+              <NavButton icon={<Layers />} label="Explore" on={mode === 'explore'} onClick={() => chooseMode('explore')} />
+              <NavButton icon={<Hand />} label="Touch" on={mode === 'touch'} onClick={() => chooseMode('touch')} />
+              <NavButton icon={<Smile />} label="Faces" on={mode === 'faces'} onClick={() => chooseMode('faces')} />
+              <NavButton icon={<Timer />} label="Quiz" on={mode === 'quiz'} onClick={() => chooseMode('quiz')} />
+            </nav>
+          </div>
+        </aside>
       )}
       {credits && <Credits onClose={() => setCredits(false)} />}
     </div>
@@ -390,18 +513,57 @@ export default function Stage() {
 function Fact({ infoId }: { infoId: StructureId }) {
   const info = structure(infoId)
   return (
-    <>
-      <p className="swatch" style={{ background: info.color }} />
-      <h2>{info.everyday}</h2>
+    <div className="fact">
+      <span className="swatch" style={{ background: info.color }} />
+      <p className="panel-title">{info.everyday}</p>
       <p className="science">{info.science}</p>
       <p>{info.fact}</p>
-    </>
+    </div>
+  )
+}
+
+function Pills<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { id: T; label: string }[]
+  onChange: (id: T) => void
+}) {
+  return (
+    <div className="pills" role="radiogroup" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="radio"
+          aria-checked={value === option.id}
+          className={value === option.id ? 'pill on' : 'pill'}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Slider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  const id = `slider-${label.replace(/\s+/g, '-').toLowerCase()}`
+  return (
+    <label className="slider" htmlFor={id}>
+      <span>{label}</span>
+      <input id={id} type="range" min={0} max={1} step={0.01} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
   )
 }
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: string }) {
   return (
-    <button type="button" className={on ? 'chip on' : 'chip'} aria-pressed={on} onClick={onClick}>
+    <button type="button" className={on ? 'pill on' : 'pill'} aria-pressed={on} onClick={onClick}>
       {children}
     </button>
   )

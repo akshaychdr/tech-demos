@@ -7,6 +7,7 @@ import { emptyHold, stepHold } from '../src/domain/hold.ts'
 import { drawQuiz, pointsFor, startQuiz, answerQuestion, advanceQuiz } from '../src/domain/quiz.ts'
 import { applySimilarity, umeyama, umeyama2 } from '../src/domain/fit.ts'
 import { parseBeat, formatScore, shareMessage } from '../src/domain/share.ts'
+import { solveScreenFit } from '../src/domain/screenFit.ts'
 import type { BlendshapeMap, BoneId, MuscleId, Vec3 } from '../src/domain/types.ts'
 
 function loadFace(): Vec3[] {
@@ -282,5 +283,37 @@ describe('hold, quiz, and share', () => {
       expect(y).toBeCloseTo(dst[i]![1], 3)
       expect(z).toBeCloseTo(dst[i]![2], 3)
     }
+  })
+})
+
+describe('screen fit', () => {
+  test('recovers a uniform scale and shift', () => {
+    const from = [
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+      { x: 0, y: 2 },
+      { x: 2, y: 2 },
+    ]
+    const to = from.map((point) => ({ x: point.x * 1.25 + 0.1, y: point.y * 1.25 - 0.2 }))
+    const fit = solveScreenFit(from, to)
+    expect(fit).not.toBeNull()
+    expect(fit!.scale).toBeCloseTo(1.25, 5)
+    expect(fit!.x).toBeCloseTo(0.1, 5)
+    expect(fit!.y).toBeCloseTo(-0.2, 5)
+  })
+
+  test('refuses fewer than three points', () => {
+    expect(
+      solveScreenFit(
+        [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+      ),
+    ).toBeNull()
   })
 })
