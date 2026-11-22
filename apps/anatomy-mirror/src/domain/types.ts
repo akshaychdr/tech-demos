@@ -10,7 +10,14 @@ export type BoneId =
   | 'maxilla'
   | 'mandible'
 
-export type MuscleId = 'frontalis' | 'corrugator' | 'orbicularis' | 'zygomaticus' | 'masseter'
+export type MuscleId =
+  | 'frontalis'
+  | 'corrugator'
+  | 'orbicularis'
+  | 'oris'
+  | 'zygomaticus'
+  | 'masseter'
+  | 'temporalis'
 
 export type StructureId = BoneId | MuscleId | 'brain'
 

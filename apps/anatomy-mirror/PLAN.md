@@ -1,30 +1,27 @@
-# Anatomy Mirror — x-ray rebuild
+# Anatomy Mirror — orbits, muscles, and the face fit
 
 ## Goal
 
-A student opens the same static Pages app and sees a Hashem-style x-ray of their own head: a smooth BodyParts3D skull (separate jaw), brain, and face muscles tracked with MediaPipe’s facial matrix, with the existing welcome, touch, expressions, quiz, share, and credits still working.
+The skull’s eye sockets, the face muscles, and the way both sit on a real face should read as an x-ray of that person, at the level of Hashem Al-Ghaili’s X-Ray Mirror.
 
 ## MVP
 
-In: higher-detail skull, mandible, and brain aligned to the MediaPipe canonical face; original muscle sheets where BodyParts3D 4.3 has no face-muscle meshes; x-ray and solid looks; feathered lens, whole-head, half, top, and lower-face reveals; independent skull, muscle, brain, and hand-bone layers; jaw driven by `jawOpen`; hand bones posed on HandLandmarker joints; leader-line labels; glow highlights and a small frosted fact card; one sans-serif UI with a phone bottom sheet.
+In: deep BodyParts3D orbits lined up with the irises and eye corners, with fresnel so the sockets recede and a faint eyeball in each one; smooth muscle surfaces (frontalis, orbicularis oculi, corrugator, zygomaticus, orbicularis oris, masseter, temporalis) with fiber stripes, soft edges, and blendshape motion; a per-face scale and offset from interpupillary distance, face width, and chin; a one-euro pose filter; a feathered face-oval edge on every reveal.
 
-Out: a demo video, accounts, extra quiz anatomy, editing `.github`, copying the reference app’s source.
+Out: a demo video, new quiz anatomy beyond the muscles above, copying the reference app’s source, editing `.github`.
 
 ## Stack
 
-- Keep the Vite + React + TypeScript app. This is a visual rebuild, not a new scaffold.
-- three.js ShaderMaterial for the fresnel x-ray and the solid look. MediaPipe Tasks Vision stays, now requesting the facial transformation matrix.
-- Meshes are rebuilt by `scripts/build_anatomy.py` from BodyParts3D 4.3 element OBJs, decimated only enough to stay a lazy-loaded GLB. CC BY-SA 2.1 JP.
-- Bun test covers the screen-fit math plus the existing touch, expression, and quiz checks.
+- Keep the Vite app. This is a visual fix, not a new scaffold.
+- The mesh script stays the source of the GLB. A smooth warp slides the orbital openings onto the canonical eyes while the chin, nose, and cranium stay put. Muscles are rebuilt on that skull.
+- three.js keeps the fresnel shader. Muscles add fiber stripes. A one-euro filter and a separate horizontal and vertical screen fit live in the scene.
 
 ## Tasks
 
-1. Export a smoother skull, jaw, brain, shell, and hand-bone templates, and check alignment against the canonical face.
-2. Drive the head from the facial matrix plus a per-frame landmark scale fit. Articulate the jaw. Pose hand-bone segments.
-3. Restyle the stage: frosted panels, pill toggles, collapsible phone sheet, 16px type, no heavy bars.
-4. `bun test` and `VITE_BASE_PATH=/tech-demos/anatomy-mirror/ bun run build` must pass.
+1. Warp the orbits onto the eyes, smooth the rims, and rebuild the muscles with fiber coordinates and jaw/expression motion.
+2. Fit scale and offset from the eyes, the face width, and the chin. Filter the pose. Feather the glow to the face oval on every reveal.
+3. Check the result on a still face fed in as a camera, then `bun test` and the Pages build.
 
 ## Deferred
 
-- Real iOS camera pass (this environment has no camera). A `?preview=1` pose is only for checking the render.
-- Teacher review of the fun facts.
+- A real phone camera pass. This environment uses a still portrait as the camera.

@@ -4,8 +4,10 @@ export const MUSCLE_IDS: MuscleId[] = [
   'frontalis',
   'corrugator',
   'orbicularis',
+  'oris',
   'zygomaticus',
   'masseter',
+  'temporalis',
 ]
 
 /** A muscle counts as held once its score clears this. */
@@ -42,8 +44,32 @@ export function scoreMuscles(scores: BlendshapeMap): Record<MuscleId, number> {
   const clench = Math.max(press, close * 0.85, cheek * 0.4)
   const masseter =
     jaw < 0.2 && smile < 0.4 ? clamp(((0.2 - jaw) / 0.2) * clench * 1.45) : clamp(clench * 0.12)
+  const pucker = Math.max(read(scores, 'mouthPucker'), read(scores, 'mouthFunnel'))
+  // Kept below the five game muscles unless the lips are actually pursed or the jaw is wide open.
+  const oris = clamp(pucker * 1.15)
+  const temporalis = clamp(jaw * 0.32)
 
-  return { frontalis, corrugator, orbicularis, zygomaticus, masseter }
+  return { frontalis, corrugator, orbicularis, oris, zygomaticus, masseter, temporalis }
+}
+
+/** How far each muscle should move. This follows the blendshape, not the quiz threshold. */
+export function muscleMotion(scores: BlendshapeMap): Record<MuscleId, number> {
+  const browUp = (read(scores, 'browInnerUp') + pair(scores, 'browOuterUpLeft', 'browOuterUpRight')) / 2
+  const browDown = pair(scores, 'browDownLeft', 'browDownRight')
+  const squint = pair(scores, 'eyeSquintLeft', 'eyeSquintRight')
+  const blink = pair(scores, 'eyeBlinkLeft', 'eyeBlinkRight')
+  const smile = pair(scores, 'mouthSmileLeft', 'mouthSmileRight')
+  const jaw = read(scores, 'jawOpen')
+  const pucker = Math.max(read(scores, 'mouthPucker'), read(scores, 'mouthFunnel'))
+  return {
+    frontalis: clamp(browUp),
+    corrugator: clamp(browDown),
+    orbicularis: clamp(Math.max(squint, blink * 0.9)),
+    oris: clamp(pucker),
+    zygomaticus: clamp(smile),
+    masseter: clamp(jaw),
+    temporalis: clamp(jaw),
+  }
 }
 
 export function activeMuscle(scored: Record<MuscleId, number>): MuscleId | null {

@@ -2,6 +2,54 @@ export type PlanePoint = { x: number; y: number }
 
 export type ScreenFit = { scale: number; x: number; y: number }
 
+export type FaceFit = { sx: number; sy: number; x: number; y: number }
+
+/**
+ * Separate horizontal and vertical scales, then a shift that pins the first
+ * `anchorCount` points (the eyes) exactly. Interpupillary distance drives
+ * width, and the chin and forehead drive height.
+ */
+export function solveFaceFit(from: PlanePoint[], to: PlanePoint[], anchorCount = 4): FaceFit | null {
+  const count = from.length
+  if (count < 4 || count !== to.length || anchorCount < 2 || anchorCount > count) return null
+  let anchorX = 0
+  let anchorY = 0
+  let targetX = 0
+  let targetY = 0
+  for (let i = 0; i < anchorCount; i += 1) {
+    anchorX += from[i]!.x
+    anchorY += from[i]!.y
+    targetX += to[i]!.x
+    targetY += to[i]!.y
+  }
+  anchorX /= anchorCount
+  anchorY /= anchorCount
+  targetX /= anchorCount
+  targetY /= anchorCount
+  let spreadX = 0
+  let matchX = 0
+  let spreadY = 0
+  let matchY = 0
+  for (let i = 0; i < count; i += 1) {
+    const dx = from[i]!.x - anchorX
+    const dy = from[i]!.y - anchorY
+    spreadX += dx * dx
+    matchX += dx * (to[i]!.x - targetX)
+    spreadY += dy * dy
+    matchY += dy * (to[i]!.y - targetY)
+  }
+  const sx = spreadX > 1e-8 ? matchX / spreadX : 1
+  const sy = spreadY > 1e-8 ? matchY / spreadY : 1
+  if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null
+  return { sx, sy, x: targetX - sx * anchorX, y: targetY - sy * anchorY }
+}
+
+/** MediaPipe face-oval loop, used to feather the glow to the skin. */
+export const FACE_OVAL = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149,
+  150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+]
+
 /**
  * Uniform scale and shift that carries `from` onto `to`.
  * Scale is around the cloud, then a translation lines up the centres.

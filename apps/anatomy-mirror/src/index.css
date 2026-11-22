@@ -313,7 +313,7 @@ h2,
 
 .mirror-video video {
   object-fit: cover;
-  filter: saturate(0.38) brightness(0.72) contrast(1.08);
+  filter: saturate(0.24) brightness(0.5) contrast(1.14);
 }
 
 .top-chip {

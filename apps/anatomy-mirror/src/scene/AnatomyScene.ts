@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { POSE_LANDMARKS, solveScreenFit } from '../domain/screenFit.ts'
-import type { StructureId, Vec3 } from '../domain/types.ts'
+import { OneEuroFilter } from '../domain/oneEuro.ts'
+import { FACE_OVAL, solveFaceFit } from '../domain/screenFit.ts'
+import type { MuscleId, StructureId, Vec3 } from '../domain/types.ts'
 import { applyLook, createShadeMaterial, type ShadeRole, type XrayMaterial } from './materials.ts'
 
 export type LookMode = 'xray' | 'solid'
@@ -18,7 +19,12 @@ export type AnchorFile = {
   jawPivot: [number, number, number]
   anchors: Partial<Record<StructureId, number[][]>>
   hands: { palm: string; bones: { name: string; a: number; b: number; span: number }[] }
+  orbits?: { center: [number, number, number]; radius: number }[]
 }
+
+export type MuscleMotion = Partial<Record<MuscleId, number>>
+
+type MuscleAttrs = Record<string, { uv: number[]; move: number[] }>
 
 type Part = {
   id: StructureId
@@ -35,7 +41,25 @@ type HandRig = {
 }
 
 const BONES: StructureId[] = ['frontal', 'parietal', 'temporal', 'occipital', 'nasal', 'zygomatic', 'maxilla', 'mandible']
-const MUSCLES: StructureId[] = ['frontalis', 'corrugator', 'orbicularis', 'zygomaticus', 'masseter']
+const MUSCLES: StructureId[] = ['frontalis', 'corrugator', 'orbicularis', 'oris', 'zygomaticus', 'masseter', 'temporalis']
+const RINGS = new Set<StructureId>(['orbicularis', 'oris'])
+const FIT_EYES: { index: number; at: [number, number, number] }[] = [
+  { index: 33, at: [-4.445859, 2.663991, 3.173422] },
+  { index: 133, at: [-1.856432, 2.585245, 3.757904] },
+  { index: 263, at: [4.445859, 2.663991, 3.173422] },
+  { index: 362, at: [1.856432, 2.585245, 3.757904] },
+  { index: 468, at: [-3.151, 2.625, 3.55] },
+  { index: 473, at: [3.151, 2.625, 3.55] },
+]
+const FIT_SPAN: { index: number; at: [number, number, number] }[] = [
+  { index: 10, at: [0, 8.261778, 4.481535] },
+  { index: 152, at: [0, -9.403378, 4.264492] },
+  { index: 234, at: [-7.664182, 0.673132, -2.435867] },
+  { index: 454, at: [7.664182, 0.673132, -2.435867] },
+  { index: 1, at: [0, -1.126865, 7.475604] },
+  { index: 61, at: [-2.456206, -4.342621, 4.283884] },
+  { index: 291, at: [2.456206, -4.342621, 4.283884] },
+]
 const VERTICAL_FOV = 63
 
 export class AnatomyScene {
@@ -62,10 +86,27 @@ export class AnatomyScene {
   private coverX = 1
   private coverY = 1
   private jawAngle = 0
-  private fitScale = 1
+  private fitSx = 1
+  private fitSy = 1
   private fitX = 0
   private fitY = 0
   private poseReady = false
+  private readonly orbits = [new THREE.Vector4(), new THREE.Vector4()]
+  private readonly euro = {
+    x: new OneEuroFilter(1.35, 0.045),
+    y: new OneEuroFilter(1.35, 0.045),
+    z: new OneEuroFilter(1.35, 0.045),
+    rx: new OneEuroFilter(1.15, 0.03),
+    ry: new OneEuroFilter(1.15, 0.03),
+    rz: new OneEuroFilter(1.15, 0.03),
+    sx: new OneEuroFilter(0.8, 0.02),
+    sy: new OneEuroFilter(0.8, 0.02),
+    sz: new OneEuroFilter(0.8, 0.02),
+    fitSx: new OneEuroFilter(0.7, 0.012),
+    fitSy: new OneEuroFilter(0.7, 0.012),
+    fitX: new OneEuroFilter(0.9, 0.02),
+    fitY: new OneEuroFilter(0.9, 0.02),
+  }
   private readonly displayPos = new THREE.Vector3()
   private readonly displayQuat = new THREE.Quaternion()
   private readonly displayScale = new THREE.Vector3(1, 1, 1)
@@ -77,6 +118,7 @@ export class AnatomyScene {
     point: new THREE.Vector3(),
     clip: new THREE.Vector4(),
     handSample: new THREE.Vector3(),
+    euler: new THREE.Euler(0, 0, 0, 'YXZ'),
   }
 
   constructor(headCanvas: HTMLCanvasElement, handCanvas: HTMLCanvasElement) {
@@ -112,17 +154,28 @@ export class AnatomyScene {
   }
 
   async load(modelUrl: string, anchorUrl: string): Promise<void> {
-    const [gltf, anchorFile] = await Promise.all([
+    const muscleUrl = anchorUrl.replace('anchors.json', 'muscle-attrs.json')
+    const [gltf, anchorFile, muscleAttrs] = await Promise.all([
       new GLTFLoader().loadAsync(modelUrl),
       fetch(anchorUrl).then((response) => response.json() as Promise<AnchorFile>),
+      fetch(muscleUrl).then(async (response): Promise<MuscleAttrs> => (response.ok ? await response.json() : {})),
     ])
     if (!findMesh(gltf.scene, 'frontal')) throw new Error('Anatomy model is missing the skull')
     const pivot = anchorFile.jawPivot
     this.jawPivot.position.set(pivot[0], pivot[1], pivot[2])
+    for (const [index, orbit] of (anchorFile.orbits ?? []).slice(0, 2).entries()) {
+      this.orbits[index]!.set(orbit.center[0], orbit.center[1], orbit.center[2], orbit.radius)
+    }
     const add = (id: StructureId, role: ShadeRole, jaw = false) => {
       const mesh = findMesh(gltf.scene, id)
       if (!mesh) return
       ensureNormals(mesh.geometry)
+      ensureShadeAttrs(mesh.geometry)
+      const spec = muscleAttrs[id]
+      if (spec?.uv && spec.move) {
+        mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(spec.uv), 2))
+        mesh.geometry.setAttribute('aMove', new THREE.BufferAttribute(Float32Array.from(spec.move), 3))
+      }
       const material = createShadeMaterial(role)
       mesh.material = material
       mesh.frustumCulled = false
@@ -140,9 +193,11 @@ export class AnatomyScene {
     for (const id of BONES) add(id, 'bone', id === 'mandible')
     for (const id of MUSCLES) add(id, 'muscle')
     add('brain', 'brain')
+    this.addEyes(anchorFile)
     const shell = findMesh(gltf.scene, 'shell')
     if (shell) {
       ensureNormals(shell.geometry)
+      ensureShadeAttrs(shell.geometry)
       const veil = shell
       const outline = shell.clone()
       veil.material = createShadeMaterial('veil')
@@ -168,11 +223,15 @@ export class AnatomyScene {
       const mesh = findMesh(gltf.scene, bone.name)
       if (mesh) {
         ensureNormals(mesh.geometry)
+        ensureShadeAttrs(mesh.geometry)
         geometries.set(bone.name, mesh.geometry)
       }
     }
     const palmMesh = findMesh(gltf.scene, anchorFile.hands.palm)
-    if (palmMesh) ensureNormals(palmMesh.geometry)
+    if (palmMesh) {
+      ensureNormals(palmMesh.geometry)
+      ensureShadeAttrs(palmMesh.geometry)
+    }
     const palmGeo = palmMesh?.geometry
     for (let slot = 0; slot < 2; slot += 1) {
       const rig: HandRig = { palm: new THREE.Mesh(), bones: [], points: null }
@@ -228,6 +287,9 @@ export class AnatomyScene {
     matrix: number[] | null
     landmarks: { x: number; y: number; z: number }[] | null
     jaw: number
+    motion: MuscleMotion
+    lensPin: { x: number; y: number } | null
+    lensRadius: number
     hands: Vec3[][]
     layers: SceneLayers
     highlight: StructureId | null
@@ -238,7 +300,7 @@ export class AnatomyScene {
     skin: number
     time: number
   }): void {
-    this.poseHead(frame.matrix, frame.landmarks, frame.jaw)
+    this.poseHead(frame.matrix, frame.landmarks, frame.jaw, frame.time)
     this.jawPivot.rotation.x = this.jawAngle
     this.jawPivot.updateMatrix()
     this.head.updateMatrixWorld(true)
@@ -248,27 +310,33 @@ export class AnatomyScene {
     const share = 1 / (0.62 + 0.38 * Math.max(1, active))
     const showingHead =
       frame.layers.skull || frame.layers.muscles || frame.layers.brain || frame.highlight != null
+    const lens = this.lensLayout(frame.lensPin, frame.lensRadius, frame.landmarks)
+    this.paintMask(frame.landmarks, lens, frame.feather, frame.reveal === 'lens')
     for (const part of this.parts) {
       const layerOn =
         (part.role === 'bone' && frame.layers.skull) ||
+        (part.role === 'eye' && frame.layers.skull) ||
         (part.role === 'muscle' && frame.layers.muscles) ||
         (part.role === 'brain' && frame.layers.brain) ||
         part.role === 'veil' ||
         part.role === 'outline'
-      const hot = part.role !== 'veil' && part.role !== 'outline' && part.id === frame.highlight
+      const hot = part.role !== 'veil' && part.role !== 'outline' && part.role !== 'eye' && part.id === frame.highlight
       part.mesh.visible = showingHead && (part.role === 'veil' || part.role === 'outline' ? layerOn : layerOn || hot)
       if (part.role === 'outline') part.mesh.visible = showingHead && frame.look === 'xray'
       applyLook(part.material, solid)
-      const base = part.role === 'brain' ? 0.55 : part.role === 'muscle' ? 0.7 : part.role === 'outline' ? 0.42 : 1
+      const base = part.role === 'brain' ? 0.55 : part.role === 'muscle' ? 0.92 : part.role === 'eye' ? 0.62 : part.role === 'outline' ? 0.42 : 1
       part.material.uniforms.uGain!.value = solid ? 1 : base * share
-      part.material.uniforms.uBoost!.value = hot ? 1 : 0
-      const veilStrength = solid ? (1 - frame.skin) * 0.35 : 1 - frame.skin
-      part.material.uniforms.uCover!.value = part.role === 'veil' ? veilStrength : solid ? 0.88 : 1
+      const acting = part.role === 'muscle' ? (frame.motion[part.id as MuscleId] ?? 0) : 0
+      part.material.uniforms.uAction!.value = acting
+      part.material.uniforms.uStrap!.value = RINGS.has(part.id) ? 0 : 1
+      part.material.uniforms.uBoost!.value = hot ? 1 : acting * 0.45
+      const veilStrength = solid ? (1 - frame.skin) * 0.28 : (1 - frame.skin) * 0.72
+      part.material.uniforms.uCover!.value = part.role === 'veil' ? veilStrength : solid ? 0.9 : 1
       part.material.uniforms.uClip!.value = plane ? 1 : 0
       if (plane) part.material.uniforms.uPlane!.value.copy(plane)
       part.material.uniforms.uSoft!.value = 0.45 + frame.feather * 3.4
       const rim = part.role === 'outline' ? 0.35 : 0.08
-      part.material.uniforms.uSilhouette!.value = solid ? 0.015 : rim + frame.feather * 0.55
+      part.material.uniforms.uSilhouette!.value = solid ? 0.015 : rim + frame.feather * 0.45
       if (part.jaw) {
         part.material.uniforms.uHead!.value.copy(this.jawPivot.matrix).multiply(part.mesh.matrix)
       } else {
@@ -320,11 +388,17 @@ export class AnatomyScene {
     }
   }
 
-  private poseHead(matrix: number[] | null, landmarks: { x: number; y: number; z: number }[] | null, jaw: number): void {
+  private poseHead(
+    matrix: number[] | null,
+    landmarks: { x: number; y: number; z: number }[] | null,
+    jaw: number,
+    time: number,
+  ): void {
     if (!matrix) {
       this.poseReady = false
       this.head.visible = false
       this.noseLocal = null
+      for (const filter of Object.values(this.euro)) filter.reset()
       return
     }
     const raw = this.scratch.matrix.fromArray(matrix)
@@ -333,23 +407,29 @@ export class AnatomyScene {
     const rowShift = Math.abs(elements[3]!) + Math.abs(elements[7]!) + Math.abs(elements[11]!)
     if (columnShift < 1e-5 && rowShift > 1e-3) raw.transpose()
     raw.decompose(this.scratch.pos, this.scratch.quat, this.scratch.scale)
-    if (!this.poseReady) {
-      this.displayPos.copy(this.scratch.pos)
-      this.displayQuat.copy(this.scratch.quat)
-      this.displayScale.copy(this.scratch.scale)
-      this.jawAngle = Math.max(0, Math.min(1, jaw)) * 0.42
-      this.fitScale = 1
-      this.fitX = 0
-      this.fitY = 0
-    } else {
-      this.displayPos.lerp(this.scratch.pos, 0.55)
-      if (this.displayQuat.dot(this.scratch.quat) < 0) {
-        this.scratch.quat.set(-this.scratch.quat.x, -this.scratch.quat.y, -this.scratch.quat.z, -this.scratch.quat.w)
-      }
-      this.displayQuat.slerp(this.scratch.quat, 0.5)
-      this.displayScale.lerp(this.scratch.scale, 0.45)
-      this.jawAngle += (Math.max(0, Math.min(1, jaw)) * 0.42 - this.jawAngle) * 0.45
+    if (this.displayQuat.dot(this.scratch.quat) < 0) {
+      this.scratch.quat.set(-this.scratch.quat.x, -this.scratch.quat.y, -this.scratch.quat.z, -this.scratch.quat.w)
     }
+    this.scratch.euler.setFromQuaternion(this.scratch.quat, 'YXZ')
+    this.displayPos.set(
+      this.euro.x.filter(this.scratch.pos.x, time),
+      this.euro.y.filter(this.scratch.pos.y, time),
+      this.euro.z.filter(this.scratch.pos.z, time),
+    )
+    this.scratch.euler.set(
+      this.euro.rx.filter(this.scratch.euler.x, time),
+      this.euro.ry.filter(this.scratch.euler.y, time),
+      this.euro.rz.filter(this.scratch.euler.z, time),
+      'YXZ',
+    )
+    this.displayQuat.setFromEuler(this.scratch.euler)
+    this.displayScale.set(
+      this.euro.sx.filter(this.scratch.scale.x, time),
+      this.euro.sy.filter(this.scratch.scale.y, time),
+      this.euro.sz.filter(this.scratch.scale.z, time),
+    )
+    const jawTarget = Math.max(0, Math.min(1, jaw)) * 0.42
+    this.jawAngle += (jawTarget - this.jawAngle) * (this.poseReady ? 0.45 : 1)
     this.poseReady = true
     this.head.visible = true
     this.head.matrix.compose(this.displayPos, this.displayQuat, this.displayScale)
@@ -359,36 +439,110 @@ export class AnatomyScene {
       const from: { x: number; y: number }[] = []
       const to: { x: number; y: number }[] = []
       const pose = new THREE.Matrix4().compose(this.displayPos, this.displayQuat, this.displayScale)
-      for (const mark of POSE_LANDMARKS) {
+      const push = (mark: { index: number; at: [number, number, number] }) => {
         const seen = landmarks[mark.index]
-        if (!seen) continue
+        if (!seen) return false
         this.scratch.clip.set(mark.at[0], mark.at[1], mark.at[2], 1).applyMatrix4(pose).applyMatrix4(this.baseProjection)
+        if (this.scratch.clip.w === 0) return false
         from.push({ x: this.scratch.clip.x / this.scratch.clip.w, y: this.scratch.clip.y / this.scratch.clip.w })
-        const videoX = seen.x * 2 - 1
-        const videoY = 1 - seen.y * 2
-        to.push({ x: videoX * this.coverX, y: videoY * this.coverY })
+        to.push({ x: this.coverX * (seen.x * 2 - 1), y: this.coverY * (1 - seen.y * 2) })
+        return true
       }
-      const solved = solveScreenFit(from, to)
-      if (solved && Number.isFinite(solved.scale)) {
-        const scale = Math.min(1.45, Math.max(0.7, solved.scale))
-        this.fitScale += (scale - this.fitScale) * 0.45
-        this.fitX += (solved.x - this.fitX) * 0.55
-        this.fitY += (solved.y - this.fitY) * 0.55
-        const correction = new THREE.Matrix4().makeScale(this.fitScale, this.fitScale, 1)
+      let anchors = 0
+      for (const mark of FIT_EYES) {
+        if (push(mark)) anchors += 1
+      }
+      for (const mark of FIT_SPAN) push(mark)
+      const solved = solveFaceFit(from, to, Math.min(anchors, 4))
+      if (solved) {
+        const sx = Math.min(1.34, Math.max(0.8, solved.sx))
+        const sy = Math.min(1.34, Math.max(0.8, solved.sy))
+        this.fitSx = this.euro.fitSx.filter(sx, time)
+        this.fitSy = this.euro.fitSy.filter(sy, time)
+        this.fitX = this.euro.fitX.filter(solved.x, time)
+        this.fitY = this.euro.fitY.filter(solved.y, time)
+        const correction = new THREE.Matrix4().makeScale(this.fitSx, this.fitSy, 1)
         correction.elements[12] = this.fitX
         correction.elements[13] = this.fitY
         this.fitProjection.premultiply(correction)
       }
     }
     const nose = landmarks?.[1]
-    if (nose) {
-      const fit = Math.max(this.viewW / this.videoW, this.viewH / this.videoH)
-      const dispW = this.videoW * fit
-      const dispH = this.videoH * fit
-      this.noseLocal = {
-        x: (this.viewW - dispW) / 2 + nose.x * dispW,
-        y: (this.viewH - dispH) / 2 + nose.y * dispH,
+    this.noseLocal = nose ? this.layoutPoint(nose.x, nose.y) : null
+  }
+
+  private layoutPoint(nx: number, ny: number): { x: number; y: number } {
+    const fit = Math.max(this.viewW / this.videoW, this.viewH / this.videoH)
+    const dispW = this.videoW * fit
+    const dispH = this.videoH * fit
+    return {
+      x: (this.viewW - dispW) / 2 + nx * dispW,
+      y: (this.viewH - dispH) / 2 + ny * dispH,
+    }
+  }
+
+  private lensLayout(
+    pin: { x: number; y: number } | null,
+    radius: number,
+    landmarks: { x: number; y: number }[] | null,
+  ): { x: number; y: number; radius: number } | null {
+    if (pin) return { ...pin, radius }
+    const nose = landmarks?.[1]
+    if (!nose) return this.noseLocal ? { ...this.noseLocal, radius } : null
+    return { ...this.layoutPoint(nose.x, nose.y), radius }
+  }
+
+  private paintMask(
+    landmarks: { x: number; y: number }[] | null,
+    lens: { x: number; y: number; radius: number } | null,
+    feather: number,
+    lensOn: boolean,
+  ): void {
+    const oval = landmarks && landmarks.length > 454 ? FACE_OVAL.map((index) => this.layoutPoint(landmarks[index]!.x, landmarks[index]!.y)) : []
+    for (const part of this.parts) {
+      const uniforms = part.material.uniforms
+      uniforms.uView!.value.set(this.viewW, this.viewH)
+      uniforms.uOrbitOn!.value = this.orbits[0]!.w > 0 ? 1 : 0
+      uniforms.uOrbit0!.value.copy(this.orbits[0]!)
+      uniforms.uOrbit1!.value.copy(this.orbits[1]!)
+      uniforms.uOvalCount!.value = oval.length
+      uniforms.uOvalSoft!.value = 14 + feather * 42
+      if (oval.length > 3) {
+        let top = oval[0]!.y
+        let left = oval[0]!.x
+        let right = oval[0]!.x
+        for (const point of oval) {
+          top = Math.min(top, point.y)
+          left = Math.min(left, point.x)
+          right = Math.max(right, point.x)
+        }
+        uniforms.uCrown!.value.set(top + 8, (left + right) / 2, (right - left) * 0.58)
+      } else {
+        uniforms.uCrown!.value.set(0, 0, 1e6)
       }
+      const points = uniforms.uOval!.value as THREE.Vector2[]
+      for (let i = 0; i < points.length; i += 1) {
+        const point = oval[i]
+        points[i]!.set(point?.x ?? 0, point?.y ?? 0)
+      }
+      uniforms.uLensOn!.value = lensOn && lens ? 1 : 0
+      if (lens) uniforms.uLens!.value.set(lens.x, lens.y, lens.radius)
+      uniforms.uLensSoft!.value = 22 + feather * Math.max(lens?.radius ?? 40, 20) * 1.15
+    }
+  }
+
+  private addEyes(anchorFile: AnchorFile): void {
+    for (const orbit of anchorFile.orbits ?? []) {
+      const radius = Math.min(1.02, Math.max(0.72, orbit.radius * 0.68))
+      const geometry = new THREE.SphereGeometry(radius, 32, 24)
+      ensureNormals(geometry)
+      ensureShadeAttrs(geometry)
+      const material = createShadeMaterial('eye')
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.position.set(orbit.center[0], orbit.center[1], orbit.center[2] - radius * 0.5)
+      mesh.frustumCulled = false
+      this.head.add(mesh)
+      this.parts.push({ id: 'frontal', role: 'eye', mesh, material, jaw: false })
     }
   }
 
@@ -465,6 +619,12 @@ export class AnatomyScene {
 
 function ensureNormals(geometry: THREE.BufferGeometry): void {
   if (!geometry.getAttribute('normal')) geometry.computeVertexNormals()
+}
+
+function ensureShadeAttrs(geometry: THREE.BufferGeometry): void {
+  const count = geometry.getAttribute('position')?.count ?? 0
+  if (!geometry.getAttribute('uv')) geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2))
+  if (!geometry.getAttribute('aMove')) geometry.setAttribute('aMove', new THREE.BufferAttribute(new Float32Array(count * 3), 3))
 }
 
 function roleOf(id: StructureId): ShadeRole {

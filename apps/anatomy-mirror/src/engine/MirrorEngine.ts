@@ -8,7 +8,7 @@ import {
 import { emptyHold, stepHold, type HoldState } from '../domain/hold.ts'
 import { dist } from '../domain/math.ts'
 import { classifyTouch, matchesBone } from '../domain/regions.ts'
-import { matchesMuscle, scoreMuscles } from '../domain/expressions.ts'
+import { MUSCLE_IDS, matchesMuscle, muscleMotion, scoreMuscles } from '../domain/expressions.ts'
 import { structure } from '../domain/structures.ts'
 import type { BlendshapeMap, BoneId, MuscleId, StructureId, Vec3 } from '../domain/types.ts'
 import { paintCallouts } from '../scene/callouts.ts'
@@ -25,8 +25,6 @@ const FACE_MODEL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
 const HAND_MODEL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
-
-const MUSCLES: MuscleId[] = ['frontalis', 'corrugator', 'orbicularis', 'zygomaticus', 'masseter']
 
 export class CameraError extends Error {
   reason: 'denied' | 'missing' | 'unknown'
@@ -155,7 +153,7 @@ export class MirrorEngine {
     this.cut = appearance.cut
     this.feather = appearance.feather
     this.skin = appearance.skin
-    if (appearance.reveal !== 'lens') this.applyMask(null)
+    if (appearance.reveal !== 'lens') this.applyMask()
   }
 
   followLens(): void {
@@ -376,10 +374,14 @@ export class MirrorEngine {
     const region = placed && finger ? classifyTouch(placed, finger)?.bone ?? null : null
     const live = this.liveStructure(region, muscle)
     this.trackHolds(time, placed, finger, region, scored)
+    const lensRadius = (0.18 + this.cut * 0.5) * Math.min(view.width, view.height)
     scene.update({
       matrix,
       landmarks: raw,
       jaw: blends.jawOpen ?? 0,
+      motion: muscleMotion(blends),
+      lensPin: this.reveal === 'lens' ? this.lensPin : null,
+      lensRadius,
       hands,
       layers: this.layers,
       highlight: this.highlight ?? live,
@@ -403,6 +405,7 @@ export class MirrorEngine {
     const s = Math.sin(yaw)
     const jaw = 0.22 + 0.4 * (0.5 + 0.5 * Math.sin(time / 900))
     const hands = this.layers.hand ? [previewHand(view.width, view.height)] : []
+    const lensRadius = (0.18 + this.cut * 0.5) * Math.min(view.width, view.height)
     scene.update({
       matrix: [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, -0.6, -30, 1],
       landmarks: [
@@ -410,6 +413,14 @@ export class MirrorEngine {
         { x: 0.5, y: 0.46, z: 0 },
       ],
       jaw,
+      motion: {
+        frontalis: 0.15,
+        zygomaticus: 0.2,
+        masseter: jaw,
+        temporalis: jaw,
+      },
+      lensPin: this.reveal === 'lens' ? this.lensPin : null,
+      lensRadius,
       hands,
       layers: this.layers,
       highlight: this.highlight,
@@ -514,13 +525,10 @@ export class MirrorEngine {
       })),
       centerX,
     )
-    if (this.reveal !== 'lens') {
-      this.applyMask(null)
-      return
-    }
+    this.applyMask()
+    if (this.reveal !== 'lens') return
     const lens = this.lensPin ?? nose ?? { x: viewW / 2, y: viewH * 0.42 }
     const radius = (0.18 + this.cut * 0.5) * Math.min(viewW, viewH)
-    this.applyMask(lens, radius)
     ctx.strokeStyle = 'rgba(186, 224, 255, 0.9)'
     ctx.lineWidth = 1.5
     ctx.beginPath()
@@ -528,18 +536,12 @@ export class MirrorEngine {
     ctx.stroke()
   }
 
-  private applyMask(lens: { x: number; y: number } | null, radius = 0): void {
+  private applyMask(): void {
     const canvas = this.headCanvas
     if (!canvas) return
-    if (!lens || this.reveal !== 'lens') {
-      canvas.style.maskImage = 'none'
-      canvas.style.setProperty('-webkit-mask-image', 'none')
-      return
-    }
-    const inner = Math.round((1 - this.feather) * 78)
-    const image = `radial-gradient(circle ${radius.toFixed(1)}px at ${lens.x.toFixed(1)}px ${lens.y.toFixed(1)}px, #fff ${inner}%, transparent 100%)`
-    canvas.style.maskImage = image
-    canvas.style.setProperty('-webkit-mask-image', image)
+    // The glow feathers in the shader, so a CSS mask would clip it like a sticker.
+    canvas.style.maskImage = 'none'
+    canvas.style.setProperty('-webkit-mask-image', 'none')
   }
 
   private publish(
@@ -595,7 +597,7 @@ function readMatrix(matrix: { data: ArrayLike<number> } | undefined): number[] |
 function strongestMuscle(scored: ReturnType<typeof scoreMuscles>): MuscleId | null {
   let muscle: MuscleId | null = null
   let best = 0.4
-  for (const id of MUSCLES) {
+  for (const id of MUSCLE_IDS) {
     if (scored[id] > best) {
       best = scored[id]
       muscle = id
@@ -622,7 +624,7 @@ function closestFinger(hands: Vec3[][], face: Vec3[] | null): Vec3 | null {
 
 function labelColor(id: StructureId): string {
   if (id === 'brain') return '#ffc4d6'
-  if (MUSCLES.includes(id as MuscleId)) return '#ffb3aa'
+  if (MUSCLE_IDS.includes(id as MuscleId)) return '#ffb3aa'
   return '#d7ecff'
 }
 

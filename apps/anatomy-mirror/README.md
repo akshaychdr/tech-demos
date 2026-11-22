@@ -1,6 +1,6 @@
 # Anatomy Mirror
 
-A phone-first mirror that teaches eight skull bones and five face muscles. The camera never leaves the device. MediaPipe places a BodyParts3D skull, brain, and hand bones on your face with an x-ray glow you can peel back.
+A phone-first mirror that teaches eight skull bones and the muscles that move the face. The camera never leaves the device. MediaPipe places a BodyParts3D skull, brain, and hand bones on your face, with the eye sockets lined up to your eyes and an x-ray glow that feathers into the skin.
 
 Hosted at [https://akshaychdr.github.io/tech-demos/anatomy-mirror/](https://akshaychdr.github.io/tech-demos/anatomy-mirror/).
 

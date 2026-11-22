@@ -11,9 +11,8 @@ export function Credits({ onClose }: { onClose: () => void }) {
           <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en">CC BY-SA 2.1 Japan</a>.
         </p>
         <p>
-          BodyParts3D 4.3 does not include meshes for the five expression muscles in this app. Those five
-          shapes are original schematic ribbons, drawn where each muscle sits, and shipped in the same
-          anatomy file under CC BY-SA 2.1 Japan.
+          BodyParts3D 4.3 does not include the expression muscles in this app. Those surfaces are original
+          sheets that follow the skull, and they ship in the same anatomy file under CC BY-SA 2.1 Japan.
         </p>
         <p>
           Face and hand tracking uses MediaPipe Tasks Vision (Apache 2.0). The app code is MIT. Nothing you
