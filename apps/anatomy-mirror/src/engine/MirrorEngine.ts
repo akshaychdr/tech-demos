@@ -14,7 +14,9 @@ import type { BlendshapeMap, BoneId, MuscleId, StructureId, Vec3 } from '../doma
 import { paintCallouts } from '../scene/callouts.ts'
 import {
   AnatomyScene,
+  DEFAULT_FIT,
   type LookMode,
+  type ManualFit,
   type RevealMode,
   type SceneLayers,
 } from '../scene/AnatomyScene.ts'
@@ -55,6 +57,7 @@ export type Appearance = {
   cut: number
   feather: number
   skin: number
+  fit: ManualFit
 }
 
 type Watch = { kind: 'touch'; id: BoneId } | { kind: 'show'; id: MuscleId } | null
@@ -81,7 +84,8 @@ export class MirrorEngine {
   private snapAt = 0
   private mode: EngineMode = 'explore'
   private layers: SceneLayers = { skull: true, muscles: false, brain: false, hand: false }
-  private showLabels = true
+  private showLabels = false
+  private fit: ManualFit = { ...DEFAULT_FIT }
   private look: LookMode = 'xray'
   private reveal: RevealMode = 'lens'
   private cut = 0.42
@@ -153,6 +157,7 @@ export class MirrorEngine {
     this.cut = appearance.cut
     this.feather = appearance.feather
     this.skin = appearance.skin
+    this.fit = appearance.fit
     if (appearance.reveal !== 'lens') this.applyMask()
   }
 
@@ -390,6 +395,7 @@ export class MirrorEngine {
       cut: this.cut,
       feather: this.feather,
       skin: this.skin,
+      fit: this.fit,
       time,
     })
     this.paintHud(view.width, view.height)
@@ -429,6 +435,7 @@ export class MirrorEngine {
       cut: this.cut,
       feather: this.feather,
       skin: this.skin,
+      fit: this.fit,
       time,
     })
     this.paintHud(view.width, view.height)

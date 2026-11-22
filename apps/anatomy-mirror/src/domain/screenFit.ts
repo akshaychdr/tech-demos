@@ -84,6 +84,51 @@ export function solveScreenFit(from: PlanePoint[], to: PlanePoint[]): ScreenFit 
   return { scale, x: targetX - scale * meanX, y: targetY - scale * meanY }
 }
 
+/** Same fit as `solveScreenFit`, with a weight per point. Eyes can outweigh the chin. */
+export function solveWeightedScreenFit(from: PlanePoint[], to: PlanePoint[], weights: number[]): ScreenFit | null {
+  const count = from.length
+  if (count < 3 || count !== to.length || weights.length !== count) return null
+  let weight = 0
+  let meanX = 0
+  let meanY = 0
+  let targetX = 0
+  let targetY = 0
+  for (let i = 0; i < count; i += 1) {
+    const w = weights[i]!
+    if (!(w > 0)) continue
+    weight += w
+    meanX += w * from[i]!.x
+    meanY += w * from[i]!.y
+    targetX += w * to[i]!.x
+    targetY += w * to[i]!.y
+  }
+  if (weight <= 0) return null
+  meanX /= weight
+  meanY /= weight
+  targetX /= weight
+  targetY /= weight
+  let match = 0
+  let spread = 0
+  for (let i = 0; i < count; i += 1) {
+    const w = weights[i]!
+    if (!(w > 0)) continue
+    const dx = from[i]!.x - meanX
+    const dy = from[i]!.y - meanY
+    match += w * (dx * (to[i]!.x - targetX) + dy * (to[i]!.y - targetY))
+    spread += w * (dx * dx + dy * dy)
+  }
+  if (spread < 1e-8) return { scale: 1, x: targetX - meanX, y: targetY - meanY }
+  const scale = match / spread
+  if (!Number.isFinite(scale)) return null
+  return { scale, x: targetX - scale * meanX, y: targetY - scale * meanY }
+}
+
+/** Keep the on-screen correction inside the range the sliders can also reach. */
+export function clampScreenScale(scale: number, min = 0.6, max = 1.6): number {
+  if (!Number.isFinite(scale)) return 1
+  return Math.min(max, Math.max(min, scale))
+}
+
 /** Landmarks used to pin the skull to the face on screen. Canonical face, centimetres. */
 export const POSE_LANDMARKS: { index: number; at: [number, number, number] }[] = [
   { index: 33, at: [-4.445859, 2.663991, 3.173422] },

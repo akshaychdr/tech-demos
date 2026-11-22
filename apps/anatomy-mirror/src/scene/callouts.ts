@@ -21,7 +21,7 @@ export function paintCallouts(
     if (item.x < centerX) left.push(item)
     else right.push(item)
   }
-  ctx.font = '600 16px Outfit, "Avenir Next", "Segoe UI", sans-serif'
+  ctx.font = '600 12px Outfit, "Avenir Next", "Segoe UI", sans-serif'
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
   const columns: [Callout[], 'left' | 'right'][] = [
@@ -35,7 +35,7 @@ export function paintCallouts(
     for (const item of list) {
       const y = Math.max(item.y, cursor)
       rows.push({ item, y })
-      cursor = y + 26
+      cursor = y + 20
     }
     const overflow = cursor - (height - 18)
     const nudge = overflow > 0 ? overflow : 0

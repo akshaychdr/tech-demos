@@ -1,27 +1,28 @@
-# Anatomy Mirror — orbits, muscles, and the face fit
+# Anatomy Mirror — one clean skull, then the face
 
 ## Goal
 
-The skull’s eye sockets, the face muscles, and the way both sit on a real face should read as an x-ray of that person, at the level of Hashem Al-Ghaili’s X-Ray Mirror.
+Ship one watertight cranium and one jaw, with even triangles and a crisp fresnel edge, then lay the real BodyParts3D face muscles and a skin veil on that rigid skull.
 
 ## MVP
 
-In: deep BodyParts3D orbits lined up with the irises and eye corners, with fresnel so the sockets recede and a faint eyeball in each one; smooth muscle surfaces (frontalis, orbicularis oculi, corrugator, zygomaticus, orbicularis oris, masseter, temporalis) with fiber stripes, soft edges, and blendshape motion; a per-face scale and offset from interpupillary distance, face width, and chin; a one-euro pose filter; a feathered face-oval edge on every reveal.
+In: drop duplicate bone shells, build one watertight cranium (outer surface, smooth normals, no torn edges) and keep the mandible as the jaw. Standalone fresnel renders (front, three-quarter, side) before the mesh is wired into the app. Muscles are the 23 BodyParts3D 4.0 isa elements under FMA9616, named from the FMA parts list, merged, and rigidly aligned. One skin mesh drawn as a dark veil and again as a blue fresnel outline. X-ray fresnel with per-layer gains. Pose from the face matrix, then a smoothed uniform 2D scale and offset (0.6–1.6) plus Fit sliders. Small type. Default is skull, eyes, and outline on; brain, muscles, and labels off.
 
-Out: a demo video, new quiz anatomy beyond the muscles above, copying the reference app’s source, editing `.github`.
+Out: a new scaffold, a demo video, copying the reference source, editing `.github`, deforming the skull onto the eyes.
 
 ## Stack
 
-- Keep the Vite app. This is a visual fix, not a new scaffold.
-- The mesh script stays the source of the GLB. A smooth warp slides the orbital openings onto the canonical eyes while the chin, nose, and cranium stay put. Muscles are rebuilt on that skull.
-- three.js keeps the fresnel shader. Muscles add fiber stripes. A one-euro filter and a separate horizontal and vertical screen fit live in the scene.
+- Keep the Vite app and `scripts/build_anatomy.py`. Bones stay BodyParts3D 4.3. Muscles come from `isa_BP3D_4.0_obj_99`.
+- One similarity into canonical-face centimetres. The 4.0 muscles are registered onto this skull because that release does not share coordinates with 4.3.
+- three.js keeps the fresnel shader. The screen fit is a uniform least-squares scale and offset on the projection.
 
 ## Tasks
 
-1. Warp the orbits onto the eyes, smooth the rims, and rebuild the muscles with fiber coordinates and jaw/expression motion.
-2. Fit scale and offset from the eyes, the face width, and the chin. Filter the pose. Feather the glow to the face oval on every reveal.
-3. Check the result on a still face fed in as a camera, then `bun test` and the Pages build.
+1. Build the watertight cranium and jaw and render them alone (front, three-quarter, side) with the fresnel shader. Do not wire a torn or doubled shell into the app.
+2. Identify the 23 muscle-of-head elements, merge them, and replace the handmade sheets.
+3. Add the skin veil and outline, the layer gains, the screen fit, and the smaller controls.
+4. Check a frontal and a three-quarter face, then the Pages build.
 
 ## Deferred
 
-- A real phone camera pass. This environment uses a still portrait as the camera.
+- A live phone pass. This environment uses still portraits as the camera.

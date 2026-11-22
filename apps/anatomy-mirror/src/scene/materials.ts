@@ -1,25 +1,27 @@
 import * as THREE from 'three'
 
-export type ShadeRole = 'veil' | 'outline' | 'bone' | 'muscle' | 'brain' | 'hand' | 'eye'
+export type ShadeRole = 'veil' | 'outline' | 'bone' | 'muscle' | 'brain' | 'hindbrain' | 'hand' | 'eye'
 
 const XRAY: Record<ShadeRole, string> = {
-  veil: '#070b14',
-  outline: '#8ec8ff',
-  bone: '#d5ecff',
-  muscle: '#ff4d42',
-  brain: '#ff9ebe',
+  veil: '#04070d',
+  outline: '#6fb6ff',
+  bone: '#bfe3ff',
+  muscle: '#ff6b5e',
+  brain: '#ff9fc0',
+  hindbrain: '#ffc37a',
   hand: '#d9f3ff',
-  eye: '#e7f4ff',
+  eye: '#fff3a8',
 }
 
 const SOLID: Record<ShadeRole, string> = {
-  veil: '#070b14',
-  outline: '#8ec8ff',
-  bone: '#e7e1d6',
-  muscle: '#c4473c',
-  brain: '#e5a8b6',
+  veil: '#04070d',
+  outline: '#6fb6ff',
+  bone: '#e9e2cf',
+  muscle: '#b5453c',
+  brain: '#e2a39d',
+  hindbrain: '#d6ad84',
   hand: '#efe6d8',
-  eye: '#f4f1ea',
+  eye: '#f4f4ee',
 }
 
 const VERT = `
@@ -118,7 +120,7 @@ void main() {
   vec3 normal = normalize(vNormalView);
   vec3 eye = normalize(vTowardEye);
   float facing = clamp(abs(dot(normal, eye)), 0.0, 1.0);
-  float rim = pow(1.0 - facing, 2.15);
+  float rim = pow(1.0 - facing, 2.1);
 
   float keep = 1.0;
   if (uClip > 0.5) {
@@ -170,7 +172,7 @@ void main() {
     gl_FragColor = vec4(color * solidAlpha, solidAlpha);
     return;
   }
-  float glow = (uFill + (1.0 - uFill) * rim) * uGain * (1.0 + 1.7 * uBoost);
+  float glow = (0.035 + 0.95 * rim) * uGain * (1.0 + 1.35 * uBoost);
   float lightAmount = glow * keep * socket * fiber;
   gl_FragColor = vec4(tint * lightAmount, lightAmount);
 }
@@ -184,7 +186,6 @@ function ovalUniform(): THREE.IUniform<THREE.Vector2[]> {
 
 export function createShadeMaterial(role: ShadeRole): XrayMaterial {
   const veil = role === 'veil'
-  const muscle = role === 'muscle'
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uHead: { value: new THREE.Matrix4() },
@@ -193,7 +194,7 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
       uTint: { value: new THREE.Color(XRAY[role]) },
       uWarm: { value: new THREE.Color(SOLID[role]) },
       uGain: { value: 1 },
-      uFill: { value: muscle ? 0.72 : role === 'brain' ? 0.22 : role === 'eye' ? 0.2 : 0.05 },
+      uFill: { value: role === 'muscle' ? 0.72 : role === 'brain' || role === 'hindbrain' ? 0.22 : role === 'eye' ? 0.2 : 0.05 },
       uCover: { value: veil ? 0.55 : 0.92 },
       uBoost: { value: 0 },
       uMode: { value: veil ? 2 : 0 },
@@ -204,7 +205,7 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
       uNeck: { value: role === 'veil' || role === 'outline' ? 1 : 0 },
       uNeck0: { value: -8.4 },
       uNeck1: { value: -4.6 },
-      uFiber: { value: muscle ? 1 : 0 },
+      uFiber: { value: 0 },
       uStrap: { value: 1 },
       uEye: { value: role === 'eye' ? 1 : 0 },
       uOrbitOn: { value: 0 },
