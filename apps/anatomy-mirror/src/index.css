@@ -141,9 +141,13 @@ body,
   color: #eef4fb;
 }
 
+html {
+  font-size: 14px;
+}
+
 body {
   font-family: Outfit, "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.45;
   overflow: hidden;
 }
@@ -170,14 +174,16 @@ h2,
 }
 
 h1 {
-  font-size: clamp(2.4rem, 8vw, 4.2rem);
+  font-size: 24px;
   margin: 0;
 }
 
 h2,
 .panel-title {
-  font-size: 1.35rem;
+  font-size: 12px;
   margin: 0;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 .welcome {
@@ -208,7 +214,7 @@ h2,
   color: #9fd0ff;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: 1rem;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -404,8 +410,27 @@ h2,
 }
 
 .prompt {
-  font-size: clamp(1.35rem, 4vw, 1.7rem);
+  font-size: 15px;
   margin: 0;
+}
+
+.adjust {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.adjust summary,
+.fit-heading {
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9fd0ff;
+  cursor: pointer;
+}
+
+.fit-grid {
+  display: grid;
+  gap: 0.35rem;
 }
 
 .quiz-row,

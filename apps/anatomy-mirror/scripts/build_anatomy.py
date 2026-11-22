@@ -4,7 +4,7 @@
 Bones, brain, and hand bones are decimated from BodyParts3D (CC BY-SA 2.1 JP,
 (c) DBCLS). Release 4.3 has no face-muscle meshes, so the muscle surfaces are
 original sheets that follow this skull and ship under the same licence.
-A smooth warp then slides the orbital openings onto the canonical eyes.
+The bones stay rigid: one similarity into canonical-face centimetres, then light decimation.
 Cache lives in /tmp/bp3d.
 
 Requires: trimesh, fast-simplification, numpy, scipy, scikit-image, pillow, matplotlib.
@@ -110,15 +110,17 @@ HAND_FILES = {
 CARPALS = ["scaphoid", "lunate", "triquetral", "pisiform", "trapezium", "trapezoid", "capitate", "hamate"]
 LONG_BONES = [k for k in HAND_FILES if k not in CARPALS]
 
+# Face bones stay at the BodyParts3D resolution. The orbits, the nasal
+# aperture, and the cheekbones tear if those triangles are collapsed.
 FACE_LIMIT = {
-    "frontal": 14000,
-    "parietal": 11000,
-    "temporal": 9000,
-    "occipital": 8000,
-    "nasal": 3500,
-    "zygomatic": 7000,
-    "maxilla": 10000,
-    "mandible": 10000,
+    "frontal": 20000,
+    "parietal": 18000,
+    "temporal": 14000,
+    "occipital": 14000,
+    "nasal": 4000,
+    "zygomatic": 8000,
+    "maxilla": 14000,
+    "mandible": 12000,
     "brain": 15000,
     "shell": 7000,
 }
@@ -462,11 +464,10 @@ def jaw_pivot(mandible: trimesh.Trimesh) -> np.ndarray:
     return np.mean(pivots, axis=0)
 
 
-def remesh_brain(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
+def remesh_brain(parts: list[trimesh.Trimesh], target: int = 15000, pitch: float = 2.5) -> trimesh.Trimesh:
     cloud = np.concatenate([mesh.vertices for mesh in parts])
-    if len(cloud) > 80000:
-        cloud = cloud[:: len(cloud) // 80000]
-    pitch = 2.5
+    if len(cloud) > 120000:
+        cloud = cloud[:: max(1, len(cloud) // 120000)]
     mins = cloud.min(0) - pitch * 3
     dims = np.ceil((cloud.max(0) - mins) / pitch).astype(int) + 6
     idx = np.clip(((cloud - mins) / pitch).astype(int), 0, dims - 1)
@@ -486,7 +487,7 @@ def remesh_brain(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
     # Smooth in local coordinates. The same filter drifts when vertices sit at z ≈ 1500 mm.
     origin = mesh.vertices.mean(0)
     mesh.vertices = mesh.vertices - origin
-    mesh = decimate(mesh, FACE_LIMIT["brain"])
+    mesh = decimate(mesh, target)
     trimesh.smoothing.filter_laplacian(mesh, lamb=0.35, iterations=4)
     mesh.vertices = mesh.vertices + origin
     mesh.fix_normals()
@@ -1217,7 +1218,9 @@ def anchor_points(meshes: dict[str, trimesh.Trimesh], jaw: np.ndarray) -> dict[s
     brain = meshes["brain"]
     anchors["brain"] = [most(brain, brain.vertices[:, 1] * 0.6 + brain.vertices[:, 2] * 0.4)]
     for name in MUSCLE_NAMES:
-        mesh = meshes[name]
+        mesh = meshes.get(name)
+        if mesh is None:
+            continue
         verts = mesh.vertices
         if name in ("frontalis", "oris"):
             anchors[name] = [[round(float(v), 4) for v in verts.mean(0)]]
@@ -1269,6 +1272,760 @@ def combine(parts: dict[str, trimesh.Trimesh], names: list[str]) -> trimesh.Trim
     return trimesh.util.concatenate([parts[name] for name in names])
 
 
+def _boundary_edges(mesh: trimesh.Trimesh) -> int:
+    edges, counts = np.unique(mesh.edges_sorted, axis=0, return_counts=True)
+    return int((counts == 1).sum())
+
+
+def measure_orbits(meshes: dict[str, trimesh.Trimesh], face: np.ndarray) -> list[dict]:
+    """Record the real orbital openings. The vertices are not moved."""
+    face_bone = trimesh.util.concatenate([meshes[name] for name in ("frontal", "zygomatic", "maxilla", "nasal")])
+    eye_r = (face[33] + face[133]) / 2
+    eye_l = (face[263] + face[362]) / 2
+    found = detect_orbits(face_bone, np.stack([eye_r, eye_l]))
+    for name in ("frontal", "zygomatic", "maxilla", "nasal", "mandible", "parietal", "temporal", "occipital"):
+        mesh = meshes[name]
+        print(f"  intact {name} faces {len(mesh.faces)} boundary { _boundary_edges(mesh) }")
+    if found is None:
+        raise RuntimeError("the rigid skull has no orbital opening near each eye")
+    right, left, _nasal, radius = found
+    print("rigid orbits", np.round(right, 2), np.round(left, 2), "radius", round(radius, 2))
+    return [
+        {"center": [round(float(v), 4) for v in right], "radius": round(radius, 3)},
+        {"center": [round(float(v), 4) for v in left], "radius": round(radius, 3)},
+    ]
+
+
+def _pack(point: np.ndarray) -> list[float]:
+    return [round(float(v), 4) for v in point]
+
+
+def fit_anchors(meshes: dict[str, trimesh.Trimesh], orbits: list[dict]) -> list[dict]:
+    """Skull points paired with MediaPipe landmark ids. The mesh itself stays put."""
+    right = np.array(orbits[0]["center"])
+    left = np.array(orbits[1]["center"])
+    bones = trimesh.util.concatenate([meshes[name] for name in ("frontal", "zygomatic", "maxilla", "nasal")])
+    verts = bones.vertices
+
+    def on_rim(center: np.ndarray, toward: float) -> np.ndarray:
+        flat = np.hypot(verts[:, 0] - center[0], verts[:, 1] - center[1])
+        band = verts[(flat > 0.7) & (flat < 2.3) & (np.abs(verts[:, 1] - center[1]) < 0.9)]
+        if len(band) < 8:
+            band = verts[flat < 2.6]
+        score = band[:, 0] * toward
+        return band[int(np.argmax(score))]
+
+    frontal = meshes["frontal"].vertices
+    bridge = frontal[(np.abs(frontal[:, 0]) < 0.9) & (frontal[:, 1] > 1.2) & (frontal[:, 1] < 5.2)]
+    nasion = bridge[int(np.argmax(bridge[:, 2]))] if len(bridge) else frontal[int(np.argmax(frontal[:, 2]))]
+    zy = meshes["zygomatic"].vertices
+    cheek_r = zy[int(np.argmin(zy[:, 0]))]
+    cheek_l = zy[int(np.argmax(zy[:, 0]))]
+    jaw = meshes["mandible"].vertices
+    chin = jaw[int(np.argmin(jaw[:, 1] + np.abs(jaw[:, 0]) * 0.15))]
+    right_jaw = jaw[jaw[:, 0] < np.quantile(jaw[:, 0], 0.18)]
+    left_jaw = jaw[jaw[:, 0] > np.quantile(jaw[:, 0], 0.82)]
+    gonion_r = right_jaw[int(np.argmin(right_jaw[:, 1]))]
+    gonion_l = left_jaw[int(np.argmin(left_jaw[:, 1]))]
+    pairs = [
+        (468, right),
+        (473, left),
+        (33, on_rim(right, -1.0)),
+        (133, on_rim(right, 1.0)),
+        (263, on_rim(left, 1.0)),
+        (362, on_rim(left, -1.0)),
+        (168, nasion),
+        (116, cheek_r),
+        (345, cheek_l),
+        (152, chin),
+        (172, gonion_r),
+        (397, gonion_l),
+    ]
+    return [{"id": index, "at": _pack(point)} for index, point in pairs]
+
+
+CRANIUM_KEYS = [
+    "frontal",
+    "parietal_l",
+    "parietal_r",
+    "temporal_l",
+    "temporal_r",
+    "sphenoid",
+    "occipital",
+    "nasal_l",
+    "nasal_r",
+    "zygomatic_l",
+    "zygomatic_r",
+    "maxilla_l",
+    "maxilla_r",
+]
+# Pitch is the triangle size. Quadric decimation is not used: it turns the
+# smooth vault into huge triangles and the fresnel line breaks.
+CRANIUM_PITCH_CM = 0.155
+JAW_PITCH_CM = 0.125
+# How far outside air may walk into openings. Deep enough for the eye sockets
+# and the nasal aperture, short of the cranial cavity and the sinus labyrinth.
+SOCKET_REACH_CM = 2.55
+
+
+def _as_mesh(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    return trimesh.Trimesh(np.asarray(mesh.vertices), np.asarray(mesh.faces), process=False)
+
+
+def _filled_points(mesh: trimesh.Trimesh, pitch: float) -> np.ndarray:
+    """Voxel centres inside a closed bone. The source shells are watertight solids."""
+    solid = _as_mesh(mesh)
+    solid.merge_vertices()
+    solid.update_faces(solid.unique_faces() & solid.nondegenerate_faces())
+    solid.remove_unreferenced_vertices()
+    solid.fix_normals()
+    grid = solid.voxelized(pitch).fill()
+    return np.asarray(grid.points, dtype=np.float64)
+
+
+def _union_mask(meshes: list[trimesh.Trimesh], pitch: float) -> tuple[np.ndarray, np.ndarray]:
+    clouds = [_filled_points(mesh, pitch) for mesh in meshes]
+    cloud = np.concatenate(clouds)
+    lo = cloud.min(axis=0) - pitch * 2
+    hi = cloud.max(axis=0) + pitch * 2
+    dims = np.ceil((hi - lo) / pitch).astype(int) + 1
+    print(f"  voxel grid {tuple(int(v) for v in dims)} pitch {pitch}", flush=True)
+    mask = np.zeros(tuple(int(v) for v in dims), dtype=bool)
+    index = np.floor((cloud - lo) / pitch).astype(int)
+    index = np.clip(index, 0, dims - 1)
+    mask[index[:, 0], index[:, 1], index[:, 2]] = True
+    # Close suture gaps, then fill air cells that do not open onto the outside.
+    mask = ndimage.binary_closing(mask, iterations=1)
+    mask = ndimage.binary_fill_holes(mask)
+    return mask, lo
+
+
+def _world_to_index(points: np.ndarray, lo: np.ndarray, pitch: float, dims: np.ndarray) -> np.ndarray:
+    index = np.floor((points - lo) / pitch).astype(int)
+    return np.clip(index, 0, dims - 1)
+
+
+def _plug_sphere(mask: np.ndarray, lo: np.ndarray, pitch: float, center: np.ndarray, radius: float) -> None:
+    dims = np.array(mask.shape)
+    lo_i = _world_to_index(np.array([center - radius]), lo, pitch, dims)[0]
+    hi_i = _world_to_index(np.array([center + radius]), lo, pitch, dims)[0]
+    xs = range(int(lo_i[0]), int(hi_i[0]) + 1)
+    ys = range(int(lo_i[1]), int(hi_i[1]) + 1)
+    zs = range(int(lo_i[2]), int(hi_i[2]) + 1)
+    for x in xs:
+        for y in ys:
+            for z in zs:
+                point = lo + np.array([x + 0.5, y + 0.5, z + 0.5]) * pitch
+                if np.linalg.norm(point - center) <= radius:
+                    mask[x, y, z] = True
+
+
+def _enclosed_hole(slice_mask: np.ndarray, window: np.ndarray) -> np.ndarray | None:
+    """Largest air hole that does not touch the border of a 2D window. Returns [x, z] indices."""
+    x0, x1, z0, z1 = [int(v) for v in window]
+    x0, z0 = max(x0, 0), max(z0, 0)
+    x1, z1 = min(x1, slice_mask.shape[0] - 1), min(z1, slice_mask.shape[1] - 1)
+    if x1 - x0 < 6 or z1 - z0 < 6:
+        return None
+    crop = slice_mask[x0 : x1 + 1, z0 : z1 + 1]
+    air = ~crop
+    labeled, count = ndimage.label(air)
+    if count == 0:
+        return None
+    best = None
+    best_area = 0
+    for label in range(1, count + 1):
+        component = labeled == label
+        if component[0, :].any() or component[-1, :].any() or component[:, 0].any() or component[:, -1].any():
+            continue
+        area = int(component.sum())
+        if area > best_area:
+            best_area = area
+            points = np.argwhere(component)
+            best = points.mean(axis=0) + np.array([x0, z0])
+    if best is None or best_area < 25:
+        return None
+    return best
+
+
+def _plug_cranial_tunnels(mask: np.ndarray, lo: np.ndarray, pitch: float, aligned: dict[str, trimesh.Trimesh]) -> None:
+    """Cap the foramen magnum and ear canals so the cranial cavity stays inside."""
+    dims = np.array(mask.shape)
+
+    def window_for(bone: trimesh.Trimesh, shrink: float = 0.08) -> tuple[int, int, int, int]:
+        lo_b, hi_b = bone.bounds
+        span = hi_b - lo_b
+        lo_b = lo_b + span * shrink
+        hi_b = hi_b - span * shrink
+        lo_i = _world_to_index(lo_b.reshape(1, 3), lo, pitch, dims)[0]
+        hi_i = _world_to_index(hi_b.reshape(1, 3), lo, pitch, dims)[0]
+        return int(lo_i[0]), int(hi_i[0]), int(lo_i[2]), int(hi_i[2])
+
+    def y_range(bone: trimesh.Trimesh, start: float, end: float) -> range:
+        lo_b, hi_b = bone.bounds[:, 1]
+        y0 = lo_b + (hi_b - lo_b) * start
+        y1 = lo_b + (hi_b - lo_b) * end
+        i0 = int(_world_to_index(np.array([[0.0, y0, 0.0]]), lo, pitch, dims)[0, 1])
+        i1 = int(_world_to_index(np.array([[0.0, y1, 0.0]]), lo, pitch, dims)[0, 1])
+        return range(max(0, i0), min(mask.shape[1] - 1, i1) + 1)
+
+    occipital = aligned["occipital"]
+    holes = []
+    for y in y_range(occipital, 0.05, 0.48):
+        found = _enclosed_hole(mask[:, y, :], np.array(window_for(occipital, 0.02)))
+        if found is not None:
+            holes.append((y, found))
+    if holes:
+        # The foramen is the lowest large hole. A higher hole is the cranial cavity seen in cross-section.
+        y, found = holes[0]
+        center = lo + np.array([found[0] + 0.5, y + 0.5, found[1] + 0.5]) * pitch
+        print("  plug foramen", np.round(center, 2), flush=True)
+        _plug_sphere(mask, lo, pitch, center, 1.2)
+
+    for name in ("temporal_l", "temporal_r"):
+        bone = aligned[name]
+        found_canal = None
+        for y in y_range(bone, 0.38, 0.72):
+            found = _enclosed_hole(mask[:, y, :], np.array(window_for(bone, 0.05)))
+            if found is not None:
+                found_canal = (y, found)
+                break
+        if found_canal is None:
+            continue
+        y, found = found_canal
+        center = lo + np.array([found[0] + 0.5, y + 0.5, found[1] + 0.5]) * pitch
+        print(f"  plug {name}", np.round(center, 2), flush=True)
+        _plug_sphere(mask, lo, pitch, center, 0.6)
+
+
+def _outer_volume(mask: np.ndarray, lo: np.ndarray, pitch: float) -> np.ndarray:
+    """Bone plus the cranial cavity. The surface is the outside of that volume."""
+    air = ~mask
+    reached = np.zeros(mask.shape, dtype=bool)
+    reached[0, :, :] = air[0, :, :]
+    reached[-1, :, :] = air[-1, :, :]
+    reached[:, 0, :] = air[:, 0, :]
+    reached[:, -1, :] = air[:, -1, :]
+    reached[:, :, 0] = air[:, :, 0]
+    reached[:, :, -1] = air[:, :, -1]
+    structure = ndimage.generate_binary_structure(3, 1)
+    limit = int(sum(mask.shape))
+    for _ in range(limit):
+        grown = ndimage.binary_dilation(reached, structure=structure)
+        grown &= air
+        if np.array_equal(grown, reached):
+            break
+        reached = grown
+    return ~reached
+
+
+def _mesh_from_mask(mask: np.ndarray, lo: np.ndarray, pitch: float) -> trimesh.Trimesh:
+    padded = np.pad(mask, 1)
+    mesh = trimesh.voxel.ops.matrix_to_marching_cubes(padded, pitch=pitch)
+    mesh.apply_translation(lo - pitch)
+    mesh.merge_vertices()
+    mesh.update_faces(mesh.unique_faces() & mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
+    pieces = mesh.split(only_watertight=False)
+    mesh = max(pieces, key=lambda item: len(item.faces))
+    mesh.fix_normals()
+    return mesh
+
+
+def _smooth_shell(mesh: trimesh.Trimesh, iterations: int = 4) -> trimesh.Trimesh:
+    # Taubin takes the small steps off the rims without shrinking the orbits.
+    trimesh.smoothing.filter_taubin(mesh, lamb=0.33, nu=0.34, iterations=iterations)
+    mesh.merge_vertices()
+    mesh.update_faces(mesh.unique_faces() & mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
+    mesh.fix_normals()
+    if not mesh.is_watertight:
+        trimesh.repair.fill_holes(mesh)
+        mesh.fix_normals()
+    # Average normals in place so the fresnel line is one curve, not a facet.
+    normals = np.array(mesh.vertex_normals, copy=True)
+    neighbors = mesh.vertex_neighbors
+    for _ in range(4):
+        averaged = np.zeros_like(normals)
+        for index, ring in enumerate(neighbors):
+            if not ring:
+                averaged[index] = normals[index]
+                continue
+            averaged[index] = normals[index] * 2.0 + normals[ring].sum(axis=0)
+        length = np.linalg.norm(averaged, axis=1, keepdims=True)
+        normals = averaged / np.maximum(length, 1e-8)
+    mesh.vertex_normals = normals
+    return mesh
+
+
+def shell_quality(name: str, mesh: trimesh.Trimesh) -> None:
+    _edges, counts = np.unique(mesh.edges_sorted, axis=0, return_counts=True)
+    areas = np.asarray(mesh.area_faces)
+    lengths = np.asarray(mesh.edges_unique_length)
+    mean = float(areas.mean()) if len(areas) else 1.0
+    print(
+        f"  {name} faces {len(mesh.faces)} watertight {mesh.is_watertight} "
+        f"boundary {int((counts == 1).sum())} nonmanifold {int((counts > 2).sum())} "
+        f"area-cv {areas.std() / mean:.2f} max-edge {lengths.max():.3f} "
+        f"p95-edge {np.quantile(lengths, 0.95):.3f} area {mesh.area:.1f}",
+        flush=True,
+    )
+
+
+def union_shell(
+    parts: list[trimesh.Trimesh], pitch: float, aligned: dict[str, trimesh.Trimesh] | None = None
+) -> trimesh.Trimesh:
+    mask, lo = _union_mask(parts, pitch)
+    if aligned is not None:
+        _plug_cranial_tunnels(mask, lo, pitch, aligned)
+    volume = _outer_volume(mask, lo, pitch)
+    mesh = _mesh_from_mask(volume, lo, pitch)
+    shell_quality("before-smooth", mesh)
+    return _smooth_shell(mesh)
+
+
+def _march_distance(origins: np.ndarray, directions: np.ndarray, mask: np.ndarray, lo: np.ndarray, pitch: float) -> np.ndarray:
+    """Distance along each ray until bone. Negative means the ray left the grid."""
+    pos = origins.copy()
+    hit = np.full(len(origins), np.inf)
+    alive = np.ones(len(origins), dtype=bool)
+    step = pitch * 0.7
+    dims = np.array(mask.shape)
+    for index in range(90):
+        if not alive.any():
+            break
+        pos[alive] += directions[alive] * step
+        idx = np.floor((pos - lo) / pitch).astype(int)
+        inside = alive & np.all((idx >= 0) & (idx < dims), axis=1)
+        hit[alive & ~inside] = -1.0
+        alive &= inside
+        if not alive.any():
+            break
+        solid = mask[idx[alive, 0], idx[alive, 1], idx[alive, 2]]
+        struck = np.zeros(len(origins), dtype=bool)
+        struck[np.flatnonzero(alive)[solid]] = True
+        hit[struck] = (index + 1) * step
+        alive[struck] = False
+    return hit
+
+
+def _fill_short_boundaries(mesh: trimesh.Trimesh, max_edges: int = 18) -> trimesh.Trimesh:
+    """Close suture cracks. Orbital and nasal loops are much longer and stay open."""
+    edges = mesh.edges_sorted
+    uniq, counts = np.unique(edges, axis=0, return_counts=True)
+    boundary = uniq[counts == 1]
+    if len(boundary) == 0:
+        return mesh
+    neighbors: dict[int, list[int]] = {}
+    for a, b in boundary:
+        neighbors.setdefault(int(a), []).append(int(b))
+        neighbors.setdefault(int(b), []).append(int(a))
+    seen: set[int] = set()
+    fans: list[list[int]] = []
+    for start in list(neighbors):
+        if start in seen:
+            continue
+        loop = [start]
+        seen.add(start)
+        prev = -1
+        current = start
+        for _ in range(len(neighbors) + 2):
+            nxts = [n for n in neighbors[current] if n != prev]
+            if not nxts:
+                break
+            nxt = nxts[0]
+            if nxt == start:
+                break
+            if nxt in seen:
+                break
+            loop.append(nxt)
+            seen.add(nxt)
+            prev, current = current, nxt
+        if 3 <= len(loop) <= max_edges and neighbors[loop[-1]].count(start):
+            fans.append(loop)
+    if not fans:
+        return mesh
+    faces = [mesh.faces]
+    for loop in fans:
+        anchor = loop[0]
+        faces.append([[anchor, loop[i], loop[i + 1]] for i in range(1, len(loop) - 1)])
+    mesh = trimesh.Trimesh(mesh.vertices.copy(), np.vstack(faces), process=False)
+    mesh.remove_unreferenced_vertices()
+    mesh.fix_normals()
+    return mesh
+
+
+def _exterior_bone(parts: list[trimesh.Trimesh], occupancy_pitch: float) -> trimesh.Trimesh:
+    """One layer of the original bone triangles: the faces that look out of the skull."""
+    mesh = _as_mesh(trimesh.util.concatenate([_as_mesh(part) for part in parts]))
+    mesh.merge_vertices()
+    mesh.update_faces(mesh.unique_faces() & mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
+    # Each bone already points outward. Fixing normals on the combined mesh
+    # flips some of those solids and the vault then gets discarded.
+    mask, lo = _union_mask(parts, occupancy_pitch)
+    centroids = mesh.triangles_center
+    normals = np.array(mesh.face_normals, copy=True)
+    normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-8)
+    # Start outside the bone thickness. A ray that leaves the grid is the outer
+    # surface. A short hit is another bone in front (a buried face). A medium hit
+    # on the face is the far wall of an eye socket or the nasal opening.
+    origins = centroids + normals * 0.85
+    distance = _march_distance(origins, normals, mask, lo, occupancy_pitch)
+    socket = (distance > 0.4) & (distance < 4.6) & (centroids[:, 2] > -0.4)
+    keep = (distance < 0) | socket
+    print(f"  exterior faces {int(keep.sum())} of {len(keep)}", flush=True)
+    mesh.update_faces(keep)
+    mesh.remove_unreferenced_vertices()
+    shell_quality("kept", mesh)
+    # Weld suture vertices that sit within about 1.5mm of each other.
+    mesh.vertices = np.round(mesh.vertices / 0.15) * 0.15
+    mesh.merge_vertices()
+    mesh.update_faces(mesh.unique_faces() & mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
+    mesh = _fill_short_boundaries(mesh, max_edges=28)
+    mesh.fix_normals()
+    return _smooth_shell(mesh, iterations=3)
+
+
+def _axis_shell(mask: np.ndarray) -> np.ndarray:
+    """The first and last solid voxel along x, y, and z. Seams and the inner table drop out."""
+    shell = np.zeros(mask.shape, dtype=bool)
+    for axis in range(3):
+        any_solid = mask.any(axis=axis)
+        first = np.argmax(mask, axis=axis)
+        last = mask.shape[axis] - 1 - np.argmax(np.flip(mask, axis=axis), axis=axis)
+        indexer = [np.arange(mask.shape[i]) for i in range(3) if i != axis]
+        grids = np.meshgrid(*indexer, indexing="ij")
+        base = [None, None, None]
+        slot = 0
+        for dim in range(3):
+            if dim == axis:
+                continue
+            base[dim] = grids[slot]
+            slot += 1
+        for which in (first, last):
+            coords = base.copy()
+            coords[axis] = which
+            chosen = tuple(coords)
+            shell[chosen] |= any_solid
+    return shell
+
+
+def _close_gaps(mask: np.ndarray, pitch: float, radius_cm: float) -> np.ndarray:
+    """Weld suture gaps and ear canals. Orbits, the nose, and the foramen stay open."""
+    radius = max(1, int(round(radius_cm / pitch)))
+    struct = ndimage.iterate_structure(ndimage.generate_binary_structure(3, 1), radius)
+    closed = ndimage.binary_closing(mask, structure=struct)
+    return ndimage.binary_fill_holes(closed)
+
+
+def _seal_cranial_cavity(mask: np.ndarray, lo: np.ndarray, pitch: float) -> tuple[np.ndarray, np.ndarray]:
+    """Fill the braincase so the surface is the outside of the skull.
+
+    A watershed on the air-distance field meets at the foramen magnum, which is
+    the narrow neck between the cavity and the outside. Eye sockets and the
+    nasal aperture stay open because they are wide and face the outside.
+    """
+    from skimage.segmentation import watershed
+
+    pad = int(np.ceil(3.4 / pitch))
+    mask = np.pad(mask, pad, constant_values=False)
+    lo = lo - pad * pitch
+    dist = ndimage.distance_transform_edt(~mask) * pitch
+    border = np.zeros(mask.shape, dtype=bool)
+    border[0] = border[-1] = True
+    border[:, 0] = border[:, -1] = True
+    border[:, :, 0] = border[:, :, -1] = True
+    sealed_core = None
+    for threshold in (2.4, 2.1, 1.85, 1.6, 1.35):
+        core = dist >= threshold
+        labeled, count = ndimage.label(core)
+        if count == 0:
+            continue
+        outside_ids = set(np.unique(labeled[border]).tolist()) - {0}
+        best_lab = 0
+        best_cm3 = 0.0
+        for lab in range(1, count + 1):
+            if lab in outside_ids:
+                continue
+            cm3 = float((labeled == lab).sum()) * pitch**3
+            if cm3 > best_cm3:
+                best_lab = lab
+                best_cm3 = cm3
+        outside_voxels = int(np.isin(labeled, list(outside_ids)).sum()) if outside_ids else 0
+        print(
+            f"  cavity T={threshold:.2f} internal {best_cm3:.0f} cm3 outside-core {outside_voxels}",
+            flush=True,
+        )
+        if best_cm3 > 200 and outside_voxels > 1000:
+            markers = np.zeros(mask.shape, dtype=np.int32)
+            markers[np.isin(labeled, list(outside_ids))] = 1
+            markers[labeled == best_lab] = 2
+            elevation = -dist.astype(np.float64)
+            elevation[mask] = 1.0e3
+            labels = watershed(elevation, markers, mask=~mask)
+            cavity = labels == 2
+            print(f"  cavity kept {float(cavity.sum()) * pitch**3:.0f} cm3", flush=True)
+            sealed_core = mask | cavity
+            break
+    if sealed_core is None:
+        print("  cranial cavity was not sealed", flush=True)
+        sealed_core = mask
+    sealed_core = ndimage.binary_fill_holes(sealed_core)
+    return sealed_core, lo
+
+
+def _sdf_mesh(mask: np.ndarray, lo: np.ndarray, pitch: float, sigma: float) -> trimesh.Trimesh:
+    """Marching cubes on a blurred signed distance, so the fresnel line is one curve."""
+    from skimage.measure import marching_cubes
+
+    pad = 3
+    padded = np.pad(mask, pad, constant_values=False)
+    origin = lo - pad * pitch
+    outside = ndimage.distance_transform_edt(~padded)
+    inside = ndimage.distance_transform_edt(padded)
+    field = ndimage.gaussian_filter((outside - inside).astype(np.float32), sigma=sigma)
+    verts, faces, normals, _values = marching_cubes(field, level=0.0, spacing=(pitch, pitch, pitch))
+    mesh = trimesh.Trimesh(vertices=verts + origin, faces=faces, vertex_normals=normals, process=False)
+    mesh.merge_vertices()
+    mesh.update_faces(mesh.unique_faces() & mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
+    pieces = mesh.split(only_watertight=False)
+    mesh = max(pieces, key=lambda item: len(item.faces))
+    mesh.fix_normals()
+    # The distance field is already smooth. A short normal average keeps the
+    # silhouette one line where two triangles share a shallow angle.
+    normals = np.array(mesh.vertex_normals, copy=True)
+    neighbors = mesh.vertex_neighbors
+    for _ in range(3):
+        averaged = np.zeros_like(normals)
+        for index, ring in enumerate(neighbors):
+            if not ring:
+                averaged[index] = normals[index]
+                continue
+            averaged[index] = normals[index] * 2.0 + normals[ring].sum(axis=0)
+        length = np.linalg.norm(averaged, axis=1, keepdims=True)
+        normals = averaged / np.maximum(length, 1e-8)
+    mesh.vertex_normals = normals
+    return mesh
+
+
+def _spatial_smooth(mesh: trimesh.Trimesh, radius: float, iterations: int, blend: float) -> None:
+    """Average vertices inside a small radius so voxel steps stop catching the fresnel."""
+    vertices = np.asarray(mesh.vertices).copy()
+    for _ in range(iterations):
+        tree = cKDTree(vertices)
+        groups = tree.query_ball_point(vertices, r=radius)
+        averaged = np.empty_like(vertices)
+        for index, group in enumerate(groups):
+            averaged[index] = vertices[group].mean(axis=0)
+        vertices = vertices * (1.0 - blend) + averaged * blend
+    mesh.vertices = vertices
+
+
+def _smooth_normals(mesh: trimesh.Trimesh, radius: float) -> None:
+    mesh.fix_normals()
+    normals = np.array(mesh.vertex_normals, copy=True)
+    tree = cKDTree(np.asarray(mesh.vertices))
+    groups = tree.query_ball_point(mesh.vertices, r=radius)
+    smoothed = np.empty_like(normals)
+    for index, group in enumerate(groups):
+        normal = normals[group].mean(axis=0)
+        smoothed[index] = normal / max(float(np.linalg.norm(normal)), 1e-8)
+    mesh.vertex_normals = smoothed
+
+
+def _visible_cranium(parts: list[trimesh.Trimesh], pitch: float) -> trimesh.Trimesh:
+    mask, lo = _union_mask(parts, pitch)
+    mask = _close_gaps(mask, pitch, 0.38)
+    mask, lo = _seal_cranial_cavity(mask, lo, pitch)
+    mesh = _sdf_mesh(mask, lo, pitch, sigma=1.15)
+    _spatial_smooth(mesh, radius=0.42, iterations=4, blend=0.55)
+    _smooth_normals(mesh, radius=0.5)
+    return mesh
+
+
+def _jaw_shell(mandible: trimesh.Trimesh) -> trimesh.Trimesh:
+    """The real mandible, subdivided once. A voxel jaw reads as stacked blocks."""
+    jaw = _as_mesh(mandible)
+    jaw.merge_vertices()
+    jaw.update_faces(jaw.unique_faces() & jaw.nondegenerate_faces())
+    jaw.remove_unreferenced_vertices()
+    jaw.fix_normals()
+    jaw = subdivide(jaw)
+    _smooth_normals(jaw, radius=0.22)
+    return jaw
+
+
+def build_skull_shells(
+    aligned: dict[str, trimesh.Trimesh],
+) -> tuple[trimesh.Trimesh, trimesh.Trimesh]:
+    print("outer cranium", flush=True)
+    cranium = _visible_cranium([aligned[name] for name in CRANIUM_KEYS], 0.18)
+    shell_quality("cranium", cranium)
+    print("jaw from the mandible", flush=True)
+    jaw = _jaw_shell(aligned["mandible"])
+    shell_quality("jaw", jaw)
+    return cranium, jaw
+
+
+# BodyParts3D 4.0 isa elements under FMA9616 "muscle of head".
+# Names come from the 4.3 FMA is-a table. They are the extraocular muscles,
+# the tongue, and the palate — not the muscles of facial expression.
+HEAD_MUSCLES = [
+    ("FJ1323", "left superior rectus"),
+    ("FJ1374", "right superior rectus"),
+    ("FJ1295", "left inferior rectus"),
+    ("FJ1346", "right inferior rectus"),
+    ("FJ1308", "left medial rectus"),
+    ("FJ1359", "right medial rectus"),
+    ("FJ1304", "left lateral rectus"),
+    ("FJ1355", "right lateral rectus"),
+    ("FJ1322", "left superior oblique"),
+    ("FJ1373", "right superior oblique"),
+    ("FJ1294", "left inferior oblique"),
+    ("FJ1345", "right inferior oblique"),
+    ("FJ1306", "left levator palpebrae superioris"),
+    ("FJ1357", "right levator palpebrae superioris"),
+    ("FJ2738", "left genioglossus"),
+    ("FJ2750", "right genioglossus"),
+    ("FJ2739", "left hyoglossus"),
+    ("FJ2751", "right hyoglossus"),
+    ("FJ2741", "left levator veli palatini"),
+    ("FJ2753", "right levator veli palatini"),
+    ("FJ2748", "left tensor veli palatini"),
+    ("FJ2760", "right tensor veli palatini"),
+    ("FJ2762", "uvular muscle"),
+]
+EYE_IDS = ("FJ1289", "FJ1340", "FJ1317", "FJ1368")  # cornea L/R, sclera L/R
+ISA_ZIP = Path("/tmp/bp3d/isa_BP3D_4.0_obj_99.zip")
+
+
+def _isa_mesh(fj: str) -> trimesh.Trimesh:
+    cache = Path("/tmp/bp3d/muscles40") / f"{fj}.obj"
+    if not cache.exists():
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(ISA_ZIP) as bundle:
+            cache.write_bytes(bundle.read(f"isa_BP3D_4.0_obj_99/{fj}.obj"))
+    return load_mesh(cache)
+
+
+def _posed(fj: str, scale: float, rot: np.ndarray, trans: np.ndarray) -> trimesh.Trimesh:
+    return apply_similarity(_isa_mesh(fj), scale, rot, trans)
+
+
+def build_real_muscles(scale: float, rot: np.ndarray, trans: np.ndarray) -> tuple[trimesh.Trimesh, list[dict]]:
+    parts = []
+    named = []
+    for fj, name in HEAD_MUSCLES:
+        mesh = _posed(fj, scale, rot, trans)
+        parts.append(mesh)
+        named.append({"id": fj, "name": name, "at": [round(float(v), 4) for v in mesh.vertices.mean(0)]})
+        print(f"  muscle {fj} {name} faces {len(mesh.faces)}", flush=True)
+    merged = trimesh.util.concatenate(parts)
+    merged.merge_vertices()
+    print(f"  muscles merged {len(merged.faces)}", flush=True)
+    if len(merged.faces) > 36000:
+        merged = decimate(merged, 36000)
+    merged.fix_normals()
+    shell_quality("muscles", merged)
+    return merged, named
+
+
+def build_eyes(scale: float, rot: np.ndarray, trans: np.ndarray) -> trimesh.Trimesh:
+    eyes = trimesh.util.concatenate([_posed(fj, scale, rot, trans) for fj in EYE_IDS])
+    eyes.merge_vertices()
+    print(f"  eyes raw {len(eyes.faces)}", flush=True)
+    if len(eyes.faces) > 8000:
+        eyes = decimate(eyes, 6000)
+    eyes.fix_normals()
+    shell_quality("eyes", eyes)
+    return eyes
+
+
+def build_skin(
+    scale: float, rot: np.ndarray, trans: np.ndarray, skull: trimesh.Trimesh
+) -> tuple[trimesh.Trimesh, float, float]:
+    """Head crop of the 4.0 skin. Body triangles are dropped, then long edges
+    are split so the veil and the fresnel outline stay continuous."""
+    skin = _posed("FJ2810", scale, rot, trans)
+    lo = skull.bounds[0] - np.array([1.8, 5.5, 2.0])
+    hi = skull.bounds[1] + np.array([1.8, 1.4, 2.4])
+    center = skin.triangles_center
+    skin.update_faces(np.all((center >= lo) & (center <= hi), axis=1))
+    skin.remove_unreferenced_vertices()
+    faces = np.asarray(skin.faces)
+
+    def edge_length(a: np.ndarray, c: np.ndarray) -> np.ndarray:
+        return np.linalg.norm(skin.vertices[a] - skin.vertices[c], axis=1)
+
+    short = (
+        (edge_length(faces[:, 0], faces[:, 1]) <= 3.2)
+        & (edge_length(faces[:, 1], faces[:, 2]) <= 3.2)
+        & (edge_length(faces[:, 2], faces[:, 0]) <= 3.2)
+    )
+    skin.update_faces(short)
+    skin.remove_unreferenced_vertices()
+    verts, faces = trimesh.remesh.subdivide_to_size(
+        skin.vertices, skin.faces, max_edge=1.15, max_iter=6
+    )
+    skin = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    skin.merge_vertices()
+    skin.update_faces(skin.unique_faces() & skin.nondegenerate_faces())
+    skin.remove_unreferenced_vertices()
+    pieces = skin.split(only_watertight=False)
+    skin = max(pieces, key=lambda item: len(item.faces))
+    if len(skin.faces) < 500:
+        raise RuntimeError("head crop removed the skin")
+    # The body skin is a thin double wall. The inner wall turns the fresnel into a web.
+    center = np.median(skin.vertices, axis=0)
+    outward = np.einsum("ij,ij->i", skin.triangles_center - center, skin.face_normals) > 0.05
+    skin.update_faces(outward)
+    skin.remove_unreferenced_vertices()
+    _spatial_smooth(skin, 0.45, 4, 0.6)
+    _smooth_normals(skin, 0.7)
+    shell_quality("skin", skin)
+    ys = skin.vertices[:, 1]
+    # Fade only the cut neck. The chin stays bright.
+    low = float(ys.min())
+    return skin, low + 0.4, low + 3.2
+
+
+def _expression_anchors(labeled: dict[str, trimesh.Trimesh], orbits: list[dict]) -> dict[str, list[list[float]]]:
+    """Label points on the skull for the quiz. These muscles are not in the 4.0 element set."""
+    frontal = labeled["frontal"].vertices
+    upper = frontal[frontal[:, 1] > np.quantile(frontal[:, 1], 0.62)]
+    frontalis = upper[int(np.argmax(upper[:, 2]))] if len(upper) else frontal.mean(0)
+    nasion_band = frontal[(np.abs(frontal[:, 0]) < 1.1) & (frontal[:, 1] > 1.0) & (frontal[:, 1] < 4.5)]
+    nasion = nasion_band[int(np.argmax(nasion_band[:, 2]))] if len(nasion_band) else frontal.mean(0)
+    right = np.array(orbits[0]["center"], dtype=np.float64)
+    left = np.array(orbits[1]["center"], dtype=np.float64)
+    mx = labeled["maxilla"].vertices
+    mouth = mx[(np.abs(mx[:, 0]) < 1.4) & (mx[:, 1] < np.quantile(mx[:, 1], 0.35))]
+    oris = mouth[int(np.argmax(mouth[:, 2]))] if len(mouth) else mx.mean(0)
+    zy = labeled["zygomatic"].vertices
+    md = labeled["mandible"].vertices
+    lateral = md[np.abs(md[:, 0]) > np.quantile(np.abs(md[:, 0]), 0.72)]
+    masseter = lateral.mean(0) if len(lateral) else md.mean(0)
+    tv = labeled["temporal"].vertices
+    high = tv[tv[:, 1] > np.quantile(tv[:, 1], 0.7)]
+    temporalis = high.mean(0) if len(high) else tv.mean(0)
+
+    def pack(point: np.ndarray) -> list[float]:
+        return [round(float(v), 4) for v in point]
+
+    return {
+        "frontalis": [pack(frontalis)],
+        "corrugator": [pack(nasion + np.array([0.7, 0.35, 0.1])), pack(nasion + np.array([-0.7, 0.35, 0.1]))],
+        "orbicularis": [pack(right), pack(left)],
+        "oris": [pack(oris)],
+        "zygomaticus": [pack(zy[zy[:, 0] >= 0].mean(0)), pack(zy[zy[:, 0] < 0].mean(0))],
+        "masseter": [pack(masseter)],
+        "temporalis": [pack(temporalis)],
+    }
+
+
 def main() -> None:
     pairs = [item for group in BONE_FILES.values() for item in group]
     pairs += BRAIN_FILES
@@ -1288,38 +2045,60 @@ def main() -> None:
     face = face_mesh.vertices
     aligned, jaw, pose = align_bones(parts, face)
     scale, rot, trans = pose
-    brain_raw = []
+    labeled = {
+        "frontal": aligned["frontal"],
+        "parietal": combine(aligned, ["parietal_l", "parietal_r"]),
+        "temporal": combine(aligned, ["temporal_l", "temporal_r", "sphenoid"]),
+        "occipital": aligned["occipital"],
+        "nasal": combine(aligned, ["nasal_l", "nasal_r"]),
+        "zygomatic": combine(aligned, ["zygomatic_l", "zygomatic_r"]),
+        "maxilla": combine(aligned, ["maxilla_l", "maxilla_r"]),
+        "mandible": aligned["mandible"],
+    }
+    orbits = measure_orbits(labeled, face)
+    fit = fit_anchors(labeled, orbits)
+    jaw = jaw_pivot(aligned["mandible"])
+    print("jaw pivot", np.round(jaw, 3), flush=True)
+    cranium, jaw_mesh = build_skull_shells(aligned)
+    print("real muscles", flush=True)
+    muscles, identified = build_real_muscles(scale, rot, trans)
+    drift = float(np.linalg.norm(muscles.vertices.mean(0) - cranium.vertices.mean(0)))
+    print(f"  muscle centroid drift {drift:.2f} cm", flush=True)
+    if drift > 12:
+        raise RuntimeError("4.0 muscles did not land on the 4.3 skull")
+    print("eyes", flush=True)
+    eyes = build_eyes(scale, rot, trans)
+    skull_box = trimesh.util.concatenate([cranium, jaw_mesh])
+    print("skin", flush=True)
+    skin, neck0, neck1 = build_skin(scale, rot, trans, skull_box)
+    print(f"  neck fade {neck0:.2f} {neck1:.2f}", flush=True)
+    cerebrum_raw = []
+    hind_raw = []
     for fj, _bp in BRAIN_FILES:
-        if fj in have:
-            brain_raw.append(load_mesh(have[fj]))
-    print(f"brain parts {len(brain_raw)}", flush=True)
-    brain_bp = remesh_brain(brain_raw)
-    brain = apply_similarity(brain_bp, scale, rot, trans)
-    brain.fix_normals()
-    span = brain.bounds[1] - brain.bounds[0]
-    print("brain faces", len(brain.faces), "span", np.round(span, 2))
-    if span[1] > 28 or brain.bounds[0][1] < -18:
-        raise RuntimeError(f"brain bounds look wrong: {brain.bounds}")
+        if fj not in have:
+            continue
+        bucket = hind_raw if fj == "FJ1781" else cerebrum_raw
+        bucket.append(load_mesh(have[fj]))
+    print(f"brain parts cerebrum {len(cerebrum_raw)} hind {len(hind_raw)}", flush=True)
+    cerebrum = apply_similarity(remesh_brain(cerebrum_raw, target=70000, pitch=1.7), scale, rot, trans)
+    cerebrum.fix_normals()
+    hindbrain = apply_similarity(decimate(hind_raw[0], 16000), scale, rot, trans)
+    hindbrain.fix_normals()
+    for name, mesh in (("cerebrum", cerebrum), ("hindbrain", hindbrain)):
+        span = mesh.bounds[1] - mesh.bounds[0]
+        print(name, "faces", len(mesh.faces), "span", np.round(span, 2), flush=True)
+        if span[1] > 28 or mesh.bounds[0][1] < -18:
+            raise RuntimeError(f"{name} bounds look wrong: {mesh.bounds}")
 
     export: dict[str, trimesh.Trimesh] = {
-        "frontal": decimate(aligned["frontal"], FACE_LIMIT["frontal"]),
-        "parietal": decimate(combine(aligned, ["parietal_l", "parietal_r"]), FACE_LIMIT["parietal"]),
-        "temporal": decimate(combine(aligned, ["temporal_l", "temporal_r", "sphenoid"]), FACE_LIMIT["temporal"]),
-        "occipital": decimate(aligned["occipital"], FACE_LIMIT["occipital"]),
-        "nasal": decimate(combine(aligned, ["nasal_l", "nasal_r"]), FACE_LIMIT["nasal"]),
-        "zygomatic": decimate(combine(aligned, ["zygomatic_l", "zygomatic_r"]), FACE_LIMIT["zygomatic"]),
-        "maxilla": decimate(combine(aligned, ["maxilla_l", "maxilla_r"]), FACE_LIMIT["maxilla"]),
-        "mandible": decimate(aligned["mandible"], FACE_LIMIT["mandible"]),
-        "brain": brain,
+        "cranium": cranium,
+        "jaw": jaw_mesh,
+        "muscles": muscles,
+        "eyes": eyes,
+        "skin": skin,
+        "cerebrum": cerebrum,
+        "hindbrain": hindbrain,
     }
-    print("jaw pivot before orbit pin", jaw)
-    refine_face_bones(export)
-    orbits = pin_orbits(export, face)
-    jaw = jaw_pivot(export["mandible"])
-    print("jaw pivot", jaw)
-    export.update(build_muscles(face_mesh, export, jaw))
-    skull_for_shell = combine(export, ["frontal", "parietal", "temporal", "occipital"])
-    export["shell"] = build_shell(face_mesh, skull_for_shell)
     hand_raw = {name: load_mesh(have[fj]) for name, (fj, _bp) in HAND_FILES.items()}
     export.update(build_hand(hand_raw))
 
@@ -1340,7 +2119,10 @@ def main() -> None:
         scene.add_geometry(mesh, node_name=name, geom_name=name)
     glb = OUT_DIR / "anatomy.glb"
     scene.export(glb)
-    anchors = anchor_points({k: v for k, v in export.items() if not k.startswith("hand_")}, jaw)
+    bone_anchors = anchor_points({**labeled, "brain": export["cerebrum"]}, jaw)
+    for name, points in _expression_anchors(labeled, orbits).items():
+        bone_anchors.setdefault(name, points)
+    anchors = bone_anchors
     hand_map = {
         "palm": "hand_palm",
         "bones": [
@@ -1370,6 +2152,9 @@ def main() -> None:
         "anchors": anchors,
         "hands": hand_map,
         "orbits": orbits,
+        "fit": fit,
+        "neck": [round(neck0, 3), round(neck1, 3)],
+        "muscles": identified,
         "bytes": glb.stat().st_size,
     }
     (OUT_DIR / "anchors.json").write_text(json.dumps(payload))
@@ -1460,8 +2245,35 @@ def replace_muscles() -> None:
     print("replaced muscles", glb.stat().st_size)
 
 
+def skull_only() -> None:
+    """Union the rigid bones and write a skull GLB. Does not touch the app export."""
+    pairs = [item for group in BONE_FILES.values() for item in group]
+    seen: set[str] = set()
+    unique = []
+    for pair in pairs:
+        if pair[0] not in seen:
+            seen.add(pair[0])
+            unique.append(pair)
+    have = ensure_objs(unique)
+    parts = {name: merge_paths([have[fj] for fj, _bp in files if fj in have]) for name, files in BONE_FILES.items()}
+    for name, mesh in parts.items():
+        print(f"loaded {name} faces {len(mesh.faces)} watertight {mesh.is_watertight}", flush=True)
+    face = load_canonical().vertices
+    aligned, _jaw, _pose = align_bones(parts, face)
+    cranium, jaw = build_skull_shells(aligned)
+    out = Path("/tmp/bp3d/skull-only.glb")
+    scene = trimesh.Scene()
+    for name, mesh in (("cranium", cranium), ("jaw", jaw)):
+        mesh.vertex_normals
+        scene.add_geometry(mesh, node_name=name, geom_name=name)
+    scene.export(out)
+    print("wrote", out, out.stat().st_size, flush=True)
+
+
 if __name__ == "__main__":
     if "--muscles-only" in sys.argv:
         replace_muscles()
+    elif "--skull-only" in sys.argv:
+        skull_only()
     else:
         main()

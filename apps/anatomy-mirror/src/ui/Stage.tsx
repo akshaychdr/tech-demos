@@ -19,7 +19,7 @@ import {
   type EngineSnapshot,
   type HoldEvent,
 } from '../engine/MirrorEngine.ts'
-import type { LookMode, RevealMode, SceneLayers } from '../scene/AnatomyScene.ts'
+import { DEFAULT_FIT, type LookMode, type ManualFit, type RevealMode, type SceneLayers } from '../scene/AnatomyScene.ts'
 import type { StructureId } from '../domain/types.ts'
 import { Credits } from './Credits.tsx'
 import { drawScoreCard } from './scoreImage.ts'
@@ -60,7 +60,8 @@ export default function Stage() {
   const [snap, setSnap] = useState<EngineSnapshot>(emptySnap)
   const [mode, setMode] = useState<EngineMode>('explore')
   const [layers, setLayers] = useState<SceneLayers>({ skull: true, muscles: false, brain: false, hand: false })
-  const [labelsOn, setLabelsOn] = useState(true)
+  const [labelsOn, setLabelsOn] = useState(false)
+  const [fit, setFit] = useState<ManualFit>(loadFit)
   const [look, setLook] = useState<LookMode>('xray')
   const [reveal, setReveal] = useState<RevealMode>('lens')
   const [cut, setCut] = useState(0.42)
@@ -160,9 +161,10 @@ export default function Stage() {
   }, [mode, layers, labelsOn, faceStep, quiz])
 
   useEffect(() => {
-    const appearance: Appearance = { look, reveal, cut, feather, skin }
+    const appearance: Appearance = { look, reveal, cut, feather, skin, fit }
     engine.current?.setAppearance(appearance)
-  }, [look, reveal, cut, feather, skin, status])
+    window.localStorage.setItem(FIT_KEY, JSON.stringify(fit))
+  }, [look, reveal, cut, feather, skin, fit, status])
 
   useEffect(() => {
     const eng = engine.current
@@ -455,23 +457,36 @@ export default function Stage() {
               </div>
             )}
 
-            <Pills label="Look" value={look} options={LOOKS} onChange={setLook} />
-            <Pills label="Reveal" value={reveal} options={REVEALS} onChange={setReveal} />
-            {reveal !== 'whole' && <Slider label={cutLabel} value={cut} onChange={setCut} />}
-            {reveal === 'lens' && (
-              <button
-                type="button"
-                className={lensPinned ? 'pill' : 'pill on'}
-                onClick={() => {
-                  engine.current?.followLens()
-                  setLensPinned(false)
-                }}
-              >
-                {lensPinned ? 'Follow face' : 'Following the face'}
-              </button>
-            )}
-            <Slider label="Skin" value={skin} onChange={setSkin} />
-            <Slider label="Soft edge" value={feather} onChange={setFeather} />
+            <details className="adjust">
+              <summary>Adjust</summary>
+              <Pills label="Look" value={look} options={LOOKS} onChange={setLook} />
+              <Pills label="Reveal" value={reveal} options={REVEALS} onChange={setReveal} />
+              {reveal !== 'whole' && <Slider label={cutLabel} value={cut} onChange={setCut} />}
+              {reveal === 'lens' && (
+                <button
+                  type="button"
+                  className={lensPinned ? 'pill' : 'pill on'}
+                  onClick={() => {
+                    engine.current?.followLens()
+                    setLensPinned(false)
+                  }}
+                >
+                  {lensPinned ? 'Follow face' : 'Following the face'}
+                </button>
+              )}
+              <Slider label="Skin" value={skin} onChange={setSkin} />
+              <Slider label="Soft edge" value={feather} onChange={setFeather} />
+              <div className="fit-grid">
+                <p className="fit-heading">Fit</p>
+                <FitSlider label="Size" value={fit.size} min={0.6} max={1.6} onChange={(size) => setFit((value) => ({ ...value, size }))} />
+                <FitSlider label="Width" value={fit.width} min={0.7} max={1.4} onChange={(width) => setFit((value) => ({ ...value, width }))} />
+                <FitSlider label="Height" value={fit.height} min={0.7} max={1.4} onChange={(height) => setFit((value) => ({ ...value, height }))} />
+                <FitSlider label="Depth" value={fit.depth} min={0.7} max={1.4} onChange={(depth) => setFit((value) => ({ ...value, depth }))} />
+                <FitSlider label="X" value={fit.x} min={-4} max={4} onChange={(x) => setFit((value) => ({ ...value, x }))} />
+                <FitSlider label="Y" value={fit.y} min={-4} max={4} onChange={(y) => setFit((value) => ({ ...value, y }))} />
+                <FitSlider label="Z" value={fit.z} min={-4} max={4} onChange={(z) => setFit((value) => ({ ...value, z }))} />
+              </div>
+            </details>
 
             <div className="chip-row" role="group" aria-label="Layers">
               <Chip on={layers.skull} onClick={() => setLayers((value) => ({ ...value, skull: !value.skull }))}>
@@ -548,6 +563,50 @@ function Pills<T extends string>({
         </button>
       ))}
     </div>
+  )
+}
+
+const FIT_KEY = 'anatomy-mirror-fit-v1'
+
+function loadFit(): ManualFit {
+  try {
+    const raw = window.localStorage.getItem(FIT_KEY)
+    if (!raw) return { ...DEFAULT_FIT }
+    return { ...DEFAULT_FIT, ...(JSON.parse(raw) as Partial<ManualFit>) }
+  } catch {
+    return { ...DEFAULT_FIT }
+  }
+}
+
+function FitSlider({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  onChange: (value: number) => void
+}) {
+  const id = `fit-${label.toLowerCase()}`
+  return (
+    <label className="slider" htmlFor={id}>
+      <span>
+        {label} {value.toFixed(2)}
+      </span>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step={0.01}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
   )
 }
 

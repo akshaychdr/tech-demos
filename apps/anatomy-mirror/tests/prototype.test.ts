@@ -7,7 +7,7 @@ import { emptyHold, stepHold } from '../src/domain/hold.ts'
 import { drawQuiz, pointsFor, startQuiz, answerQuestion, advanceQuiz } from '../src/domain/quiz.ts'
 import { applySimilarity, umeyama, umeyama2 } from '../src/domain/fit.ts'
 import { parseBeat, formatScore, shareMessage } from '../src/domain/share.ts'
-import { solveFaceFit, solveScreenFit } from '../src/domain/screenFit.ts'
+import { clampScreenScale, solveFaceFit, solveScreenFit, solveWeightedScreenFit } from '../src/domain/screenFit.ts'
 import { OneEuroFilter } from '../src/domain/oneEuro.ts'
 import type { BlendshapeMap, BoneId, MuscleId, Vec3 } from '../src/domain/types.ts'
 
@@ -340,6 +340,28 @@ describe('screen fit', () => {
     let value = stepped
     for (let t = 64; t < 2000; t += 16) value = filter.filter(3, t)
     expect(value).toBeGreaterThan(2.9)
+  })
+
+  test('weighted fit keeps a uniform scale when the eyes count more', () => {
+    const from = [
+      { x: -2, y: 1 },
+      { x: 2, y: 1 },
+      { x: 0, y: 4 },
+      { x: 0, y: -3 },
+    ]
+    const to = from.map((point) => ({ x: point.x * 1.4 + 0.25, y: point.y * 1.4 - 0.1 }))
+    const fit = solveWeightedScreenFit(from, to, [5, 5, 1, 1])
+    expect(fit).not.toBeNull()
+    expect(fit!.scale).toBeCloseTo(1.4, 4)
+    expect(fit!.x).toBeCloseTo(0.25, 4)
+    expect(fit!.y).toBeCloseTo(-0.1, 4)
+  })
+
+  test('screen scale stays inside 0.6 and 1.6', () => {
+    expect(clampScreenScale(2)).toBe(1.6)
+    expect(clampScreenScale(0.2)).toBe(0.6)
+    expect(clampScreenScale(1.1)).toBeCloseTo(1.1, 5)
+    expect(clampScreenScale(Number.NaN)).toBe(1)
   })
 
   test('refuses fewer than three points', () => {

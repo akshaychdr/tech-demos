@@ -1,9 +1,8 @@
 {
   "nodes": [
-    "brain",
-    "corrugator",
-    "frontal",
-    "frontalis",
+    "cerebrum",
+    "cranium",
+    "eyes",
     "hand_dp1",
     "hand_dp2",
     "hand_dp3",
@@ -24,19 +23,10 @@
     "hand_pp3",
     "hand_pp4",
     "hand_pp5",
-    "mandible",
-    "masseter",
-    "maxilla",
-    "nasal",
-    "occipital",
-    "orbicularis",
-    "oris",
-    "parietal",
-    "shell",
-    "temporal",
-    "temporalis",
-    "zygomatic",
-    "zygomaticus"
+    "hindbrain",
+    "jaw",
+    "muscles",
+    "skin"
   ],
-  "bytes": 7910752
+  "bytes": 7101236
 }
