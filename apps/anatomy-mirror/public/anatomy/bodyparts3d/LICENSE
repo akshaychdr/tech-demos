@@ -1,18 +1,16 @@
 Anatomy Mirror derived meshes
 Creative Commons Attribution-ShareAlike 2.1 Japan (CC BY-SA 2.1 JP)
 
-The skull, brain, eyes, skin, hand bones, and head muscles in anatomy.glb are
-adapted from BodyParts3D / Anatomography, copyright Database Center for Life
+The skull, brain, eyes, skin, hand bones, and facial muscles in anatomy.glb are
+adapted from BodyParts3D 3.0 and 4.x / Anatomography, © Database Center for Life
 Science (DBCLS). BodyParts3D is licensed under CC BY-SA 2.1 Japan:
 https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en
 
 You may copy, share, and adapt these meshes provided you give credit, link the
 licence, and distribute adaptations under the same licence.
 
-The muscle layer is the 23 element meshes under FMA9616 in the BodyParts3D 4.0
-isa tree (extraocular muscles, tongue, and palate), rigidly aligned to the 4.3
-skull and released under the same licence. The muscles of facial expression are
-not in that release.
+The muscle layer is the expression muscles from BodyParts3D 3.0, simplified and
+re-aligned onto the 4.x skull, and released under the same licence.
 
 The canonical face coordinates used only to align the meshes come from the
 MediaPipe canonical face model (Apache License 2.0).

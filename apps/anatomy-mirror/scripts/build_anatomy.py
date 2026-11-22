@@ -1870,36 +1870,58 @@ def build_skull_shells(
     return cranium, jaw
 
 
-# BodyParts3D 4.0 isa elements under FMA9616 "muscle of head".
-# Names come from the 4.3 FMA is-a table. They are the extraocular muscles,
-# the tongue, and the palate — not the muscles of facial expression.
-HEAD_MUSCLES = [
-    ("FJ1323", "left superior rectus"),
-    ("FJ1374", "right superior rectus"),
-    ("FJ1295", "left inferior rectus"),
-    ("FJ1346", "right inferior rectus"),
-    ("FJ1308", "left medial rectus"),
-    ("FJ1359", "right medial rectus"),
-    ("FJ1304", "left lateral rectus"),
-    ("FJ1355", "right lateral rectus"),
-    ("FJ1322", "left superior oblique"),
-    ("FJ1373", "right superior oblique"),
-    ("FJ1294", "left inferior oblique"),
-    ("FJ1345", "right inferior oblique"),
-    ("FJ1306", "left levator palpebrae superioris"),
-    ("FJ1357", "right levator palpebrae superioris"),
-    ("FJ2738", "left genioglossus"),
-    ("FJ2750", "right genioglossus"),
-    ("FJ2739", "left hyoglossus"),
-    ("FJ2751", "right hyoglossus"),
-    ("FJ2741", "left levator veli palatini"),
-    ("FJ2753", "right levator veli palatini"),
-    ("FJ2748", "left tensor veli palatini"),
-    ("FJ2760", "right tensor veli palatini"),
-    ("FJ2762", "uvular muscle"),
+# BodyParts3D 3.0 expression muscles. Ids are the FMA rows in parts_list_e.txt
+# (release 20110915). "jaw" says how the muscle answers jawOpen:
+# stretch keeps the cranial origin still, follow rides the mandible, light
+# is a smaller share of that ride, none stays on the cranium.
+# quiz is the label this mesh owns. Empty means it is drawn but does not host a quiz marker.
+EXPRESSION_MUSCLES = [
+    ("FMA46759", "right frontalis", "frontalis", "none"),
+    ("FMA46760", "left frontalis", "frontalis", "none"),
+    ("FMA46782", "orbital part of right orbicularis oculi", "orbicularis", "none"),
+    ("FMA46783", "orbital part of left orbicularis oculi", "orbicularis", "none"),
+    ("FMA46785", "palpebral part of right orbicularis oculi", "orbicularis", "none"),
+    ("FMA46786", "palpebral part of left orbicularis oculi", "orbicularis", "none"),
+    ("FMA46841", "orbicularis oris", "oris", "light"),
+    ("FMA46812", "right zygomaticus major", "zygomaticus", "none"),
+    ("FMA46813", "left zygomaticus major", "zygomaticus", "none"),
+    ("FMA46814", "right zygomaticus minor", "", "none"),
+    ("FMA46815", "left zygomaticus minor", "", "none"),
+    ("FMA46806", "right levator labii superioris", "", "none"),
+    ("FMA46807", "left levator labii superioris", "", "none"),
+    ("FMA46803", "right levator labii superioris alaeque nasi", "", "none"),
+    ("FMA46804", "left levator labii superioris alaeque nasi", "", "none"),
+    ("FMA46839", "right risorius", "", "light"),
+    ("FMA46840", "left risorius", "", "light"),
+    ("FMA46826", "right mentalis", "", "follow"),
+    ("FMA46827", "left mentalis", "", "follow"),
+    ("FMA46829", "right depressor anguli oris", "", "follow"),
+    ("FMA46830", "left depressor anguli oris", "", "follow"),
+    ("FMA46835", "right buccinator", "", "stretch"),
+    ("FMA46836", "left buccinator", "", "stretch"),
+    ("FMA55606", "right nasalis", "", "none"),
+    ("FMA55607", "left nasalis", "", "none"),
+    ("FMA55610", "right procerus", "corrugator", "none"),
+    ("FMA55611", "left procerus", "corrugator", "none"),
+    ("FMA49001", "superficial part of right masseter", "masseter", "stretch"),
+    ("FMA49002", "superficial part of left masseter", "masseter", "stretch"),
+    ("FMA49004", "deep part of right masseter", "masseter", "stretch"),
+    ("FMA49005", "deep part of left masseter", "masseter", "stretch"),
+    ("FMA49007", "right temporalis", "temporalis", "stretch"),
+    ("FMA49008", "left temporalis", "temporalis", "stretch"),
+]
+# 3.0 bone, 4.0 bone. The pair estimates the similarity between the two releases.
+ALIGNMENT_BONES = [
+    ("FMA52734", "FJ3200", "frontal"),
+    ("FMA52748", "FJ3289", "mandible"),
+    ("FMA52893", "FJ3287", "left zygomatic"),
+    ("FMA52892", "FJ3392", "right zygomatic"),
 ]
 EYE_IDS = ("FJ1289", "FJ1340", "FJ1317", "FJ1368")  # cornea L/R, sclera L/R
 ISA_ZIP = Path("/tmp/bp3d/isa_BP3D_4.0_obj_99.zip")
+V3_ZIP = Path("/tmp/bp3d/bp3d30.zip")
+# Matches the jaw's full open in AnatomyScene (jawOpen of 1 rotates 0.42 rad).
+JAW_OPEN = 0.42
 
 
 def _isa_mesh(fj: str) -> trimesh.Trimesh:
@@ -1915,22 +1937,201 @@ def _posed(fj: str, scale: float, rot: np.ndarray, trans: np.ndarray) -> trimesh
     return apply_similarity(_isa_mesh(fj), scale, rot, trans)
 
 
-def build_real_muscles(scale: float, rot: np.ndarray, trans: np.ndarray) -> tuple[trimesh.Trimesh, list[dict]]:
-    parts = []
-    named = []
-    for fj, name in HEAD_MUSCLES:
-        mesh = _posed(fj, scale, rot, trans)
-        parts.append(mesh)
-        named.append({"id": fj, "name": name, "at": [round(float(v), 4) for v in mesh.vertices.mean(0)]})
-        print(f"  muscle {fj} {name} faces {len(mesh.faces)}", flush=True)
-    merged = trimesh.util.concatenate(parts)
-    merged.merge_vertices()
-    print(f"  muscles merged {len(merged.faces)}", flush=True)
-    if len(merged.faces) > 36000:
-        merged = decimate(merged, 36000)
-    merged.fix_normals()
+def _v3_mesh(fma: str) -> trimesh.Trimesh:
+    cache = Path("/tmp/bp3d/muscles30") / f"{fma}.obj"
+    if not cache.exists():
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(V3_ZIP) as bundle:
+            member = next(
+                name for name in bundle.namelist() if name.replace("\\", "/").endswith(f"/{fma}.obj")
+            )
+            cache.write_bytes(bundle.read(member))
+    return load_mesh(cache)
+
+
+def _compose(
+    s1: float, r1: np.ndarray, t1: np.ndarray, s0: float, r0: np.ndarray, t0: np.ndarray
+) -> tuple[float, np.ndarray, np.ndarray]:
+    """Apply (s0, r0, t0) first, then (s1, r1, t1). Matches apply_similarity."""
+    scale = s1 * s0
+    rot = r1 @ r0
+    trans = s1 * (t0 @ r1.T) + t1
+    return scale, rot, trans
+
+
+def similarity_icp(
+    src: np.ndarray, dst: np.ndarray, iterations: int = 20
+) -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+    """Similarity ICP. Correspondences are nearest neighbours; each step is Umeyama."""
+    tree = cKDTree(dst)
+    scale = 1.0
+    rot = np.eye(3)
+    trans = np.zeros(3)
+    thresh = 15.0
+    current = src
+    for step in range(iterations):
+        dist, index = tree.query(current)
+        keep = dist < thresh
+        if int(keep.sum()) < 80:
+            thresh *= 1.4
+            continue
+        step_scale, step_rot, step_trans = umeyama(current[keep], dst[index[keep]])
+        scale, rot, trans = _compose(step_scale, step_rot, step_trans, scale, rot, trans)
+        current = apply_similarity_points(src, scale, rot, trans)
+        kept = dist[keep]
+        median = float(np.median(kept))
+        thresh = float(np.clip(median * 6.0, 2.0, 20.0))
+        print(
+            f"  icp {step:02d} scale {scale:.4f} median {median:.3f} mm keep {int(keep.sum())}/{len(src)}",
+            flush=True,
+        )
+    dist, _index = tree.query(current)
+    return scale, rot, trans, dist
+
+
+def _sample_bone(mesh: trimesh.Trimesh, count: int = 2500) -> np.ndarray:
+    points, _faces = trimesh.sample.sample_surface(mesh, count, seed=4)
+    return np.asarray(points, dtype=np.float64)
+
+
+def register_releases() -> tuple[float, np.ndarray, np.ndarray]:
+    """Similarity that takes a 3.0 vertex, in millimetres, onto the 4.0 bones."""
+    sources = []
+    targets = []
+    for fma, fj, label in ALIGNMENT_BONES:
+        try:
+            src = _sample_bone(_v3_mesh(fma))
+            dst = _sample_bone(_isa_mesh(fj))
+        except (StopIteration, KeyError, FileNotFoundError) as error:
+            print(f"  skip {label}: {error}", flush=True)
+            continue
+        before, _index = cKDTree(dst).query(src)
+        print(
+            f"  bone {label} before median {np.median(before):.2f} mm p95 {np.quantile(before, 0.95):.2f}",
+            flush=True,
+        )
+        sources.append(src)
+        targets.append(dst)
+    if len(sources) < 3:
+        raise RuntimeError("need at least three bone pairs to register 3.0 onto 4.0")
+    src = np.concatenate(sources)
+    dst = np.concatenate(targets)
+    before, _index = cKDTree(dst).query(src)
+    print(
+        f"  before median {np.median(before):.3f} mm p95 {np.quantile(before, 0.95):.3f}",
+        flush=True,
+    )
+    scale, rot, trans, after = similarity_icp(src, dst)
+    print(
+        f"  after scale {scale:.4f} median {np.median(after):.3f} mm p95 {np.quantile(after, 0.95):.3f}",
+        flush=True,
+    )
+    print(f"  rotation\n{np.array2string(rot, precision=4)}", flush=True)
+    print(f"  translation {np.round(trans, 3)} mm", flush=True)
+    return scale, rot, trans
+
+
+def _jaw_weights(points: np.ndarray, kind: str, jaw_tree: cKDTree, skull_tree: cKDTree) -> np.ndarray:
+    if kind == "none":
+        return np.zeros(len(points))
+    jaw_dist, _index = jaw_tree.query(points)
+    skull_dist, _index = skull_tree.query(points)
+    on_jaw = skull_dist / np.maximum(skull_dist + jaw_dist, 1e-6)
+    if kind == "follow":
+        return np.clip(on_jaw * 0.25 + 0.75, 0.0, 1.0)
+    if kind == "light":
+        return np.clip(on_jaw * 0.55, 0.0, 1.0)
+    # stretch: origin stays, the mandibular end travels with the hinge
+    return np.clip((on_jaw - 0.2) / 0.6, 0.0, 1.0)
+
+
+def _open_move(points: np.ndarray, pivot: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    angle = JAW_OPEN
+    cosine, sine = float(np.cos(angle)), float(np.sin(angle))
+    relative = points - pivot
+    opened = np.column_stack(
+        [
+            relative[:, 0],
+            relative[:, 1] * cosine - relative[:, 2] * sine,
+            relative[:, 1] * sine + relative[:, 2] * cosine,
+        ]
+    )
+    return (opened - relative) * weights[:, None]
+
+
+def _topology_normals(mesh: trimesh.Trimesh) -> None:
+    normals = np.array(mesh.vertex_normals, copy=True)
+    neighbors = mesh.vertex_neighbors
+    for _ in range(2):
+        averaged = np.zeros_like(normals)
+        for index, ring in enumerate(neighbors):
+            averaged[index] = normals[index] if not ring else normals[index] + normals[ring].sum(axis=0)
+        length = np.linalg.norm(averaged, axis=1, keepdims=True)
+        normals = averaged / np.maximum(length, 1e-8)
+    mesh.vertex_normals = normals
+
+
+def _on_surface(mesh: trimesh.Trimesh) -> list[float]:
+    center = mesh.vertices.mean(0)
+    point = mesh.vertices[int(np.argmin(np.linalg.norm(mesh.vertices - center, axis=1)))]
+    return [round(float(v), 4) for v in point]
+
+
+def build_expression_muscles(
+    skull_pose: tuple[float, np.ndarray, np.ndarray],
+    jaw_pivot_cm: np.ndarray,
+    mandible: trimesh.Trimesh,
+    cranium_parts: list[trimesh.Trimesh],
+) -> tuple[trimesh.Trimesh, list[dict], dict[str, list[list[float]]]]:
+    """3.0 expression muscles, in the app's centimetre frame, with jaw travel stored per vertex."""
+    reg_scale, reg_rot, reg_trans = register_releases()
+    scale, rot, trans = _compose(*skull_pose, reg_scale, reg_rot, reg_trans)
+    jaw_tree = cKDTree(mandible.vertices[:: max(1, len(mandible.vertices) // 8000)])
+    skull_cloud = np.concatenate([part.vertices[:: max(1, len(part.vertices) // 6000)] for part in cranium_parts])
+    skull_tree = cKDTree(skull_cloud)
+
+    raw = []
+    for fma, name, quiz, kind in EXPRESSION_MUSCLES:
+        mesh = apply_similarity(_v3_mesh(fma), scale, rot, trans)
+        raw.append((fma, name, quiz, kind, mesh))
+        print(f"  muscle {fma} {name} faces {len(mesh.faces)}", flush=True)
+    areas = np.array([max(mesh.area, 1e-4) for *_rest, mesh in raw])
+    budgets = np.maximum(180, np.round(36000 * areas / areas.sum()).astype(int))
+    if int(budgets.sum()) > 36000:
+        budgets = np.maximum(180, np.round(budgets * 36000 / budgets.sum()).astype(int))
+
+    pieces = []
+    moves = []
+    identified = []
+    anchors: dict[str, list[list[float]]] = {name: [] for name in MUSCLE_NAMES}
+    for (fma, name, quiz, kind, mesh), budget in zip(raw, budgets):
+        if len(mesh.faces) > int(budget):
+            mesh = decimate(mesh, int(budget))
+        else:
+            mesh.fix_normals()
+        weights = _jaw_weights(np.asarray(mesh.vertices), kind, jaw_tree, skull_tree)
+        move = _open_move(np.asarray(mesh.vertices), jaw_pivot_cm, weights)
+        pieces.append(mesh)
+        moves.append(move)
+        identified.append({"id": fma, "name": name, "at": _on_surface(mesh)})
+        if quiz:
+            anchors[quiz].append(_on_surface(mesh))
+        print(f"    kept {len(mesh.faces)} jaw {kind} weight {float(weights.mean()):.2f}", flush=True)
+
+    offset = 0
+    faces = []
+    for mesh in pieces:
+        faces.append(np.asarray(mesh.faces) + offset)
+        offset += len(mesh.vertices)
+    merged = trimesh.Trimesh(
+        vertices=np.concatenate([mesh.vertices for mesh in pieces]),
+        faces=np.concatenate(faces),
+        process=False,
+    )
+    merged.metadata = {"move": np.concatenate(moves).astype(np.float32)}
+    _topology_normals(merged)
     shell_quality("muscles", merged)
-    return merged, named
+    return merged, identified, anchors
 
 
 def build_eyes(scale: float, rot: np.ndarray, trans: np.ndarray) -> trimesh.Trimesh:
@@ -2060,8 +2261,13 @@ def main() -> None:
     jaw = jaw_pivot(aligned["mandible"])
     print("jaw pivot", np.round(jaw, 3), flush=True)
     cranium, jaw_mesh = build_skull_shells(aligned)
-    print("real muscles", flush=True)
-    muscles, identified = build_real_muscles(scale, rot, trans)
+    print("expression muscles", flush=True)
+    muscles, identified, muscle_anchors = build_expression_muscles(
+        (scale, rot, trans),
+        jaw,
+        aligned["mandible"],
+        [aligned[name] for name in ("frontal", "zygomatic_l", "zygomatic_r", "maxilla_l", "maxilla_r")],
+    )
     drift = float(np.linalg.norm(muscles.vertices.mean(0) - cranium.vertices.mean(0)))
     print(f"  muscle centroid drift {drift:.2f} cm", flush=True)
     if drift > 12:
@@ -2109,10 +2315,10 @@ def main() -> None:
         # Touch the cache so the glTF writer stores normals. Without them the x-ray shader has nothing to shade.
         mesh.vertex_normals
         move = mesh.metadata.get("move") if isinstance(mesh.metadata, dict) else None
-        if name in MUSCLE_NAMES and move is not None:
-            uv = np.asarray(mesh.visual.uv, dtype=np.float32)
+        if name == "muscles" and move is not None:
+            count = len(mesh.vertices)
             muscle_attrs[name] = {
-                "uv": [round(float(v), 4) for v in uv.reshape(-1)],
+                "uv": [0.0] * (count * 2),
                 "move": [round(float(v), 4) for v in np.asarray(move, dtype=np.float32).reshape(-1)],
             }
         mesh.visual.vertex_colors = [220, 230, 240, 255]
@@ -2120,8 +2326,9 @@ def main() -> None:
     glb = OUT_DIR / "anatomy.glb"
     scene.export(glb)
     bone_anchors = anchor_points({**labeled, "brain": export["cerebrum"]}, jaw)
-    for name, points in _expression_anchors(labeled, orbits).items():
-        bone_anchors.setdefault(name, points)
+    for name, points in muscle_anchors.items():
+        if points:
+            bone_anchors[name] = points
     anchors = bone_anchors
     hand_map = {
         "palm": "hand_palm",
@@ -2210,39 +2417,89 @@ def _affine_from(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
     return affine
 
 
+def _muscle_job(
+    aligned: dict[str, trimesh.Trimesh], pose: tuple[float, np.ndarray, np.ndarray]
+) -> tuple[trimesh.Trimesh, list[dict], dict[str, list[list[float]]]]:
+    np.random.seed(4)
+    jaw = jaw_pivot(aligned["mandible"])
+    return build_expression_muscles(
+        pose,
+        jaw,
+        aligned["mandible"],
+        [aligned[name] for name in ("frontal", "zygomatic_l", "zygomatic_r", "maxilla_l", "maxilla_r")],
+    )
+
+
+def _load_aligned() -> tuple[dict[str, trimesh.Trimesh], tuple[float, np.ndarray, np.ndarray]]:
+    pairs = [item for group in BONE_FILES.values() for item in group]
+    seen: set[str] = set()
+    unique = []
+    for pair in pairs:
+        if pair[0] not in seen:
+            seen.add(pair[0])
+            unique.append(pair)
+    have = ensure_objs(unique)
+    parts = {name: merge_paths([have[fj] for fj, _bp in files if fj in have]) for name, files in BONE_FILES.items()}
+    face = load_canonical().vertices
+    aligned, _jaw, pose = align_bones(parts, face)
+    return aligned, pose
+
+
+def muscles_preview() -> None:
+    """Write skull + new muscles to a preview file. Does not touch the app."""
+    aligned, pose = _load_aligned()
+    muscles, identified, anchors = _muscle_job(aligned, pose)
+    skull = trimesh.load(OUT_DIR / "anatomy.glb", force="scene")
+    scene = trimesh.Scene()
+    for name in ("cranium", "jaw"):
+        mesh = skull.geometry[name]
+        mesh.vertex_normals
+        scene.add_geometry(mesh, node_name=name, geom_name=name)
+    muscles.vertex_normals
+    scene.add_geometry(muscles, node_name="muscles", geom_name="muscles")
+    out = Path("/tmp/bp3d/muscles-on-skull.glb")
+    scene.export(out)
+    print("preview", out, out.stat().st_size, flush=True)
+    print("anchors", {key: len(points) for key, points in anchors.items()}, flush=True)
+    print("identified", len(identified), flush=True)
+
+
 def replace_muscles() -> None:
-    """Rebuild muscle sheets on the skull already in the glTF. Does not move the bones."""
+    """Swap the muscle layer in the app file. The cranium and jaw stay as they are."""
+    aligned, pose = _load_aligned()
+    muscles, identified, muscle_anchors = _muscle_job(aligned, pose)
     glb = OUT_DIR / "anatomy.glb"
     loaded = trimesh.load(glb, force="scene")
-    bones = {name: loaded.geometry[name] for name in ("frontal", "parietal", "temporal", "occipital", "nasal", "zygomatic", "maxilla", "mandible")}
-    face_mesh = load_canonical()
-    jaw = jaw_pivot(bones["mandible"])
-    muscles = build_muscles(face_mesh, bones, jaw)
-    export = {name: loaded.geometry[name] for name in loaded.geometry}
-    export.update(muscles)
+    move = np.asarray(muscles.metadata["move"], dtype=np.float32)
     scene = trimesh.Scene()
-    muscle_attrs: dict[str, dict[str, list[float]]] = {}
-    for name, mesh in export.items():
+    for name, mesh in loaded.geometry.items():
+        if name == "muscles":
+            continue
         mesh.vertex_normals
-        move = mesh.metadata.get("move") if isinstance(mesh.metadata, dict) else None
-        if name in MUSCLE_NAMES and move is not None:
-            uv = np.asarray(mesh.visual.uv, dtype=np.float32)
-            muscle_attrs[name] = {
-                "uv": [round(float(v), 4) for v in uv.reshape(-1)],
-                "move": [round(float(v), 4) for v in np.asarray(move, dtype=np.float32).reshape(-1)],
-            }
-        if name not in MUSCLE_NAMES:
-            mesh.visual.vertex_colors = [220, 230, 240, 255]
         scene.add_geometry(mesh, node_name=name, geom_name=name)
+    muscles.vertex_normals
+    muscles.visual.vertex_colors = [220, 230, 240, 255]
+    scene.add_geometry(muscles, node_name="muscles", geom_name="muscles")
     scene.export(glb)
+    count = len(muscles.vertices)
+    attrs = {
+        "muscles": {
+            "uv": [0.0] * (count * 2),
+            "move": [round(float(v), 4) for v in move.reshape(-1)],
+        }
+    }
+    (OUT_DIR / "muscle-attrs.json").write_text(json.dumps(attrs))
     anchors = json.loads((OUT_DIR / "anchors.json").read_text())
-    fresh = anchor_points({k: v for k, v in export.items() if not k.startswith("hand_")}, jaw)
-    anchors["jawPivot"] = fresh.pop("jawPivot")[0]
-    anchors["anchors"] = {k: v for k, v in fresh.items() if k != "jawPivot"}
+    for name, points in muscle_anchors.items():
+        if points:
+            anchors["anchors"][name] = points
+    anchors["muscles"] = identified
     anchors["bytes"] = glb.stat().st_size
     (OUT_DIR / "anchors.json").write_text(json.dumps(anchors))
-    (OUT_DIR / "muscle-attrs.json").write_text(json.dumps(muscle_attrs))
-    print("replaced muscles", glb.stat().st_size)
+    nodes = json.loads((OUT_DIR / "nodes.json").read_text())
+    nodes["bytes"] = glb.stat().st_size
+    (OUT_DIR / "nodes.json").write_text(json.dumps(nodes, indent=2))
+    print("replaced muscles", glb.stat().st_size, "faces", len(muscles.faces), flush=True)
 
 
 def skull_only() -> None:
@@ -2271,7 +2528,9 @@ def skull_only() -> None:
 
 
 if __name__ == "__main__":
-    if "--muscles-only" in sys.argv:
+    if "--muscles-preview" in sys.argv:
+        muscles_preview()
+    elif "--muscles-only" in sys.argv:
         replace_muscles()
     elif "--skull-only" in sys.argv:
         skull_only()
