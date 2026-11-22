@@ -2,9 +2,10 @@
 """Rebuild Anatomy Mirror meshes from BodyParts3D 4.3 element OBJs.
 
 Bones, brain, and hand bones are decimated from BodyParts3D (CC BY-SA 2.1 JP,
-(c) DBCLS). Release 4.3 has no meshes for the five expression muscles, so those
-sheets are drawn on the MediaPipe canonical face and shipped under the same
-licence. Cache lives in /tmp/bp3d.
+(c) DBCLS). Release 4.3 has no face-muscle meshes, so the muscle surfaces are
+original sheets that follow this skull and ship under the same licence.
+A smooth warp then slides the orbital openings onto the canonical eyes.
+Cache lives in /tmp/bp3d.
 
 Requires: trimesh, fast-simplification, numpy, scipy, scikit-image, pillow, matplotlib.
 """
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import time
 import zipfile
 from pathlib import Path
@@ -109,17 +111,27 @@ CARPALS = ["scaphoid", "lunate", "triquetral", "pisiform", "trapezium", "trapezo
 LONG_BONES = [k for k in HAND_FILES if k not in CARPALS]
 
 FACE_LIMIT = {
-    "frontal": 11000,
+    "frontal": 14000,
     "parietal": 11000,
     "temporal": 9000,
     "occipital": 8000,
     "nasal": 3500,
-    "zygomatic": 5500,
-    "maxilla": 9000,
-    "mandible": 11000,
+    "zygomatic": 7000,
+    "maxilla": 10000,
+    "mandible": 10000,
     "brain": 15000,
     "shell": 7000,
 }
+
+MUSCLE_NAMES = (
+    "frontalis",
+    "corrugator",
+    "orbicularis",
+    "oris",
+    "zygomaticus",
+    "masseter",
+    "temporalis",
+)
 
 RIGHT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
 LEFT_EYE = [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466]
@@ -557,83 +569,528 @@ def resample(polyline: np.ndarray, count: int) -> np.ndarray:
     return np.stack(out)
 
 
-def muscle_sheets(face_mesh: trimesh.Trimesh) -> dict[str, trimesh.Trimesh]:
-    fine = subdivide(face_mesh)
-    tree = cKDTree(fine.vertices)
-    normals = fine.vertex_normals
-    surface = fine.vertices
+def _raster_openings(mesh: trimesh.Trimesh, res: float = 0.07) -> list[dict]:
+    """Front-view holes in the facial bones. Each hole is a dict of center, size, and area."""
+    verts = mesh.vertices
+    x0, x1, y0, y1 = -8.4, 7.2, -6.2, 8.6
+    width = int((x1 - x0) / res) + 1
+    height = int((y1 - y0) / res) + 1
+    occupied = np.zeros((height, width), dtype=bool)
+    tris = verts[mesh.faces]
+    for tri in tris:
+        samples = [tri.mean(0)]
+        for i in range(3):
+            samples.append(tri[i])
+            samples.append((tri[i] + tri[(i + 1) % 3]) * 0.5)
+        for point in samples:
+            ix = int((point[0] - x0) / res)
+            iy = int((point[1] - y0) / res)
+            if 0 <= ix < width and 0 <= iy < height:
+                occupied[iy, ix] = True
+    occupied = ndimage.binary_dilation(occupied, iterations=1)
+    empty = ~occupied
+    empty[0, :] = empty[-1, :] = empty[:, 0] = empty[:, -1] = False
+    labels, count = ndimage.label(empty)
+    holes = []
+    for label in range(1, count + 1):
+        ys, xs = np.where(labels == label)
+        if len(xs) < 80:
+            continue
+        cx = x0 + xs.mean() * res
+        cy = y0 + ys.mean() * res
+        holes.append(
+            {
+                "area": int(len(xs)),
+                "center": np.array([cx, cy, 0.0]),
+                "width": (xs.max() - xs.min()) * res,
+                "height": (ys.max() - ys.min()) * res,
+            }
+        )
+    return holes
+
+
+def _rim_point(vertices: np.ndarray, center_xy: np.ndarray, radius: float) -> np.ndarray:
+    flat = np.hypot(vertices[:, 0] - center_xy[0], vertices[:, 1] - center_xy[1])
+    band = vertices[(flat > radius * 0.45) & (flat < radius * 1.25)]
+    if len(band) < 12:
+        band = vertices[flat < radius * 1.6]
+    if len(band) < 8:
+        return np.array([center_xy[0], center_xy[1], 3.2])
+    z = float(np.quantile(band[:, 2], 0.72))
+    return np.array([center_xy[0], center_xy[1], z])
+
+
+def _orbit_candidates(holes: list[dict], eye: np.ndarray) -> list[tuple[float, dict]]:
+    """Holes on the eye's side of the face, ranked by distance to that eye."""
+    side = -1.0 if eye[0] < 0 else 1.0
+    ranked = []
+    for hole in holes:
+        center = hole["center"]
+        if side * center[0] < 1.35:
+            continue
+        if not (1.15 <= hole["width"] <= 4.6 and 0.9 <= hole["height"] <= 4.8):
+            continue
+        if not (280 <= hole["area"] <= 5200):
+            continue
+        dist = float(np.hypot(center[0] - eye[0], center[1] - eye[1]))
+        if dist > 3.5:
+            continue
+        ranked.append((dist, hole))
+    ranked.sort(key=lambda item: item[0])
+    return ranked
+
+
+def detect_orbits(mesh: trimesh.Trimesh, eyes: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, float] | None:
+    """Right orbit, left orbit, nasal aperture, and a socket radius.
+
+    The orbit is the opening nearest each canonical eye, not the largest hole
+    on that side. A medial gap beside the nose is closer to the midline and
+    must not win.
+    """
+    holes = _raster_openings(mesh)
+    print(
+        "openings",
+        [(round(float(h["center"][0]), 2), round(float(h["center"][1]), 2), h["area"], round(h["width"], 2), round(h["height"], 2)) for h in holes],
+    )
+    right_ranked = _orbit_candidates(holes, eyes[0])
+    left_ranked = _orbit_candidates(holes, eyes[1])
+    if not right_ranked or not left_ranked:
+        return None
+    right_h = right_ranked[0][1]
+    left_h = left_ranked[0][1]
+    radius = float(np.clip((right_h["width"] + right_h["height"] + left_h["width"] + left_h["height"]) / 8, 1.05, 1.55))
+    right_c = _rim_point(mesh.vertices, right_h["center"][:2], radius)
+    left_c = _rim_point(mesh.vertices, left_h["center"][:2], radius)
+    nasal_holes = [h for h in holes if abs(h["center"][0]) < 1.35 and h["center"][1] < min(right_c[1], left_c[1]) - 0.35]
+    if nasal_holes:
+        nasal_h = max(nasal_holes, key=lambda h: h["area"])
+        nasal = _rim_point(mesh.vertices, nasal_h["center"][:2], 0.9)
+    else:
+        nasal = np.array([0.0, -2.3, 5.0])
+    return right_c, left_c, nasal, radius
+
+
+def _smooth_falloff(distance: np.ndarray, inner: float, outer: float) -> np.ndarray:
+    span = np.clip((outer - distance) / max(outer - inner, 1e-4), 0.0, 1.0)
+    return span * span * (3.0 - 2.0 * span)
+
+
+def _socket_slide(
+    vertices: np.ndarray,
+    sources: np.ndarray,
+    targets: np.ndarray,
+    pins: np.ndarray,
+    inner: float = 2.15,
+    outer: float = 4.1,
+) -> np.ndarray:
+    """Translate each socket as a piece. Pins vote to stay put, so the chin and cheeks do not follow."""
+    acc = np.zeros_like(vertices)
+    weight = np.zeros(len(vertices))
+    for source, target in zip(sources, targets):
+        influence = _smooth_falloff(np.linalg.norm(vertices - source, axis=1), inner, outer)
+        acc += influence[:, None] * (target - source)
+        weight += influence
+    for pin in pins:
+        influence = _smooth_falloff(np.linalg.norm(vertices - pin, axis=1), 0.7, 1.7)
+        weight += influence
+    out = vertices.copy()
+    mask = weight > 1e-6
+    out[mask] += acc[mask] / weight[mask, None]
+    return out
+
+
+def _rbf_move(points: np.ndarray, handles: np.ndarray, disp: np.ndarray, radius: float) -> np.ndarray:
+    kernel = np.exp(-(np.linalg.norm(handles[:, None, :] - handles[None, :, :], axis=2) / radius) ** 2)
+    weights = np.linalg.solve(kernel + np.eye(len(handles)) * 1e-3, disp)
+    out = np.empty_like(points)
+    for start in range(0, len(points), 25000):
+        chunk = points[start : start + 25000]
+        dist = np.linalg.norm(chunk[:, None, :] - handles[None, :, :], axis=2)
+        phi = np.exp(-((dist / radius) ** 2))
+        out[start : start + len(chunk)] = chunk + phi @ weights
+    return out
+
+
+def _closest(vertices: np.ndarray, point: np.ndarray) -> np.ndarray:
+    return vertices[int(np.argmin(np.linalg.norm(vertices - point, axis=1)))]
+
+
+def pin_orbits(meshes: dict[str, trimesh.Trimesh], face: np.ndarray) -> list[dict]:
+    """Slide each orbital opening onto its canonical eye.
+
+    The warp is local. The forehead, cheekbones, nose, chin, and cranium are
+    pinned, so the socket moves without dragging the rest of the skull.
+    """
+    face_bone = trimesh.util.concatenate([meshes[name] for name in ("frontal", "zygomatic", "maxilla", "nasal")])
+    eye_r = (face[33] + face[133]) / 2 + np.array([0.0, 0.0, -0.22])
+    eye_l = (face[263] + face[362]) / 2 + np.array([0.0, 0.0, -0.22])
+    eyes = np.stack([eye_r, eye_l])
+    found = detect_orbits(face_bone, eyes)
+    if found is None:
+        raise RuntimeError("orbit detection failed; the facial bones have no socket near each eye")
+    right, left, nasal, radius = found
+    print("orbits before", np.round(right, 2), np.round(left, 2), "radius", round(radius, 2))
+    mandible = meshes["mandible"].vertices
+    menton = mandible[int(np.argmin(mandible[:, 1] + np.abs(mandible[:, 0]) * 0.15))]
+    frontal = meshes["frontal"].vertices
+    crown = frontal[int(np.argmax(frontal[:, 1] - np.abs(frontal[:, 0]) * 0.2))]
+    nasion = _closest(frontal, face[168])
+    parietal = meshes["parietal"].vertices
+    top = parietal[int(np.argmax(parietal[:, 1]))]
+    gonion_r = mandible[int(np.argmin(mandible[:, 0]))]
+    gonion_l = mandible[int(np.argmax(mandible[:, 0]))]
+    occipital = meshes["occipital"].vertices
+    back = occipital[int(np.argmin(occipital[:, 2]))]
+    zy = meshes["zygomatic"].vertices
+    cheek_band = zy[(zy[:, 2] > np.quantile(zy[:, 2], 0.35)) & (zy[:, 1] < min(right[1], left[1]) - 1.4)]
+    if len(cheek_band) < 8:
+        cheek_band = zy
+    cheek_r = cheek_band[int(np.argmin(cheek_band[:, 0]))]
+    cheek_l = cheek_band[int(np.argmax(cheek_band[:, 0]))]
+    pins = np.stack([menton, nasal, nasion, crown, top, gonion_r, gonion_l, back, cheek_r, cheek_l])
+    sources = np.stack([right, left])
+    targets = np.stack([eye_r, eye_l])
+    print("socket slide", np.round(sources, 2), "->", np.round(targets, 2))
+    names = [name for name in ("frontal", "parietal", "temporal", "occipital", "nasal", "zygomatic", "maxilla", "mandible", "brain") if name in meshes]
+    for name in names:
+        mesh = meshes[name]
+        moved = _socket_slide(mesh.vertices, sources, targets, pins)
+        shift = np.linalg.norm(moved - mesh.vertices, axis=1)
+        if float(shift.max()) > 5.5:
+            raise RuntimeError(f"orbit warp moved {name} by {shift.max():.2f} cm")
+        mesh.vertices = moved
+        mesh.fix_normals()
+    _finish_orbits(meshes, eyes)
+    check = trimesh.util.concatenate([meshes[name] for name in ("frontal", "zygomatic", "maxilla", "nasal")])
+    after = detect_orbits(check, eyes)
+    if after is None:
+        raise RuntimeError("orbit warp closed the sockets")
+    for label, eye, landed in (("right", eye_r, after[0]), ("left", eye_l, after[1])):
+        miss = float(np.hypot(landed[0] - eye[0], landed[1] - eye[1]))
+        nearest = float(np.linalg.norm(check.vertices - eye, axis=1).min())
+        print(f"  {label} socket miss {miss:.2f} cm, nearest bone {nearest:.2f} cm, landed {np.round(landed, 2)}")
+        if miss > 0.65:
+            raise RuntimeError(f"{label} orbit is still {miss:.2f} cm from the eye")
+        if nearest < 0.45 or nearest > 2.1:
+            raise RuntimeError(f"{label} eye is {nearest:.2f} cm from bone; the socket did not open around it")
+    _orbit_preview(meshes, eyes, Path("/tmp/bp3d/orbit-check.png"))
+    return [
+        {"center": [round(float(v), 4) for v in eye_r], "radius": round(radius, 3)},
+        {"center": [round(float(v), 4) for v in eye_l], "radius": round(radius, 3)},
+    ]
+
+
+def _split_long_faces(mesh: trimesh.Trimesh, limit: float = 0.42, rounds: int = 4) -> trimesh.Trimesh:
+    """Break the stretched triangles the socket slide leaves behind, so the rim can be round."""
+    vertices = np.asarray(mesh.vertices)
+    faces = np.asarray(mesh.faces)
+    for _ in range(rounds):
+        length = np.maximum(
+            np.linalg.norm(vertices[faces[:, 0]] - vertices[faces[:, 1]], axis=1),
+            np.maximum(
+                np.linalg.norm(vertices[faces[:, 1]] - vertices[faces[:, 2]], axis=1),
+                np.linalg.norm(vertices[faces[:, 2]] - vertices[faces[:, 0]], axis=1),
+            ),
+        )
+        long = np.where(length > limit)[0]
+        if len(long) == 0:
+            break
+        if len(long) > 12000:
+            long = long[np.argsort(length[long])[-12000:]]
+        vertices, faces = trimesh.remesh.subdivide(vertices, faces, face_index=long)
+    out = trimesh.Trimesh(vertices, faces, process=False)
+    out.fix_normals()
+    return out
+
+
+def _relax_rims(mesh: trimesh.Trimesh, eyes: np.ndarray, reach: float = 2.35) -> None:
+    """Round the bone around each eye without pulling the chin or the cranium."""
+    neighbors: list[list[int]] = [[] for _ in range(len(mesh.vertices))]
+    for a, b in mesh.edges_unique:
+        neighbors[a].append(int(b))
+        neighbors[b].append(int(a))
+    distance = np.min(np.linalg.norm(mesh.vertices[:, None, :] - eyes[None, :, :], axis=2), axis=1)
+    mask = distance < reach
+    if int(mask.sum()) < 30:
+        return
+    weight = _smooth_falloff(distance, reach * 0.35, reach)
+    vertices = mesh.vertices.copy()
+    for factor in (0.42, -0.44) * 5:
+        delta = np.zeros_like(vertices)
+        for index in np.flatnonzero(mask):
+            adjacent = neighbors[index]
+            if adjacent:
+                delta[index] = vertices[adjacent].mean(axis=0) - vertices[index]
+        vertices += delta * (factor * weight)[:, None]
+    mesh.vertices = vertices
+    mesh.fix_normals()
+
+
+def _finish_orbits(meshes: dict[str, trimesh.Trimesh], eyes: np.ndarray) -> None:
+    for name in ("frontal", "zygomatic", "maxilla", "nasal"):
+        meshes[name] = _split_long_faces(meshes[name])
+        _relax_rims(meshes[name], eyes)
+        print(f"rounded {name} faces {len(meshes[name].faces)}")
+
+
+def _orbit_preview(meshes: dict[str, trimesh.Trimesh], eyes: np.ndarray, path: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(6, 7), facecolor="#10141c")
+    ax.set_facecolor("#10141c")
+    colors = {"frontal": "#d5e8ff", "zygomatic": "#9ec4ef", "maxilla": "#c5d8f0", "nasal": "#f4f8ff", "mandible": "#8ec8ff"}
+    for name, color in colors.items():
+        verts = meshes[name].vertices
+        step = max(1, len(verts) // 4000)
+        ax.scatter(verts[::step, 0], verts[::step, 1], s=1, c=color, linewidths=0)
+    ax.scatter(eyes[:, 0], eyes[:, 1], s=40, c="#ff5a4a", linewidths=0)
+    ax.set_aspect("equal")
+    ax.set_xlim(-8, 8)
+    ax.set_ylim(-10, 10)
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=130)
+    print("orbit preview", path)
+
+
+def refine_face_bones(meshes: dict[str, trimesh.Trimesh]) -> None:
+    """Subdivide the bones that form the orbits, then round the rims before they are pinned."""
+    for name, lamb in (("frontal", 0.2), ("zygomatic", 0.22), ("nasal", 0.2), ("maxilla", 0.12)):
+        refined = subdivide(meshes[name])
+        trimesh.smoothing.filter_laplacian(refined, lamb=lamb, iterations=2)
+        refined.fix_normals()
+        meshes[name] = refined
+        print(f"refined {name} faces {len(refined.faces)}")
+
+
+def _project(tree: cKDTree, verts: np.ndarray, normals: np.ndarray, points: np.ndarray, lift: float) -> np.ndarray:
+    _, index = tree.query(points)
+    return verts[index] + normals[index] * lift
+
+
+def _settle(grid: np.ndarray, tree: cKDTree, verts: np.ndarray, normals: np.ndarray, lift: float, rounds: int = 7) -> np.ndarray:
+    """Pull a fiber grid onto a surface, then relax it so the quads stop reading as bricks."""
+    settled = grid.copy()
+    rows, cols, _ = settled.shape
+    for _ in range(rounds):
+        flat = _project(tree, verts, normals, settled.reshape(-1, 3), lift).reshape(settled.shape)
+        if rows > 2 and cols > 2:
+            average = (flat[:-2, 1:-1] + flat[2:, 1:-1] + flat[1:-1, :-2] + flat[1:-1, 2:]) / 4
+            flat = flat.copy()
+            flat[1:-1, 1:-1] = flat[1:-1, 1:-1] * 0.42 + average * 0.58
+        settled = flat
+    return _project(tree, verts, normals, settled.reshape(-1, 3), lift).reshape(settled.shape)
+
+
+def _surface(grid: np.ndarray, moves: np.ndarray, closed: bool = False) -> trimesh.Trimesh:
+    """grid is (along, across, 3). moves is the same shape, in centimetres at full expression.
+
+    `closed` joins the fiber ends, which is how a ring (eyes, lips) stays a loop.
+    """
+    along, across, _ = grid.shape
+    verts = grid.reshape(-1, 3)
+    move = moves.reshape(-1, 3).astype(np.float32)
+    fiber = np.linspace(0, 1, along, endpoint=not closed)
+    span = np.linspace(0, 1, across)
+    uu, vv = np.meshgrid(fiber, span, indexing="ij")
+    uv = np.stack([uu, vv], axis=-1).reshape(-1, 2).astype(np.float32)
+    faces: list[list[int]] = []
+    steps = along if closed else along - 1
+    for i in range(steps):
+        i2 = (i + 1) % along
+        for j in range(across - 1):
+            v00 = i * across + j
+            v10 = i2 * across + j
+            v01 = i * across + (j + 1)
+            v11 = i2 * across + (j + 1)
+            faces.append([v00, v10, v11])
+            faces.append([v00, v11, v01])
+    mesh = trimesh.Trimesh(vertices=verts, faces=np.asarray(faces), process=False)
+    mesh.fix_normals()
+    # The glTF writer keeps UVs or vertex colours, not both. Motion is stored beside the file.
+    mesh.visual = trimesh.visual.TextureVisuals(uv=uv)
+    mesh.metadata = {"move": move}
+    return mesh
+
+
+def _join(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
+    moves = np.concatenate([part.metadata["move"] for part in parts])
+    uvs = np.concatenate([np.asarray(part.visual.uv) for part in parts])
+    mesh = trimesh.util.concatenate(parts)
+    mesh.metadata = {"move": moves.astype(np.float32)}
+    mesh.visual = trimesh.visual.TextureVisuals(uv=uvs.astype(np.float32))
+    mesh.fix_normals()
+    return mesh
+
+
+def _loop_axes(points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    center = points.mean(0)
+    _, _, vt = np.linalg.svd(points - center, full_matrices=False)
+    return center, vt[0], vt[1]
+
+
+def _ring(points: np.ndarray, inner: float, outer: float, around: int, bands: int) -> np.ndarray:
+    center, axis_u, axis_v = _loop_axes(points)
+    local = points - center
+    ru = max(float(np.abs(local @ axis_u).max()), 0.4)
+    rv = max(float(np.abs(local @ axis_v).max()), 0.35)
+    grid = []
+    for radius in np.linspace(inner, outer, bands):
+        ring = []
+        for angle in np.linspace(0, 2 * np.pi, around, endpoint=False):
+            ring.append(center + axis_u * (np.cos(angle) * ru * radius) + axis_v * (np.sin(angle) * rv * radius))
+        grid.append(ring)
+    return np.asarray(grid)
+
+
+def _jaw_delta(points: np.ndarray, pivot: np.ndarray, angle: float = 0.42) -> np.ndarray:
+    rel = points - pivot
+    cos = np.cos(angle)
+    sin = np.sin(angle)
+    rotated = np.stack([rel[:, 0], rel[:, 1] * cos - rel[:, 2] * sin, rel[:, 1] * sin + rel[:, 2] * cos], axis=1)
+    return rotated - rel
+
+
+def _tree_of(mesh: trimesh.Trimesh) -> tuple[cKDTree, np.ndarray, np.ndarray]:
+    fine = subdivide(mesh) if len(mesh.faces) < 20000 else mesh
+    return cKDTree(fine.vertices), fine.vertices, fine.vertex_normals
+
+
+def build_muscles(
+    face_mesh: trimesh.Trimesh, bones: dict[str, trimesh.Trimesh], jaw: np.ndarray
+) -> dict[str, trimesh.Trimesh]:
+    """Smooth muscle sheets on the skull. `metadata['move']` is the full-expression displacement."""
     face = face_mesh.vertices
+    skull = trimesh.util.concatenate([bones[name] for name in ("frontal", "zygomatic", "maxilla", "mandible", "temporal", "nasal")])
+    skull_tree, skull_v, skull_n = _tree_of(skull)
+    face_tree, face_v, face_n = _tree_of(face_mesh)
+    frontal_tree, frontal_v, frontal_n = _tree_of(bones["frontal"])
+    side_tree, side_v, side_n = _tree_of(trimesh.util.concatenate([bones["temporal"], bones["parietal"], bones["frontal"]]))
 
-    def on(points: np.ndarray, lift: float) -> np.ndarray:
-        return snap(tree, normals, surface, points, lift)
+    def fade(grid: np.ndarray, move_at_end: np.ndarray) -> np.ndarray:
+        """move_at_end is (across, 3) or a single vector. Weight grows along the fiber."""
+        along = grid.shape[0]
+        weight = np.linspace(0, 1, along)[:, None, None]
+        end = np.asarray(move_at_end, dtype=float)
+        if end.ndim == 1:
+            end = np.broadcast_to(end, (grid.shape[1], 3))
+        return weight * end[None, :, :]
 
-    brow = resample(face[BROW], 28)
-    crown = brow.copy()
-    crown[:, 1] += 3.4
-    crown[:, 2] -= 0.55
-    rows = []
-    for t in np.linspace(0, 1, 16):
-        band = (1 - t) * brow + t * crown
-        rows.append(on(band, 0.16))
-    frontalis = grid_sheet(rows, 0.28)
+    brow = resample(face[BROW], 34)
+    hair = brow.copy()
+    hair[:, 0] *= 0.84
+    hair[:, 1] = face[10, 1] - 0.55
+    hair[:, 2] = np.minimum(hair[:, 2], face[10, 2] + 0.15)
+    rows = [(1 - t) * hair + t * brow for t in np.linspace(0, 1, 22)]
+    frontalis_g = _settle(np.stack(rows), frontal_tree, frontal_v, frontal_n, 0.1, rounds=8)
+    brow_lift = np.array([0.0, 0.7, 0.16])
+    frontalis = _surface(frontalis_g, fade(frontalis_g, brow_lift))
 
-    def strap(a: np.ndarray, b: np.ndarray, width: float, lift: float, steps: int = 14) -> trimesh.Trimesh:
-        path = on(resample(np.stack([a, b]), steps), lift)
+    def strap(origin: np.ndarray, insertion: np.ndarray, width: float, along: int, across: int, lift: float, end_move: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        path = resample(np.stack([origin, insertion]), along)
         tangent = np.gradient(path, axis=0)
         tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-8)
         side = np.cross(tangent, np.array([0.0, 0.0, 1.0]))
+        weak = np.linalg.norm(side, axis=1) < 1e-4
+        if np.any(weak):
+            side[weak] = np.cross(tangent[weak], np.array([0.0, 1.0, 0.0]))
         side /= np.maximum(np.linalg.norm(side, axis=1, keepdims=True), 1e-8)
-        half = width / 2
-        return grid_sheet([path - side * half, path + side * half], 0.2)
+        cols = [path + side * (t * width) for t in np.linspace(-0.5, 0.5, across)]
+        grid = _settle(np.stack(cols, axis=1), skull_tree, skull_v, skull_n, lift)
+        return grid, fade(grid, end_move)
 
-    corrugator = trimesh.util.concatenate(
-        [
-            strap(face[107], face[8], 0.34, 0.14, 10),
-            strap(face[336], face[8], 0.34, 0.14, 10),
-        ]
-    )
+    glabella = face[9]
+    corrugator_parts = []
+    for brow_index, sign in ((107, -1.0), (336, 1.0)):
+        move = np.array([sign * -0.28, -0.22, 0.05])
+        grid, moves = strap(face[brow_index], glabella, 0.55, 12, 6, 0.14, move)
+        corrugator_parts.append(_surface(grid, moves))
+    corrugator = _join(corrugator_parts)
 
-    def eye_band(indices: list[int]) -> trimesh.Trimesh:
-        loop = face[indices]
-        center = loop.mean(axis=0)
-        outer = on(center + (loop - center) * 1.55, 0.14)
-        inner = on(center + (loop - center) * 0.62, 0.12)
-        # close the ring by repeating the first sample
-        outer_r = resample(np.vstack([outer, outer[:1]]), 36)
-        inner_r = resample(np.vstack([inner, inner[:1]]), 36)
-        return grid_sheet([inner_r, outer_r], 0.18)
+    def eye_ring(indices: list[int]) -> trimesh.Trimesh:
+        grid = _ring(face[indices], 0.62, 1.28, 64, 8)
+        along, across, _ = grid.shape
+        # Fiber runs around the eye, so the grid's last axis is the loop. Swap to (around, bands).
+        grid = np.transpose(grid, (1, 0, 2))
+        grid = _settle(grid, skull_tree, skull_v, skull_n, 0.12, rounds=5)
+        center = face[indices].mean(0)
+        toward = center - grid
+        toward /= np.maximum(np.linalg.norm(toward, axis=2, keepdims=True), 1e-6)
+        moves = toward * 0.28
+        return _surface(grid, moves, closed=True)
 
-    orbicularis = trimesh.util.concatenate([eye_band(RIGHT_EYE), eye_band(LEFT_EYE)])
-    zygomaticus = trimesh.util.concatenate(
-        [
-            strap(face[116], face[61], 0.48, 0.16, 16),
-            strap(face[345], face[291], 0.48, 0.16, 16),
-        ]
-    )
+    orbicularis = _join([eye_ring(RIGHT_EYE), eye_ring(LEFT_EYE)])
 
-    def masseter(cheek: int, jaw: int, ear: int) -> trimesh.Trimesh:
-        top_front = face[cheek] + np.array([0.0, -0.15, -0.2])
-        top_back = face[cheek] * 0.45 + face[ear] * 0.55 + np.array([0.0, 0.7, 0.4])
-        bot_back = face[jaw]
-        bot_front = face[jaw] * 0.55 + face[152] * 0.45
-        rows = []
-        for t in np.linspace(0, 1, 12):
-            a = (1 - t) * top_front + t * top_back
-            b = (1 - t) * bot_front + t * bot_back
-            line = on(resample(np.stack([a, b]), 8), 0.2)
-            rows.append(line)
-        return grid_sheet(rows, 0.42)
+    lip = face[[61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185]]
+    oris_g = _ring(lip, 0.78, 1.38, 52, 6)
+    oris_g = np.transpose(oris_g, (1, 0, 2))
+    oris_g = _settle(oris_g, face_tree, face_v, face_n, 0.05, rounds=4)
+    mouth = lip.mean(0)
+    toward_mouth = mouth - oris_g
+    toward_mouth /= np.maximum(np.linalg.norm(toward_mouth, axis=2, keepdims=True), 1e-6)
+    oris = _surface(oris_g, toward_mouth * 0.34, closed=True)
 
-    masseter = trimesh.util.concatenate([masseter(116, 172, 234), masseter(345, 397, 454)])
+    def smile_strap(cheek: int, corner: int) -> trimesh.Trimesh:
+        origin = face[cheek] + np.array([0.0, 0.15, -0.15])
+        insertion = face[corner]
+        direction = origin - insertion
+        pull = direction / max(float(np.linalg.norm(direction)), 1e-6) * 0.85 + np.array([0.0, 0.22, 0.06])
+        grid, moves = strap(origin, insertion, 1.35, 24, 10, 0.1, pull)
+        return _surface(grid, moves)
+
+    zygomaticus = _join([smile_strap(116, 61), smile_strap(345, 291)])
+
+    def chew(cheek: int, gonion: int, ear: int) -> trimesh.Trimesh:
+        top_front = face[cheek] + np.array([0.0, -0.25, -0.15])
+        top_back = face[cheek] * 0.42 + face[ear] * 0.58 + np.array([0.0, 0.85, 0.15])
+        bot_back = face[gonion]
+        bot_front = face[gonion] * 0.62 + face[152] * 0.38
+        along = 16
+        across = 10
+        grid = np.zeros((along, across, 3))
+        for i, t in enumerate(np.linspace(0, 1, along)):
+            left = (1 - t) * top_front + t * bot_front
+            right = (1 - t) * top_back + t * bot_back
+            grid[i] = resample(np.stack([left, right]), across)
+        grid = _settle(grid, skull_tree, skull_v, skull_n, 0.12, rounds=8)
+        weight = np.linspace(0, 1, along)[:, None]
+        delta = _jaw_delta(grid.reshape(-1, 3), jaw).reshape(grid.shape)
+        moves = delta * weight[:, :, None]
+        return _surface(grid, moves)
+
+    masseter = _join([chew(116, 172, 234), chew(345, 397, 454)])
+
+    def temple(ear: int, gonion: int, cheek: int, sign: float) -> trimesh.Trimesh:
+        insertion = face[ear] * 0.28 + face[gonion] * 0.22 + face[cheek] * 0.5 + np.array([sign * 0.2, 1.7, 0.35])
+        origins = []
+        for lift, forward in ((2.4, -0.2), (3.6, 0.3), (4.8, 1.0), (5.0, 1.9), (4.2, 2.7), (3.2, 3.1), (2.2, 2.2), (1.6, 1.2)):
+            origins.append(face[ear] + np.array([sign * forward, lift, 0.35]))
+        along = 14
+        grid = np.zeros((along, len(origins), 3))
+        for j, origin in enumerate(origins):
+            grid[:, j] = resample(np.stack([origin, insertion]), along)
+        grid = _settle(grid, side_tree, side_v, side_n, 0.16, rounds=5)
+        weight = np.linspace(0, 1, along)[:, None]
+        delta = _jaw_delta(grid.reshape(-1, 3), jaw).reshape(grid.shape)
+        return _surface(grid, delta * weight[:, :, None] * 0.85)
+
+    temporalis = _join([temple(234, 172, 116, -1.0), temple(454, 397, 345, 1.0)])
+
     sheets = {
         "frontalis": frontalis,
         "corrugator": corrugator,
         "orbicularis": orbicularis,
+        "oris": oris,
         "zygomaticus": zygomaticus,
         "masseter": masseter,
+        "temporalis": temporalis,
     }
     for name, mesh in sheets.items():
-        print(f"  muscle {name} faces {len(mesh.faces)}")
+        shift = float(np.linalg.norm(mesh.metadata["move"], axis=1).max())
+        print(f"  muscle {name} faces {len(mesh.faces)} move {shift:.2f} cm")
     return sheets
 
 
@@ -759,16 +1216,18 @@ def anchor_points(meshes: dict[str, trimesh.Trimesh], jaw: np.ndarray) -> dict[s
     anchors["mandible"] = [most(md, -md.vertices[:, 1] + md.vertices[:, 2], np.abs(md.vertices[:, 0]) < 1.1)]
     brain = meshes["brain"]
     anchors["brain"] = [most(brain, brain.vertices[:, 1] * 0.6 + brain.vertices[:, 2] * 0.4)]
-    for name in ("frontalis", "corrugator", "orbicularis", "zygomaticus", "masseter"):
+    for name in MUSCLE_NAMES:
         mesh = meshes[name]
         verts = mesh.vertices
-        if name in ("orbicularis", "zygomaticus", "masseter", "corrugator"):
-            anchors[name] = [
-                [round(float(v), 4) for v in verts[verts[:, 0] >= 0].mean(0)],
-                [round(float(v), 4) for v in verts[verts[:, 0] < 0].mean(0)],
-            ]
-        else:
+        if name in ("frontalis", "oris"):
             anchors[name] = [[round(float(v), 4) for v in verts.mean(0)]]
+        else:
+            right = verts[verts[:, 0] < 0]
+            left = verts[verts[:, 0] >= 0]
+            anchors[name] = [
+                [round(float(v), 4) for v in (left.mean(0) if len(left) else verts.mean(0))],
+                [round(float(v), 4) for v in (right.mean(0) if len(right) else verts.mean(0))],
+            ]
     anchors["jawPivot"] = [[round(float(v), 4) for v in jaw]]
     return anchors
 
@@ -785,7 +1244,8 @@ def preview(meshes: dict[str, trimesh.Trimesh], face: np.ndarray, path: Path) ->
         "frontal": "#d5e8ff", "parietal": "#c5d8f0", "temporal": "#b7cbe6", "occipital": "#a9bdd8",
         "nasal": "#f2f7ff", "zygomatic": "#d5e8ff", "maxilla": "#d5e8ff", "mandible": "#e7f2ff",
         "brain": "#ffb3c7", "frontalis": "#ff8d84", "corrugator": "#ff8d84", "orbicularis": "#ff8d84",
-        "zygomaticus": "#ff8d84", "masseter": "#ff8d84", "shell": "#35507a",
+        "oris": "#ff8d84", "zygomaticus": "#ff8d84", "masseter": "#ff8d84", "temporalis": "#ff8d84",
+        "shell": "#35507a",
     }
     for ax, (xi, yi, title) in zip(axes, views):
         ax.set_facecolor("#0c1018")
@@ -852,8 +1312,12 @@ def main() -> None:
         "mandible": decimate(aligned["mandible"], FACE_LIMIT["mandible"]),
         "brain": brain,
     }
+    print("jaw pivot before orbit pin", jaw)
+    refine_face_bones(export)
+    orbits = pin_orbits(export, face)
+    jaw = jaw_pivot(export["mandible"])
     print("jaw pivot", jaw)
-    export.update(muscle_sheets(face_mesh))
+    export.update(build_muscles(face_mesh, export, jaw))
     skull_for_shell = combine(export, ["frontal", "parietal", "temporal", "occipital"])
     export["shell"] = build_shell(face_mesh, skull_for_shell)
     hand_raw = {name: load_mesh(have[fj]) for name, (fj, _bp) in HAND_FILES.items()}
@@ -861,9 +1325,17 @@ def main() -> None:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     scene = trimesh.Scene()
+    muscle_attrs: dict[str, dict[str, list[float]]] = {}
     for name, mesh in export.items():
         # Touch the cache so the glTF writer stores normals. Without them the x-ray shader has nothing to shade.
         mesh.vertex_normals
+        move = mesh.metadata.get("move") if isinstance(mesh.metadata, dict) else None
+        if name in MUSCLE_NAMES and move is not None:
+            uv = np.asarray(mesh.visual.uv, dtype=np.float32)
+            muscle_attrs[name] = {
+                "uv": [round(float(v), 4) for v in uv.reshape(-1)],
+                "move": [round(float(v), 4) for v in np.asarray(move, dtype=np.float32).reshape(-1)],
+            }
         mesh.visual.vertex_colors = [220, 230, 240, 255]
         scene.add_geometry(mesh, node_name=name, geom_name=name)
     glb = OUT_DIR / "anatomy.glb"
@@ -893,8 +1365,15 @@ def main() -> None:
             {"name": "hand_dp5", "a": 19, "b": 20, "span": 0.92},
         ],
     }
-    payload = {"jawPivot": anchors.pop("jawPivot")[0], "anchors": anchors, "hands": hand_map, "bytes": glb.stat().st_size}
-    (OUT_DIR / "anchors.json").write_text(json.dumps(payload, indent=2))
+    payload = {
+        "jawPivot": anchors.pop("jawPivot")[0],
+        "anchors": anchors,
+        "hands": hand_map,
+        "orbits": orbits,
+        "bytes": glb.stat().st_size,
+    }
+    (OUT_DIR / "anchors.json").write_text(json.dumps(payload))
+    (OUT_DIR / "muscle-attrs.json").write_text(json.dumps(muscle_attrs))
     (OUT_DIR / "nodes.json").write_text(json.dumps({"nodes": sorted(export), "bytes": glb.stat().st_size}, indent=2))
     print("wrote", glb, glb.stat().st_size)
     preview(export, face, Path("/tmp/bp3d/preview-aligned.png"))
@@ -946,5 +1425,43 @@ def _affine_from(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
     return affine
 
 
+def replace_muscles() -> None:
+    """Rebuild muscle sheets on the skull already in the glTF. Does not move the bones."""
+    glb = OUT_DIR / "anatomy.glb"
+    loaded = trimesh.load(glb, force="scene")
+    bones = {name: loaded.geometry[name] for name in ("frontal", "parietal", "temporal", "occipital", "nasal", "zygomatic", "maxilla", "mandible")}
+    face_mesh = load_canonical()
+    jaw = jaw_pivot(bones["mandible"])
+    muscles = build_muscles(face_mesh, bones, jaw)
+    export = {name: loaded.geometry[name] for name in loaded.geometry}
+    export.update(muscles)
+    scene = trimesh.Scene()
+    muscle_attrs: dict[str, dict[str, list[float]]] = {}
+    for name, mesh in export.items():
+        mesh.vertex_normals
+        move = mesh.metadata.get("move") if isinstance(mesh.metadata, dict) else None
+        if name in MUSCLE_NAMES and move is not None:
+            uv = np.asarray(mesh.visual.uv, dtype=np.float32)
+            muscle_attrs[name] = {
+                "uv": [round(float(v), 4) for v in uv.reshape(-1)],
+                "move": [round(float(v), 4) for v in np.asarray(move, dtype=np.float32).reshape(-1)],
+            }
+        if name not in MUSCLE_NAMES:
+            mesh.visual.vertex_colors = [220, 230, 240, 255]
+        scene.add_geometry(mesh, node_name=name, geom_name=name)
+    scene.export(glb)
+    anchors = json.loads((OUT_DIR / "anchors.json").read_text())
+    fresh = anchor_points({k: v for k, v in export.items() if not k.startswith("hand_")}, jaw)
+    anchors["jawPivot"] = fresh.pop("jawPivot")[0]
+    anchors["anchors"] = {k: v for k, v in fresh.items() if k != "jawPivot"}
+    anchors["bytes"] = glb.stat().st_size
+    (OUT_DIR / "anchors.json").write_text(json.dumps(anchors))
+    (OUT_DIR / "muscle-attrs.json").write_text(json.dumps(muscle_attrs))
+    print("replaced muscles", glb.stat().st_size)
+
+
 if __name__ == "__main__":
-    main()
+    if "--muscles-only" in sys.argv:
+        replace_muscles()
+    else:
+        main()

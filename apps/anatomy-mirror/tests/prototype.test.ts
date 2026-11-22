@@ -7,7 +7,8 @@ import { emptyHold, stepHold } from '../src/domain/hold.ts'
 import { drawQuiz, pointsFor, startQuiz, answerQuestion, advanceQuiz } from '../src/domain/quiz.ts'
 import { applySimilarity, umeyama, umeyama2 } from '../src/domain/fit.ts'
 import { parseBeat, formatScore, shareMessage } from '../src/domain/share.ts'
-import { solveScreenFit } from '../src/domain/screenFit.ts'
+import { solveFaceFit, solveScreenFit } from '../src/domain/screenFit.ts'
+import { OneEuroFilter } from '../src/domain/oneEuro.ts'
 import type { BlendshapeMap, BoneId, MuscleId, Vec3 } from '../src/domain/types.ts'
 
 function loadFace(): Vec3[] {
@@ -300,6 +301,45 @@ describe('screen fit', () => {
     expect(fit!.scale).toBeCloseTo(1.25, 5)
     expect(fit!.x).toBeCloseTo(0.1, 5)
     expect(fit!.y).toBeCloseTo(-0.2, 5)
+  })
+
+  test('face fit pins the eyes and scales width and height apart', () => {
+    const from = [
+      { x: -1, y: 1 },
+      { x: -0.4, y: 1 },
+      { x: 0.4, y: 1 },
+      { x: 1, y: 1 },
+      { x: 0, y: 3 },
+      { x: 0, y: -2 },
+      { x: -2, y: 0 },
+      { x: 2, y: 0 },
+    ]
+    const sx = 1.2
+    const sy = 0.85
+    const tx = 0.15
+    const ty = -0.2
+    const to = from.map((point) => ({ x: point.x * sx + tx, y: point.y * sy + ty }))
+    const fit = solveFaceFit(from, to, 4)
+    expect(fit).not.toBeNull()
+    expect(fit!.sx).toBeCloseTo(sx, 4)
+    expect(fit!.sy).toBeCloseTo(sy, 4)
+    const eyes = from.slice(0, 4)
+    const eyeX = eyes.reduce((sum, point) => sum + point.x, 0) / eyes.length
+    const eyeY = eyes.reduce((sum, point) => sum + point.y, 0) / eyes.length
+    expect(fit!.sx * eyeX + fit!.x).toBeCloseTo(eyeX * sx + tx, 4)
+    expect(fit!.sy * eyeY + fit!.y).toBeCloseTo(eyeY * sy + ty, 4)
+  })
+
+  test('one euro holds a steady value and eases toward a step', () => {
+    const filter = new OneEuroFilter(1.2, 0.04)
+    expect(filter.filter(2, 0)).toBeCloseTo(2, 5)
+    expect(filter.filter(2, 32)).toBeCloseTo(2, 4)
+    const stepped = filter.filter(3, 48)
+    expect(stepped).toBeGreaterThan(2)
+    expect(stepped).toBeLessThan(3)
+    let value = stepped
+    for (let t = 64; t < 2000; t += 16) value = filter.filter(3, t)
+    expect(value).toBeGreaterThan(2.9)
   })
 
   test('refuses fewer than three points', () => {

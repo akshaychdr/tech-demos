@@ -30,11 +30,13 @@
     "nasal",
     "occipital",
     "orbicularis",
+    "oris",
     "parietal",
     "shell",
     "temporal",
+    "temporalis",
     "zygomatic",
     "zygomaticus"
   ],
-  "bytes": 2312604
+  "bytes": 7910752
 }
