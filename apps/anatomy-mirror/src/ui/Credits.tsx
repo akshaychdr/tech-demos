@@ -5,16 +5,17 @@ export function Credits({ onClose }: { onClose: () => void }) {
         <p className="eyebrow">Credits</p>
         <h2 id="credits-title">Where the anatomy comes from</h2>
         <p>
-          The skull, brain, eyes, skin, and hand bones are simplified meshes derived from{' '}
-          <a href="https://lifesciencedb.jp/bp3d/">BodyParts3D</a>, © Database Center for Life Science (DBCLS),
-          licensed{' '}
-          <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en">CC BY-SA 2.1 Japan</a>.
+          The skull, brain, eyes, skin, hand bones, and facial muscles are simplified meshes derived from{' '}
+          <a href="https://lifesciencedb.jp/bp3d/">BodyParts3D</a> 3.0 and 4.x, © Database Center for Life
+          Science (DBCLS), licensed{' '}
+          <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en">CC BY-SA 2.1 Japan</a>. They
+          were simplified and re-aligned for this mirror.
         </p>
         <p>
-          The muscle layer is the 23 element meshes listed under “muscle of head” in the BodyParts3D 4.0 isa
-          tree (extraocular muscles, tongue, and palate), rigidly aligned onto the 4.3 skull. The muscles of
-          facial expression are not in that release. The quiz still names them, and those labels sit on the
-          skull.
+          The muscle layer is the expression muscles from the 3.0 release (frontalis, the orbital and
+          palpebral parts of orbicularis oculi, orbicularis oris, zygomaticus major and minor, the upper-lip
+          levators, risorius, mentalis, depressor anguli oris, buccinator, nasalis, procerus, masseter, and
+          temporalis), placed on the 4.x skull. The frown marker sits on procerus.
         </p>
         <p>
           Face and hand tracking uses MediaPipe Tasks Vision (Apache 2.0). The app code is MIT. Nothing you

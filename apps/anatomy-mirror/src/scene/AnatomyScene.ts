@@ -404,10 +404,11 @@ export class AnatomyScene {
       applyLook(part.material, solid)
       const shared = part.role === 'outline' ? 1 : share
       part.material.uniforms.uGain!.value = solid ? 1 : part.gain * shared
-      const acting = part.role === 'muscle' ? (frame.motion[part.id as MuscleId] ?? 0) : 0
-      part.material.uniforms.uAction!.value = acting
+      // The merged muscle mesh stores the jaw-open travel in aMove. Expression
+      // still lights a selected muscle through uBoost.
+      part.material.uniforms.uAction!.value = part.role === 'muscle' ? frame.jaw : 0
       part.material.uniforms.uStrap!.value = RINGS.has(part.id) ? 0 : 1
-      part.material.uniforms.uBoost!.value = hot ? 1 : acting * 0.45
+      part.material.uniforms.uBoost!.value = hot ? 1 : 0
       part.material.uniforms.uCover!.value = part.role === 'veil' ? 1 - frame.skin : solid ? 0.9 : 1
       part.material.uniforms.uClip!.value = plane ? 1 : 0
       if (plane) part.material.uniforms.uPlane!.value.copy(plane)

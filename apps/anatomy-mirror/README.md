@@ -1,6 +1,6 @@
 # Anatomy Mirror
 
-A phone-first mirror that teaches the skull. The camera never leaves the device. MediaPipe places one BodyParts3D cranium and jaw on your face, with the eye sockets lined up to your eyes and an x-ray glow that feathers into the skin.
+A phone-first mirror that teaches the skull and the muscles that move the face. The camera never leaves the device. MediaPipe places one BodyParts3D cranium, jaw, and the expression muscles on your face, with an x-ray glow that feathers into the skin.
 
 Hosted at [https://akshaychdr.github.io/tech-demos/anatomy-mirror/](https://akshaychdr.github.io/tech-demos/anatomy-mirror/).
 

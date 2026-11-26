@@ -1,28 +1,27 @@
-# Anatomy Mirror — one clean skull, then the face
+# Anatomy Mirror — expression muscles on the rigid skull
 
 ## Goal
 
-Ship one watertight cranium and one jaw, with even triangles and a crisp fresnel edge, then lay the real BodyParts3D face muscles and a skin veil on that rigid skull.
+Replace the extraocular-and-tongue muscle layer with the facial-expression muscles from BodyParts3D 3.0, rigidly aligned onto the current 4.x skull.
 
 ## MVP
 
-In: drop duplicate bone shells, build one watertight cranium (outer surface, smooth normals, no torn edges) and keep the mandible as the jaw. Standalone fresnel renders (front, three-quarter, side) before the mesh is wired into the app. Muscles are the 23 BodyParts3D 4.0 isa elements under FMA9616, named from the FMA parts list, merged, and rigidly aligned. One skin mesh drawn as a dark veil and again as a blue fresnel outline. X-ray fresnel with per-layer gains. Pose from the face matrix, then a smoothed uniform 2D scale and offset (0.6–1.6) plus Fit sliders. Small type. Default is skull, eyes, and outline on; brain, muscles, and labels off.
+In: left and right meshes for frontalis, orbital and palpebral orbicularis oculi, orbicularis oris, zygomaticus major and minor, both levators of the upper lip, risorius, mentalis, depressor anguli oris, buccinator, nasalis, procerus, superficial and deep masseter, and temporalis. A similarity ICP (Umeyama) from the 3.0 frontal, mandible, and zygomatic bones onto the 4.0 bones, then the same similarity that already places the skull in the face frame. One merged muscle mesh, about 36k triangles, smooth normals. Masseter, temporalis, and the other jaw muscles stretch or follow `jawOpen`. Quiz anchors sit on these meshes. Credits name BodyParts3D 3.0 and 4.x.
 
-Out: a new scaffold, a demo video, copying the reference source, editing `.github`, deforming the skull onto the eyes.
+Out: rebuilding the skull, a new scaffold, a demo video, deforming the muscles onto the face, and hunting muscles that are not in this list.
 
 ## Stack
 
-- Keep the Vite app and `scripts/build_anatomy.py`. Bones stay BodyParts3D 4.3. Muscles come from `isa_BP3D_4.0_obj_99`.
-- One similarity into canonical-face centimetres. The 4.0 muscles are registered onto this skull because that release does not share coordinates with 4.3.
-- three.js keeps the fresnel shader. The screen fit is a uniform least-squares scale and offset on the projection.
+- Keep the Vite app. Muscles come from `BodyParts3D_3.0_obj_99.zip` (files are `FMA*.obj`). Alignment targets are `FJ3200`, `FJ3289`, and `FJ3287` in the 4.0 isa zip, plus the right zygomatic when it is there.
+- The existing fresnel shader and gain stay. Jaw motion is a per-vertex offset along the mandible’s hinge, driven by `jawOpen`.
 
 ## Tasks
 
-1. Build the watertight cranium and jaw and render them alone (front, three-quarter, side) with the fresnel shader. Do not wire a torn or doubled shell into the app.
-2. Identify the 23 muscle-of-head elements, merge them, and replace the handmade sheets.
-3. Add the skin veil and outline, the layer gains, the screen fit, and the smaller controls.
-4. Check a frontal and a three-quarter face, then the Pages build.
+1. Estimate the 3.0-to-4.0 similarity and record the scale and residuals.
+2. Render the muscles over the skull alone (front, three-quarter, side) before replacing the app mesh.
+3. Splice the mesh, jaw follow, anchors, and credits. Check a frontal and a three-quarter face, then the Pages build.
 
 ## Deferred
 
-- A live phone pass. This environment uses still portraits as the camera.
+- A separate mesh per muscle. One merged layer is what the mirror draws.
+- Corrugator supercilii. It is not in this parts list; the frown marker sits on procerus.
