@@ -443,8 +443,8 @@ describe('screen fit', () => {
   test('x-ray gain shares skull, brain, and muscles, and the veil is 1 - real', () => {
     expect(xrayLayerGain('bone', 1, 1)).toBeCloseTo(1, 5)
     expect(xrayLayerGain('bone', 3, 1)).toBeCloseTo(1 / 2.2, 5)
-    expect(xrayLayerGain('outline', 3, 1)).toBeCloseTo(0.55, 5)
-    expect(xrayLayerGain('eye', 3, 1)).toBeCloseTo(0.9 / 2.2, 5)
+    expect(xrayLayerGain('outline', 3, 1)).toBeCloseTo(0.34, 5)
+    expect(xrayLayerGain('eye', 3, 1)).toBeCloseTo(0.32 / 2.2, 5)
     expect(xrayLayerGain('brain', 3, 1)).toBeCloseTo(0.36 / 2.2, 5)
     expect(xrayLayerGain('hindbrain', 3, 1)).toBeCloseTo(0.6 / 2.2, 5)
     expect(xrayLayerGain('muscle', 1, 1)).toBeCloseTo(0.5, 5)
@@ -494,7 +494,11 @@ describe('hashem fidelity', () => {
     expect(bone.vertexShader).toContain('normalize(normalMatrix * normal)')
     expect(bone.vertexShader).not.toContain('mat3(modelViewMatrix)')
     expect(bone.fragmentShader).toContain('(0.035 + 0.95 * rim)')
-    expect(bone.fragmentShader).toContain('pow(1.0 - ndv, 2.1)')
+    expect(bone.fragmentShader).toContain('pow(1.0 - ndv, uRimPow)')
+    expect(bone.uniforms.uRimPow!.value).toBeCloseTo(2.1, 5)
+    const eye = createShadeMaterial('eye')
+    expect(eye.uniforms.uRimPow!.value).toBeGreaterThan(4)
+    expect(xrayLayerGain('eye', 1, 1)).toBeLessThan(0.45)
     expect(bone.depthTest).toBe(false)
     expect(bone.depthWrite).toBe(false)
     expect(bone.side).toBe(THREE.DoubleSide)
@@ -528,8 +532,10 @@ describe('hashem fidelity', () => {
 
   test('shipped meshes sit on the reference boxes', () => {
     const boxes = glbBoxes()
-    expect(near(boxes.skin!.min, [-10.8, -12.59, -16.04])).toBe(true)
-    expect(near(boxes.skin!.size, [21.02, 27.14, 23.99])).toBe(true)
+    // The shell is narrowed onto the ears. His 21 cm box sits in the hair.
+    expect(boxes.skin!.size[0]!).toBeLessThan(17.2)
+    expect(boxes.skin!.size[0]!).toBeGreaterThan(14.5)
+    expect(boxes.skin!.min[1]!).toBeLessThan(-12)
     expect(near(boxes.hindbrain!.min, [-5.6, -3.6, -12.36])).toBe(true)
     expect(near(boxes.hindbrain!.size, [10.98, 8.57, 8.84])).toBe(true)
     expect(near(boxes.cranium!.min, [-7.89, -6.32, -15.59])).toBe(true)

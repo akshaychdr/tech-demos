@@ -77,6 +77,68 @@ def smooth_normals(mesh: trimesh.Trimesh, rounds: int) -> None:
     mesh.vertex_normals = normals
 
 
+def cap_face_openings(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Close the eye, ear, and nose holes. Leave the neck opening."""
+    path = mesh.outline()
+    vertices = np.array(mesh.vertices, dtype=np.float64, copy=True)
+    same = len(path.vertices) == len(vertices) and np.allclose(path.vertices, vertices)
+    faces = [np.array(mesh.faces, dtype=np.int64)]
+    for entity in path.entities:
+        loop = np.asarray(entity.points, dtype=np.int64)
+        if len(loop) < 4:
+            continue
+        samples = np.asarray(path.vertices)[loop]
+        if float(samples[:, 1].min()) < -7.0 and len(loop) > 40:
+            continue
+        if not same:
+            loop = np.array([int(np.argmin(np.linalg.norm(vertices - point, axis=1))) for point in samples])
+        center = vertices[loop].mean(0)
+        center_index = len(vertices)
+        vertices = np.vstack([vertices, center])
+        outward = center - np.array([0.0, 1.0, -1.0])
+        fan = []
+        for start, end in zip(loop, np.roll(loop, -1)):
+            normal = np.cross(vertices[end] - vertices[start], center - vertices[start])
+            tri = [start, end, center_index]
+            if float(np.dot(normal, outward)) < 0:
+                tri = [end, start, center_index]
+            fan.append(tri)
+        faces.append(np.array(fan, dtype=np.int64))
+    capped = trimesh.Trimesh(vertices=vertices, faces=np.vstack(faces), process=False)
+    capped.update_faces(capped.unique_faces() & capped.nondegenerate_faces())
+    capped.remove_unreferenced_vertices()
+    return capped
+
+
+def fit_skin_to_face(vertices: np.ndarray) -> np.ndarray:
+    """Pull the shell onto the face. His recording's rim sits just outside the ears, not in the hair."""
+    out = np.array(vertices, dtype=np.float64, copy=True)
+    band = (np.abs(out[:, 1] - 1.2) < 2.4) & (out[:, 2] > 0.4)
+    half = float(np.max(np.abs(out[band, 0]))) if np.any(band) else 0.0
+    # Ear landmarks sit at x = ±7.66. A rim 5% outside that stays on the head.
+    target = 8.05
+    if half > target:
+        out[:, 0] *= target / half
+    crown = out[:, 1] > 9.0
+    out[crown, 1] = 9.0 + (out[crown, 1] - 9.0) * 0.42
+    return out
+
+
+def shrink_eyes(mesh: trimesh.Trimesh, radius: float = 0.72) -> trimesh.Trimesh:
+    vertices = np.array(mesh.vertices, dtype=np.float64, copy=True)
+    for sign in (-1.0, 1.0):
+        mask = vertices[:, 0] * sign > 0.4
+        if int(mask.sum()) < 20:
+            continue
+        center = vertices[mask].mean(0)
+        current = float(np.median(np.linalg.norm(vertices[mask] - center, axis=1)))
+        if current < 1e-4:
+            continue
+        vertices[mask] = center + (vertices[mask] - center) * (radius / current)
+    shrunk = trimesh.Trimesh(vertices=vertices, faces=np.array(mesh.faces), process=False)
+    return bake(shrunk)
+
+
 def weld_skin(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     vertices = np.array(mesh.vertices, dtype=np.float64, copy=True)
     vertices[np.abs(vertices[:, 0]) < 0.05, 0] = 0.0
@@ -84,8 +146,27 @@ def weld_skin(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     welded.merge_vertices(digits_vertex=3)
     welded.update_faces(welded.unique_faces() & welded.nondegenerate_faces())
     welded.remove_unreferenced_vertices()
-    smooth_normals(welded, 6)
-    return welded
+    capped = cap_face_openings(welded)
+    fitted = trimesh.Trimesh(vertices=fit_skin_to_face(np.asarray(capped.vertices)), faces=np.asarray(capped.faces), process=False)
+    round_jaw(fitted)
+    # A few averages hide the mirror crease. More than that widens the rim into a band.
+    smooth_normals(fitted, 3)
+    return fitted
+
+
+def round_jaw(mesh: trimesh.Trimesh, rounds: int = 3, strength: float = 0.55) -> None:
+    """Soften the blocky chin. Leave the cheeks and the forehead alone."""
+    vertices = np.array(mesh.vertices, dtype=np.float64, copy=True)
+    neighbors = mesh.vertex_neighbors
+    for _ in range(rounds):
+        nxt = vertices.copy()
+        for index, ring in enumerate(neighbors):
+            if vertices[index, 1] > -0.5 or not ring:
+                continue
+            average = vertices[list(ring)].mean(0)
+            nxt[index] = vertices[index] * (1.0 - strength) + average * strength
+        vertices = nxt
+    mesh.vertices = vertices
 
 
 def bake(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
@@ -126,6 +207,8 @@ def main() -> None:
             mesh = hind
         elif name == "muscles":
             mesh = muscles
+        elif name == "eyes":
+            mesh = shrink_eyes(current.geometry[name])
         elif name in HEAD:
             mesh = bake(current.geometry[name])
         else:

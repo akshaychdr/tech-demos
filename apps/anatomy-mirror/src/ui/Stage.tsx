@@ -79,8 +79,8 @@ export default function Stage() {
   const [look, setLook] = useState<LookMode>('xray')
   const [reveal, setReveal] = useState<RevealMode>('whole')
   const [cut, setCut] = useState(0.5)
-  const [feather, setFeather] = useState(0.2)
-  const [real, setReal] = useState(0.12)
+  const [feather, setFeather] = useState(() => queryNumber('feather', 0.2))
+  const [real, setReal] = useState(() => queryNumber('real', 0.55))
   const [brightness, setBrightness] = useState(1)
   const [lensPinned, setLensPinned] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(() => {
@@ -607,6 +607,13 @@ function Pills<T extends string>({
       ))}
     </div>
   )
+}
+
+function queryNumber(name: string, fallback: number): number {
+  const raw = new URLSearchParams(window.location.search).get(name)
+  if (raw == null || raw === '') return fallback
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : fallback
 }
 
 function loadFit(): ManualFit {

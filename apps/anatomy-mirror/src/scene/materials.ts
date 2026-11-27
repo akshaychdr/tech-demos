@@ -30,11 +30,11 @@ const SOLID: Record<ShadeRole, string> = {
  * `heavy` is how many of skull, brain, and muscles are switched on.
  */
 export const XRAY_GAIN: Partial<Record<ShadeRole, number>> = {
-  outline: 0.55,
+  outline: 0.34,
   muscle: 0.5,
   brain: 0.36,
   hindbrain: 0.6,
-  eye: 0.9,
+  eye: 0.32,
 }
 
 export const RENDER_ORDER: Record<ShadeRole, number> = {
@@ -106,6 +106,7 @@ uniform float uLensOn;
 uniform vec3 uLens;
 uniform float uLensSoft;
 uniform float uPick;
+uniform float uRimPow;
 varying vec3 vNormalView;
 varying vec3 vTowardEye;
 varying vec3 vHeadPos;
@@ -143,7 +144,7 @@ void main() {
     gl_FragColor = vec4(color, uOpacity * soft * keep);
     return;
   }
-  float rim = pow(1.0 - ndv, 2.1);
+  float rim = pow(1.0 - ndv, uRimPow);
   float a = clamp((0.035 + 0.95 * rim) * uGain * uOpacity * fade, 0.0, 1.0);
   gl_FragColor = vec4(uColor, a * soft * keep);
 }
@@ -172,6 +173,7 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
       uLens: { value: new THREE.Vector3() },
       uLensSoft: { value: 28 },
       uPick: { value: 0 },
+      uRimPow: { value: role === 'eye' ? 6.0 : role === 'outline' ? 5.5 : 2.1 },
     },
     vertexShader: VERT,
     fragmentShader: FRAG,
