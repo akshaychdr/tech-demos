@@ -402,6 +402,7 @@ export class MirrorEngine {
       real: this.real,
       brightness: this.brightness,
       fit: this.fit,
+      now: time,
     })
     this.paintHud(view.width, view.height)
     this.publish(time, placed, Boolean(finger), region, muscle, view)
@@ -442,6 +443,7 @@ export class MirrorEngine {
       real: this.real,
       brightness: this.brightness,
       fit: this.fit,
+      now: time,
     })
     this.paintHud(view.width, view.height)
     if (time - this.snapAt < 200) return

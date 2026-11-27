@@ -12,10 +12,12 @@ import {
   solveFaceFit,
   solveOrbitFit,
   solveScreenFit,
+  stepCanonicalFit,
   solveWeightedScreenFit,
 } from '../src/domain/screenFit.ts'
 import { HEAD_LABELS, LabelColumns, anchorFacingAmount, labelVisible } from '../src/domain/headLabels.ts'
 import { OneEuroFilter } from '../src/domain/oneEuro.ts'
+import { RENDER_ORDER, veilOpacity, xrayLayerGain } from '../src/scene/materials.ts'
 import type { BlendshapeMap, BoneId, MuscleId, Vec3 } from '../src/domain/types.ts'
 
 function loadFace(): Vec3[] {
@@ -413,6 +415,50 @@ describe('screen fit', () => {
     expect(left[1]!.ty - left[0]!.ty).toBeGreaterThanOrEqual(18)
     expect(placed.find((row) => row.id === 'c')?.side).toBe('right')
     expect(placed.find((row) => row.id === 'a')?.tx).toBeLessThan(320)
+  })
+
+  test('canonical fit smooths scale, then shifts with that scale', () => {
+    const from = [
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+      { x: 0, y: 2 },
+      { x: 2, y: 2 },
+    ]
+    const to = from.map((point) => ({ x: point.x * 1.4 + 0.5, y: point.y * 1.4 - 0.25 }))
+    const once = stepCanonicalFit({ fitS: 1, fitX: 0, fitY: 0 }, from, to)
+    expect(once).not.toBeNull()
+    // Centroids are (1, 1) and (1.9, 1.15). The shift uses the smoothed scale 1.2, not 1.4.
+    expect(once!.fitS).toBeCloseTo(1.2, 5)
+    expect(once!.fitX).toBeCloseTo((1.9 - 1.2 * 1) * 0.7, 5)
+    expect(once!.fitY).toBeCloseTo((1.15 - 1.2 * 1) * 0.7, 5)
+    let state = { fitS: 1, fitX: 0, fitY: 0 }
+    for (let i = 0; i < 40; i += 1) state = stepCanonicalFit(state, from, to)!
+    expect(state.fitS).toBeCloseTo(1.4, 3)
+    expect(state.fitS * 1 + state.fitX).toBeCloseTo(1.9, 3)
+    expect(state.fitS * 1 + state.fitY).toBeCloseTo(1.15, 3)
+  })
+
+  test('x-ray gain shares skull, brain, and muscles, and the veil is 1 - real', () => {
+    expect(xrayLayerGain('bone', 1, 1)).toBeCloseTo(1, 5)
+    expect(xrayLayerGain('bone', 3, 1)).toBeCloseTo(1 / 2.2, 5)
+    expect(xrayLayerGain('outline', 3, 1)).toBeCloseTo(0.55, 5)
+    expect(xrayLayerGain('eye', 3, 1)).toBeCloseTo(0.9 / 2.2, 5)
+    expect(xrayLayerGain('brain', 3, 1)).toBeCloseTo(0.36 / 2.2, 5)
+    expect(xrayLayerGain('hindbrain', 3, 1)).toBeCloseTo(0.6 / 2.2, 5)
+    expect(xrayLayerGain('muscle', 1, 1)).toBeCloseTo(0.5, 5)
+    expect(xrayLayerGain('hand', 3, 2)).toBeCloseTo(2 / 2.2, 5)
+    expect(veilOpacity(0.12)).toBeCloseTo(0.88, 5)
+    expect(veilOpacity(0.75)).toBeCloseTo(0.25, 5)
+    expect(RENDER_ORDER).toEqual({
+      veil: -10,
+      outline: 1,
+      muscle: 2,
+      bone: 3,
+      hand: 3,
+      eye: 4,
+      brain: 5,
+      hindbrain: 5,
+    })
   })
 
   test('screen scale stays inside 0.6 and 1.6', () => {

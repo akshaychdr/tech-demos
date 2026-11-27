@@ -178,6 +178,47 @@ export function anchorFacing(
   return (ox * tx + oy * ty + oz * tz) / (olen * tlen)
 }
 
+export type CanonicalFit = { fitS: number; fitX: number; fitY: number }
+
+/**
+ * One step of Hashem's screen fit. Scale is smoothed by 0.5, then the shift
+ * is smoothed by 0.7 using that updated scale: `qmx - fitS * pmx`.
+ */
+export function stepCanonicalFit(state: CanonicalFit, from: PlanePoint[], to: PlanePoint[]): CanonicalFit | null {
+  const count = from.length
+  if (count < 3 || count !== to.length) return null
+  let pmx = 0
+  let pmy = 0
+  let qmx = 0
+  let qmy = 0
+  for (let i = 0; i < count; i += 1) {
+    pmx += from[i]!.x
+    pmy += from[i]!.y
+    qmx += to[i]!.x
+    qmy += to[i]!.y
+  }
+  pmx /= count
+  pmy /= count
+  qmx /= count
+  qmy /= count
+  let match = 0
+  let spread = 0
+  for (let i = 0; i < count; i += 1) {
+    const dx = from[i]!.x - pmx
+    const dy = from[i]!.y - pmy
+    match += dx * (to[i]!.x - qmx) + dy * (to[i]!.y - qmy)
+    spread += dx * dx + dy * dy
+  }
+  if (!(spread > 1e-8)) return { ...state }
+  const solved = match / spread
+  if (!Number.isFinite(solved)) return null
+  const target = clampScreenScale(solved)
+  const fitS = state.fitS + (target - state.fitS) * 0.5
+  const fitX = state.fitX + (qmx - fitS * pmx - state.fitX) * 0.7
+  const fitY = state.fitY + (qmy - fitS * pmy - state.fitY) * 0.7
+  return { fitS, fitX, fitY }
+}
+
 /** Keep the on-screen correction inside the range the sliders can also reach. */
 export function clampScreenScale(scale: number, min = 0.6, max = 1.6): number {
   if (!Number.isFinite(scale)) return 1
