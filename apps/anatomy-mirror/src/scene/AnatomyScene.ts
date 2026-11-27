@@ -44,6 +44,30 @@ export type ManualFit = {
 
 export const DEFAULT_FIT: ManualFit = { size: 1, width: 1, height: 1, depth: 1, x: 0, y: 0, z: 0 }
 
+export type SceneNode = {
+  kind: 'Mesh' | 'Points' | 'Line' | 'LineSegments'
+  name: string
+  role: string
+  parent: string
+  vertices: number
+  color: string
+  blending: string
+  depthTest: boolean
+  min: [number, number, number]
+  max: [number, number, number]
+}
+
+export type FitDebug = {
+  fitS: number
+  fitX: number
+  fitY: number
+  meanPx: number
+  maxPx: number
+  aspectDelta: number
+  markers: { index: number; x: number; y: number; err: number; dx: number; dy: number }[]
+  graph: SceneNode[]
+}
+
 export type AnchorFile = {
   jawPivot: [number, number, number]
   anchors: Partial<Record<StructureId, number[][]>>
@@ -75,6 +99,14 @@ type HandRig = {
 const BONES: StructureId[] = ['frontal', 'parietal', 'temporal', 'occipital', 'nasal', 'zygomatic', 'maxilla', 'mandible']
 const MUSCLES: StructureId[] = ['frontalis', 'corrugator', 'orbicularis', 'oris', 'zygomaticus', 'masseter', 'temporalis']
 const VERTICAL_FOV = 63
+/**
+ * The pose is solved for MediaPipe's 63° virtual camera. On a close webcam that
+ * depth is stronger than the picture: the ears sit about 10 cm behind the nose,
+ * so they collapse inward and the forehead rides high. Keeping a quarter of the
+ * camera-space depth leaves the rigid pose and the 2D scale-and-shift, and the
+ * 13 fit points land on the face with fitS near 1.
+ */
+const DEPTH_RELIEF = 0.25
 
 export class AnatomyScene {
   readonly headCanvas: HTMLCanvasElement
@@ -97,8 +129,17 @@ export class AnatomyScene {
   private viewH = 2
   private videoW = 2
   private videoH = 2
-  private coverX = 1
-  private coverY = 1
+  private aspectDelta = 0
+  fitDebug: FitDebug = {
+    fitS: 1,
+    fitX: 0,
+    fitY: 0,
+    meanPx: 0,
+    maxPx: 0,
+    aspectDelta: 0,
+    markers: [],
+    graph: [],
+  }
   private jawAngle = 0
   private fitScale = 1
   private fitX = 0
@@ -152,6 +193,10 @@ export class AnatomyScene {
     this.ortho.lookAt(0, 0, 0)
     this.head.matrixAutoUpdate = false
     this.jawPivot.matrixAutoUpdate = false
+    this.headScene.name = 'head-scene'
+    this.handScene.name = 'hands'
+    this.head.name = 'head'
+    this.jawPivot.name = 'jawPivot'
     this.head.add(this.jawPivot)
     this.headScene.add(this.head)
   }
@@ -221,38 +266,23 @@ export class AnatomyScene {
       add('brain', 'brain', 'brain', false, (id) => id === 'brain')
     }
     add('hindbrain', 'brain', 'hindbrain', false, (id) => id === 'brain')
-    if (!add('eyes', 'frontal', 'eye', false, () => false)) this.addEyes(anchorFile)
+    add('eyes', 'frontal', 'eye', false, () => false)
     const skin = findMesh(gltf.scene, 'skin') ?? findMesh(gltf.scene, 'shell')
     if (skin) {
       ensureNormals(skin.geometry)
       ensureShadeAttrs(skin.geometry)
-      const veil = skin
-      const outline = skin.clone()
-      veil.material = createShadeMaterial('veil')
-      outline.material = createShadeMaterial('outline')
-      veil.frustumCulled = false
-      outline.frustumCulled = false
-      veil.matrixAutoUpdate = false
-      outline.matrixAutoUpdate = false
-      veil.renderOrder = RENDER_ORDER.veil
-      outline.renderOrder = RENDER_ORDER.outline
-      veil.updateMatrix()
-      outline.updateMatrix()
-      this.head.add(veil)
-      this.head.add(outline)
-      this.parts.push({
-        id: 'brain',
-        role: 'veil',
-        mesh: veil,
-        material: veil.material as XrayMaterial,
-        jaw: false,
-        accepts: () => false,
-      })
+      skin.name = skin.name || 'skin'
+      skin.material = createShadeMaterial('outline')
+      skin.frustumCulled = false
+      skin.matrixAutoUpdate = false
+      skin.renderOrder = RENDER_ORDER.outline
+      skin.updateMatrix()
+      this.head.add(skin)
       this.parts.push({
         id: 'brain',
         role: 'outline',
-        mesh: outline,
-        material: outline.material as XrayMaterial,
+        mesh: skin,
+        material: skin.material as XrayMaterial,
         jaw: false,
         accepts: () => false,
       })
@@ -276,6 +306,7 @@ export class AnatomyScene {
       const rig: HandRig = { palm: new THREE.Mesh(), bones: [], points: null }
       if (palmGeo) {
         const palm = new THREE.Mesh(palmGeo, createShadeMaterial('hand'))
+        palm.name = `hand-${slot}-palm`
         palm.frustumCulled = false
         palm.matrixAutoUpdate = false
         palm.renderOrder = RENDER_ORDER.hand
@@ -287,6 +318,7 @@ export class AnatomyScene {
         const geometry = geometries.get(bone.name)
         if (!geometry) continue
         const mesh = new THREE.Mesh(geometry, createShadeMaterial('hand'))
+        mesh.name = `hand-${slot}-${bone.name}`
         mesh.frustumCulled = false
         mesh.matrixAutoUpdate = false
         mesh.renderOrder = RENDER_ORDER.hand
@@ -308,14 +340,13 @@ export class AnatomyScene {
       renderer.setSize(this.viewW, this.viewH, false)
     }
     const videoAspect = this.videoW / this.videoH
-    const fit = Math.max(this.viewW / this.videoW, this.viewH / this.videoH)
-    this.coverX = (this.videoW * fit) / this.viewW
-    this.coverY = (this.videoH * fit) / this.viewH
+    const viewAspect = this.viewW / this.viewH
+    this.aspectDelta = Math.abs(videoAspect - viewAspect)
+    // The stage matches the video and the video fills the canvas, so a landmark
+    // maps straight into NDC. Cover scaling would crop that mapping.
     this.camera.fov = VERTICAL_FOV
-    this.camera.aspect = videoAspect
+    this.camera.aspect = viewAspect
     this.camera.updateProjectionMatrix()
-    this.camera.projectionMatrix.elements[0]! *= this.coverX
-    this.camera.projectionMatrix.elements[5]! *= this.coverY
     this.baseProjection.copy(this.camera.projectionMatrix)
     this.ortho.left = 0
     this.ortho.right = this.viewW
@@ -508,6 +539,15 @@ export class AnatomyScene {
     this.poseReady = true
     this.head.visible = true
     this.head.matrix.compose(this.displayPos, this.displayQuat, this.displayScale)
+    let depth = 0
+    for (const mark of POSE_LANDMARKS) {
+      this.scratch.clip.set(mark.at[0], mark.at[1], mark.at[2], 1).applyMatrix4(this.head.matrix)
+      depth += this.scratch.clip.z
+    }
+    const center = depth / POSE_LANDMARKS.length
+    const flat = new THREE.Matrix4().makeScale(1, 1, DEPTH_RELIEF)
+    flat.elements[14] = (1 - DEPTH_RELIEF) * center
+    this.head.matrix.premultiply(flat)
     this.poseMatrix.copy(this.head.matrix)
     this.head.matrixWorldNeedsUpdate = true
     this.fitProjection.copy(this.baseProjection)
@@ -520,7 +560,7 @@ export class AnatomyScene {
         this.scratch.clip.set(mark.at[0], mark.at[1], mark.at[2], 1).applyMatrix4(this.head.matrix).applyMatrix4(this.baseProjection)
         if (this.scratch.clip.w === 0) continue
         from.push({ x: this.scratch.clip.x / this.scratch.clip.w, y: this.scratch.clip.y / this.scratch.clip.w })
-        to.push({ x: this.coverX * (seen.x * 2 - 1), y: this.coverY * (1 - seen.y * 2) })
+        to.push({ x: seen.x * 2 - 1, y: 1 - seen.y * 2 })
       }
       const stepped = stepCanonicalFit({ fitS: this.fitScale, fitX: this.fitX, fitY: this.fitY }, from, to)
       if (stepped) {
@@ -541,18 +581,92 @@ export class AnatomyScene {
     )
     this.head.matrix.multiply(localFit)
     this.head.matrixWorldNeedsUpdate = true
+    this.noteFit(landmarks)
     const nose = landmarks?.[1]
     this.noseLocal = nose ? this.layoutPoint(nose.x, nose.y) : null
   }
 
-  private layoutPoint(nx: number, ny: number): { x: number; y: number } {
-    const fit = Math.max(this.viewW / this.videoW, this.viewH / this.videoH)
-    const dispW = this.videoW * fit
-    const dispH = this.videoH * fit
-    return {
-      x: (this.viewW - dispW) / 2 + nx * dispW,
-      y: (this.viewH - dispH) / 2 + ny * dispH,
+  screenFromNorm(nx: number, ny: number): { x: number; y: number } {
+    return { x: nx * this.viewW, y: ny * this.viewH }
+  }
+
+  private noteFit(landmarks: { x: number; y: number; z: number }[] | null): void {
+    const markers: FitDebug['markers'] = []
+    const errors: number[] = []
+    if (landmarks && landmarks.length > 454) {
+      for (const mark of POSE_LANDMARKS) {
+        const seen = landmarks[mark.index]
+        if (!seen) continue
+        this.scratch.clip.set(mark.at[0], mark.at[1], mark.at[2], 1).applyMatrix4(this.head.matrix).applyMatrix4(this.fitProjection)
+        if (this.scratch.clip.w === 0) continue
+        const ndcX = this.scratch.clip.x / this.scratch.clip.w
+        const ndcY = this.scratch.clip.y / this.scratch.clip.w
+        const x = ((ndcX + 1) / 2) * this.viewW
+        const y = ((1 - ndcY) / 2) * this.viewH
+        const face = this.screenFromNorm(seen.x, seen.y)
+        const err = Math.hypot(x - face.x, y - face.y)
+        errors.push(err)
+        markers.push({ index: mark.index, x, y, err, dx: x - face.x, dy: y - face.y })
+      }
     }
+    const meanPx = errors.length ? errors.reduce((sum, value) => sum + value, 0) / errors.length : 0
+    this.fitDebug = {
+      fitS: this.fitScale,
+      fitX: this.fitX,
+      fitY: this.fitY,
+      meanPx,
+      maxPx: errors.length ? Math.max(...errors) : 0,
+      aspectDelta: this.aspectDelta,
+      markers,
+      graph: this.inventory(),
+    }
+  }
+
+  inventory(): SceneNode[] {
+    this.head.updateMatrixWorld(true)
+    const nodes: SceneNode[] = []
+    const visit = (root: THREE.Object3D) => {
+      root.traverse((object) => {
+        const kind = object instanceof THREE.Mesh
+          ? 'Mesh'
+          : object instanceof THREE.Points
+            ? 'Points'
+            : object instanceof THREE.LineSegments
+              ? 'LineSegments'
+              : object instanceof THREE.Line
+                ? 'Line'
+                : null
+        if (!kind) return
+        const drawable = object as THREE.Mesh
+        const geometry = drawable.geometry
+        const position = geometry?.getAttribute('position')
+        const material = drawable.material as XrayMaterial | THREE.Material
+        const shader = material as Partial<XrayMaterial>
+        const color = shader.uniforms?.uColor?.value as THREE.Color | undefined
+        geometry?.computeBoundingBox()
+        const box = geometry?.boundingBox?.clone()
+        if (box) box.applyMatrix4(drawable.matrixWorld)
+        nodes.push({
+          kind,
+          name: drawable.name || '(unnamed)',
+          role: shader.userData?.role ?? '',
+          parent: drawable.parent?.name || '(root)',
+          vertices: position?.count ?? 0,
+          color: color ? `#${color.getHexString()}` : '',
+          blending: blendName(shader.blending),
+          depthTest: Boolean(shader.depthTest),
+          min: box ? [roundCm(box.min.x), roundCm(box.min.y), roundCm(box.min.z)] : [0, 0, 0],
+          max: box ? [roundCm(box.max.x), roundCm(box.max.y), roundCm(box.max.z)] : [0, 0, 0],
+        })
+      })
+    }
+    visit(this.headScene)
+    visit(this.handScene)
+    return nodes
+  }
+
+  private layoutPoint(nx: number, ny: number): { x: number; y: number } {
+    return this.screenFromNorm(nx, ny)
   }
 
   private lensLayout(
@@ -577,31 +691,6 @@ export class AnatomyScene {
       uniforms.uLensOn!.value = lensOn && lens ? 1 : 0
       if (lens) uniforms.uLens!.value.set(lens.x, lens.y, lens.radius)
       uniforms.uLensSoft!.value = 22 + feather * Math.max(lens?.radius ?? 40, 20) * 1.15
-    }
-  }
-
-  private addEyes(anchorFile: AnchorFile): void {
-    for (const orbit of anchorFile.orbits ?? []) {
-      const radius = Math.min(1.02, Math.max(0.72, orbit.radius * 0.68))
-      const geometry = new THREE.SphereGeometry(radius, 32, 24)
-      ensureNormals(geometry)
-      ensureShadeAttrs(geometry)
-      const material = createShadeMaterial('eye')
-      const mesh = new THREE.Mesh(geometry, material)
-      mesh.position.set(orbit.center[0], orbit.center[1], orbit.center[2] - radius * 0.5)
-      mesh.frustumCulled = false
-      mesh.matrixAutoUpdate = false
-      mesh.renderOrder = RENDER_ORDER.eye
-      mesh.updateMatrix()
-      this.head.add(mesh)
-      this.parts.push({
-        id: 'frontal',
-        role: 'eye',
-        mesh,
-        material,
-        jaw: false,
-        accepts: () => false,
-      })
     }
   }
 
@@ -704,6 +793,17 @@ function findMesh(root: THREE.Object3D, name: string): THREE.Mesh | null {
     if (!found && mesh.isMesh) found = mesh
   })
   return found
+}
+
+function roundCm(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function blendName(blending: THREE.Blending | undefined): string {
+  if (blending === THREE.AdditiveBlending) return 'additive'
+  if (blending === THREE.NormalBlending) return 'normal'
+  if (blending === THREE.NoBlending) return 'none'
+  return blending == null ? '' : String(blending)
 }
 
 function clipPlane(reveal: RevealMode, cut: number): THREE.Vector4 | null {
