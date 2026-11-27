@@ -286,9 +286,19 @@ h2,
   height: 100%;
   background: #070b12;
   overflow: hidden;
+  container-type: size;
+  display: grid;
+  place-items: center;
 }
 
-.stage-host,
+.stage-host {
+  position: relative;
+  aspect-ratio: var(--ar, 1.777778);
+  width: min(100cqw, calc(100cqh * var(--ar, 1.777778)));
+  max-width: 100%;
+  max-height: 100%;
+}
+
 .mirror-video {
   position: absolute;
   inset: 0;
@@ -319,7 +329,6 @@ h2,
 
 .mirror-video video {
   object-fit: cover;
-  filter: saturate(0.24) brightness(0.5) contrast(1.14);
 }
 
 .top-chip {

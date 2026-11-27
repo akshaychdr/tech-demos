@@ -21,8 +21,13 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
-from scipy import ndimage
-from scipy.spatial import cKDTree
+
+try:
+    from scipy import ndimage
+    from scipy.spatial import cKDTree
+except ImportError:  # canonical placement of an existing GLB does not remesh
+    ndimage = None
+    cKDTree = None
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "public" / "anatomy" / "bodyparts3d"
@@ -420,20 +425,20 @@ def weighted_axis_fit(src: np.ndarray, dst: np.ndarray, weights: np.ndarray) -> 
 
 
 def align_bones(
-    parts: dict[str, trimesh.Trimesh], face: np.ndarray
+    parts: dict[str, trimesh.Trimesh], _face: np.ndarray
 ) -> tuple[dict[str, trimesh.Trimesh], np.ndarray, tuple[float, np.ndarray, np.ndarray]]:
     src_named = bone_points(parts)
     order = ["forehead", "nasion", "menton", "cheek_l", "cheek_r", "gonion_l", "gonion_r"]
-    # Skin sits just outside the bone. Targets are tucked in a little so the
-    # skull reads inside the face instead of floating in front of it.
+    # Canonical centimetres: midline at x = 0, cheeks on the zygomatic arches.
+    # canonical_space.py then mirrors the skull and fits each box.
     targets = {
-        "forehead": face[10] + np.array([0.0, -0.15, -0.35]),
-        "nasion": face[168] + np.array([0.0, 0.0, -0.2]),
-        "menton": face[152] + np.array([0.0, 0.25, -0.45]),
-        "cheek_l": face[345] + np.array([0.05, 0.0, -0.28]),
-        "cheek_r": face[116] + np.array([-0.05, 0.0, -0.28]),
-        "gonion_l": face[397] + np.array([0.15, 0.05, -0.35]),
-        "gonion_r": face[172] + np.array([-0.15, 0.05, -0.35]),
+        "forehead": np.array([0.13, 8.05, 4.35]),
+        "nasion": np.array([0.0, 3.271027, 5.236015]),
+        "menton": np.array([0.0, -9.403378, 4.264492]),
+        "cheek_l": np.array([5.0, 0.27, 2.3]),
+        "cheek_r": np.array([-5.0, 0.27, 2.3]),
+        "gonion_l": np.array([6.2, -3.2, 0.4]),
+        "gonion_r": np.array([-6.2, -3.2, 0.4]),
     }
     src = np.stack([src_named[name] for name in order])
     dst = np.stack([targets[name] for name in order])
@@ -2366,6 +2371,9 @@ def main() -> None:
     (OUT_DIR / "nodes.json").write_text(json.dumps({"nodes": sorted(export), "bytes": glb.stat().st_size}, indent=2))
     print("wrote", glb, glb.stat().st_size)
     preview(export, face, Path("/tmp/bp3d/preview-aligned.png"))
+    from canonical_space import main as place_canonical
+
+    place_canonical()
 
 
 def transform_like(source: trimesh.Trimesh, aligned: trimesh.Trimesh, mesh: trimesh.Trimesh) -> trimesh.Trimesh:
@@ -2531,5 +2539,9 @@ if __name__ == "__main__":
         replace_muscles()
     elif "--skull-only" in sys.argv:
         skull_only()
+    elif "--place-canonical" in sys.argv:
+        from canonical_space import main as place_canonical
+
+        place_canonical()
     else:
         main()
