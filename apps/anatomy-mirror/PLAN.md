@@ -1,27 +1,21 @@
-# Anatomy Mirror — expression muscles on the rigid skull
+# Anatomy Mirror — source-accurate overlay
 
 ## Goal
 
-Replace the extraocular-and-tongue muscle layer with the facial-expression muscles from BodyParts3D 3.0, rigidly aligned onto the current 4.x skull.
+Match the measured overlay: one continuous crown, a feathered rim, 26 layer-colored labels in two columns, pose lerp, and the reveal / fit panel.
+
+## Cause of the cut
+
+The shared shader feathers every layer with the MediaPipe face oval, then forces pixels above a line eight pixels under the hairline back on (`uCrown`). Bone and brain drop out in that gap and the cap above it floats free. The neck fade, the camera planes, and a mesh split are not the cut. The cranium is one mesh. Bone, brain, muscle, and the outline no longer use that oval. The neck fade is `smoothstep(-12.4, -9.2, y)` in head centimetres.
 
 ## MVP
 
-In: left and right meshes for frontalis, orbital and palpebral orbicularis oculi, orbicularis oris, zygomaticus major and minor, both levators of the upper lip, risorius, mentalis, depressor anguli oris, buccinator, nasalis, procerus, superficial and deep masseter, and temporalis. A similarity ICP (Umeyama) from the 3.0 frontal, mandible, and zygomatic bones onto the 4.0 bones, then the same similarity that already places the skull in the face frame. One merged muscle mesh, about 36k triangles, smooth normals. Masseter, temporalis, and the other jaw muscles stretch or follow `jawOpen`. Quiz anchors sit on these meshes. Credits name BodyParts3D 3.0 and 4.x.
+In: the 26 labels (layer, facing, sticky columns, 12.5px, 18px gap, halo, 2.6px dot). Landmark lerp 0.65 and pose lerp 0.6 / slerp 0.55 / scale 0.5. Feather `uFeather = feather * 0.75` with the source `soft` and neck `fade`. Reveal whole, half, or lens, with cut softness `feather * 5` cm. Slider ranges from the source. Labels on. Every mesh `frustumCulled = false` and `matrixAutoUpdate = false`.
 
-Out: rebuilding the skull, a new scaffold, a demo video, deforming the muscles onto the face, and hunting muscles that are not in this list.
-
-## Stack
-
-- Keep the Vite app. Muscles come from `BodyParts3D_3.0_obj_99.zip` (files are `FMA*.obj`). Alignment targets are `FJ3200`, `FJ3289`, and `FJ3287` in the 4.0 isa zip, plus the right zygomatic when it is there.
-- The existing fresnel shader and gain stay. Jaw motion is a per-vertex offset along the mandible’s hinge, driven by `jawOpen`.
+Out: a new skull mesh, a warp, One Euro on the pose, a demo video, and any file outside this app.
 
 ## Tasks
 
-1. Estimate the 3.0-to-4.0 similarity and record the scale and residuals.
-2. Render the muscles over the skull alone (front, three-quarter, side) before replacing the app mesh.
-3. Splice the mesh, jaw follow, anchors, and credits. Check a frontal and a three-quarter face, then the Pages build.
-
-## Deferred
-
-- A separate mesh per muscle. One merged layer is what the mirror draws.
-- Corrugator supercilii. It is not in this parts list; the frown marker sits on procerus.
+1. Shader and pose: source feather, neck fade, lerp. Keep the crown fix.
+2. Labels and the panel: 26 anchors, column layout, presets, half cut.
+3. Tests, frontal and three-quarter screenshots, then the Pages build.

@@ -428,9 +428,23 @@ h2,
   cursor: pointer;
 }
 
-.fit-grid {
+.fit-grid,
+.checks {
   display: grid;
   gap: 0.35rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.25rem;
+}
+
+.check input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: #9fd0ff;
 }
 
 .quiz-row,

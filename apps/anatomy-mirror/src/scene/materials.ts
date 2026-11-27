@@ -4,13 +4,13 @@ export type ShadeRole = 'veil' | 'outline' | 'bone' | 'muscle' | 'brain' | 'hind
 
 const XRAY: Record<ShadeRole, string> = {
   veil: '#04070d',
-  outline: '#6fb6ff',
-  bone: '#bfe3ff',
-  muscle: '#ff6b5e',
-  brain: '#ff9fc0',
-  hindbrain: '#ffc37a',
-  hand: '#d9f3ff',
-  eye: '#fff3a8',
+  outline: '#9ec8ff',
+  bone: '#f7fbff',
+  muscle: '#f3c0c8',
+  brain: '#f6c9d6',
+  hindbrain: '#f0c6be',
+  hand: '#e7f4ff',
+  eye: '#d7e6f4',
 }
 
 const SOLID: Record<ShadeRole, string> = {
@@ -51,6 +51,8 @@ uniform vec3 uTint;
 uniform vec3 uWarm;
 uniform float uGain;
 uniform float uFill;
+uniform float uPower;
+uniform float uKind;
 uniform float uCover;
 uniform float uBoost;
 uniform float uMode;
@@ -58,6 +60,8 @@ uniform float uClip;
 uniform vec4 uPlane;
 uniform float uSoft;
 uniform float uSilhouette;
+uniform float uFeather;
+uniform float uFade;
 uniform float uNeck;
 uniform float uNeck0;
 uniform float uNeck1;
@@ -74,7 +78,6 @@ uniform float uLensSoft;
 uniform vec2 uOval[36];
 uniform float uOvalCount;
 uniform float uOvalSoft;
-uniform vec3 uCrown;
 varying vec3 vNormalView;
 varying vec3 vTowardEye;
 varying vec3 vHeadPos;
@@ -89,52 +92,25 @@ float socketMask(vec3 p, vec4 orbit) {
   return 1.0 - 0.94 * inside * depth;
 }
 
-float faceFade(vec2 pixel) {
-  int count = int(uOvalCount + 0.5);
-  if (count < 3) return 1.0;
-  float dist = 1e4;
-  bool inside = false;
-  for (int i = 0; i < 36; i++) {
-    if (i >= count) break;
-    int j = i + 1;
-    if (j >= count) j = 0;
-    vec2 a = uOval[i];
-    vec2 b = uOval[j];
-    vec2 edge = b - a;
-    float along = clamp(dot(pixel - a, edge) / max(dot(edge, edge), 1e-4), 0.0, 1.0);
-    dist = min(dist, length(pixel - a - edge * along));
-    bool straddles = (a.y > pixel.y) != (b.y > pixel.y);
-    if (straddles) {
-      float x = a.x + edge.x * (pixel.y - a.y) / edge.y;
-      if (pixel.x < x) inside = !inside;
-    }
-  }
-  float signedDist = inside ? -dist : dist;
-  float fade = 1.0 - smoothstep(-uOvalSoft, uOvalSoft * 0.2, signedDist);
-  // Keep the cranium above the hairline. The oval only feathers the cheeks and jaw.
-  if (pixel.y < uCrown.x && abs(pixel.x - uCrown.y) < uCrown.z) fade = 1.0;
-  return fade;
-}
-
 void main() {
   vec3 normal = normalize(vNormalView);
   vec3 eye = normalize(vTowardEye);
   float facing = clamp(abs(dot(normal, eye)), 0.0, 1.0);
-  float rim = pow(1.0 - facing, 2.1);
+  float rim = pow(1.0 - facing, max(uPower, 0.5));
 
   float keep = 1.0;
   if (uClip > 0.5) {
     float side = dot(uPlane.xyz, vHeadPos) - uPlane.w;
-    if (side < 0.0) discard;
     keep *= smoothstep(0.0, max(uSoft, 0.001), side);
   }
-  if (uNeck > 0.5) keep *= smoothstep(uNeck0, uNeck1, vHeadPos.y);
-  float edge = smoothstep(0.0, max(uSilhouette, 0.001), facing);
-  keep *= edge;
+  float ndv = facing;
+  float soft = 1.0;
+  if (uFeather > 0.001) soft *= smoothstep(0.0, uFeather, ndv);
+  float fade = uFade > 0.5 ? smoothstep(-12.4, -9.2, vHeadPos.y) : 1.0;
+  keep *= soft * fade;
 
   vec2 ndc = vClip.xy / max(abs(vClip.w), 1e-4);
   vec2 pixel = vec2((ndc.x + 1.0) * 0.5 * uView.x, (1.0 - ndc.y) * 0.5 * uView.y);
-  keep *= faceFade(pixel);
   if (uLensOn > 0.5) {
     float lensDist = length(pixel - uLens.xy) - uLens.z;
     keep *= 1.0 - smoothstep(-uLensSoft, uLensSoft * 0.22, lensDist);
@@ -156,8 +132,8 @@ void main() {
 
   vec3 tint = mix(uTint, vec3(1.0), 0.42 * uBoost);
   if (uEye > 0.5) {
-    float pupil = smoothstep(0.58, 0.22, facing);
-    tint = mix(tint, vec3(0.04, 0.07, 0.1), pupil);
+    float pupil = smoothstep(0.4, 0.82, facing);
+    tint = mix(tint, vec3(0.55, 0.62, 0.7), pupil * 0.35);
   }
   if (uMode > 1.5) {
     float veilAlpha = uCover * keep;
@@ -172,7 +148,31 @@ void main() {
     gl_FragColor = vec4(color * solidAlpha, solidAlpha);
     return;
   }
-  float glow = (0.035 + 0.95 * rim) * uGain * (1.0 + 1.35 * uBoost);
+  float grazing = 1.0 - facing;
+  float glow;
+  if (uKind < 0.5) {
+    // Crisp white bone line. The face stays clear.
+    glow = pow(grazing, 5.4);
+    tint = mix(tint, vec3(1.0), 0.55);
+  } else if (uKind < 1.5) {
+    // Soft fresnel. uSilhouette is the edge feather (about 0.17).
+    // Blue only on the rim that sits down by the jaw and the neck.
+    float width = clamp(uSilhouette, 0.04, 0.95);
+    float power = mix(6.2, 1.7, width);
+    glow = pow(grazing, power);
+    float low = 1.0 - smoothstep(-9.2, -4.5, vHeadPos.y);
+    tint = mix(vec3(0.94, 0.97, 1.0), vec3(0.62, 0.78, 1.0), low * 0.65);
+    glow *= mix(0.35, 0.7, low);
+  } else if (uKind < 2.5) {
+    glow = 0.1 + 0.34 * pow(grazing, 1.15);
+  } else if (uKind < 4.5) {
+    glow = 0.08 + 0.3 * pow(grazing, 1.25);
+  } else if (uKind < 5.5) {
+    glow = 0.03 + 0.28 * pow(grazing, 2.6);
+  } else {
+    glow = uFill + (1.0 - uFill) * rim;
+  }
+  glow *= uGain * (1.0 + 1.35 * uBoost);
   float lightAmount = glow * keep * socket * fiber;
   gl_FragColor = vec4(tint * lightAmount, lightAmount);
 }
@@ -194,14 +194,50 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
       uTint: { value: new THREE.Color(XRAY[role]) },
       uWarm: { value: new THREE.Color(SOLID[role]) },
       uGain: { value: 1 },
-      uFill: { value: role === 'muscle' ? 0.72 : role === 'brain' || role === 'hindbrain' ? 0.22 : role === 'eye' ? 0.2 : 0.05 },
+      uFill: {
+        value:
+          role === 'outline'
+            ? 0
+            : role === 'bone'
+              ? 0.02
+              : role === 'eye'
+                ? 0.04
+                : role === 'muscle'
+                  ? 0.1
+                  : role === 'brain' || role === 'hindbrain'
+                    ? 0.1
+                    : 0.04,
+      },
+      uPower: {
+        value: role === 'outline' ? 3.8 : role === 'bone' ? 3.2 : role === 'eye' ? 2.6 : 2.15,
+      },
+      uKind: {
+        value:
+          role === 'bone'
+            ? 0
+            : role === 'outline'
+              ? 1
+              : role === 'muscle'
+                ? 2
+                : role === 'brain'
+                  ? 3
+                  : role === 'hindbrain'
+                    ? 4
+                    : role === 'eye'
+                      ? 5
+                      : role === 'hand'
+                        ? 6
+                        : 7,
+      },
       uCover: { value: veil ? 0.55 : 0.92 },
       uBoost: { value: 0 },
       uMode: { value: veil ? 2 : 0 },
       uClip: { value: 0 },
       uPlane: { value: new THREE.Vector4(1, 0, 0, 0) },
       uSoft: { value: 1.2 },
-      uSilhouette: { value: role === 'outline' ? 0.55 : 0.18 },
+      uSilhouette: { value: role === 'outline' ? 0.17 : 0.08 },
+      uFeather: { value: 0.15 },
+      uFade: { value: role === 'hand' ? 0 : 1 },
       uNeck: { value: role === 'veil' || role === 'outline' ? 1 : 0 },
       uNeck0: { value: -8.4 },
       uNeck1: { value: -4.6 },
@@ -217,7 +253,6 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
       uLensSoft: { value: 28 },
       uOvalCount: { value: 0 },
       uOvalSoft: { value: 18 },
-      uCrown: { value: new THREE.Vector3(0, 0, 1e6) },
       uOval: ovalUniform(),
     },
     vertexShader: VERT,

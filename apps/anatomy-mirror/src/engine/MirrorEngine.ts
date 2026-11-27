@@ -9,12 +9,12 @@ import { emptyHold, stepHold, type HoldState } from '../domain/hold.ts'
 import { dist } from '../domain/math.ts'
 import { classifyTouch, matchesBone } from '../domain/regions.ts'
 import { MUSCLE_IDS, matchesMuscle, muscleMotion, scoreMuscles } from '../domain/expressions.ts'
-import { structure } from '../domain/structures.ts'
 import type { BlendshapeMap, BoneId, MuscleId, StructureId, Vec3 } from '../domain/types.ts'
-import { paintCallouts } from '../scene/callouts.ts'
+import { LabelColumns, paintCallouts } from '../scene/callouts.ts'
 import {
   AnatomyScene,
   DEFAULT_FIT,
+  DEFAULT_LAYERS,
   type LookMode,
   type ManualFit,
   type RevealMode,
@@ -56,7 +56,8 @@ export type Appearance = {
   reveal: RevealMode
   cut: number
   feather: number
-  skin: number
+  real: number
+  brightness: number
   fit: ManualFit
 }
 
@@ -83,14 +84,17 @@ export class MirrorEngine {
   private noFingerSince = 0
   private snapAt = 0
   private mode: EngineMode = 'explore'
-  private layers: SceneLayers = { skull: true, muscles: false, brain: false, hand: false }
-  private showLabels = false
+  private layers: SceneLayers = { ...DEFAULT_LAYERS }
+  private showLabels = true
   private fit: ManualFit = { ...DEFAULT_FIT }
   private look: LookMode = 'xray'
-  private reveal: RevealMode = 'lens'
-  private cut = 0.42
-  private feather = 0.22
-  private skin = 0.32
+  private reveal: RevealMode = 'whole'
+  private cut = 0.5
+  private feather = 0.2
+  private real = 0.12
+  private brightness = 1
+  private smoothMarks: RawPoint[] | null = null
+  private readonly labelColumns = new LabelColumns()
   private lensPin: { x: number; y: number } | null = null
   private dragging = false
   private watch: Watch = null
@@ -156,7 +160,8 @@ export class MirrorEngine {
     this.reveal = appearance.reveal
     this.cut = appearance.cut
     this.feather = appearance.feather
-    this.skin = appearance.skin
+    this.real = appearance.real
+    this.brightness = appearance.brightness
     this.fit = appearance.fit
     if (appearance.reveal !== 'lens') this.applyMask()
   }
@@ -358,7 +363,7 @@ export class MirrorEngine {
     if (!view || view.width < 2) return
 
     const faceResult = this.face.detectForVideo(video, time)
-    const raw = faceResult.faceLandmarks[0] ?? null
+    const raw = this.smoothLandmarks(faceResult.faceLandmarks[0] ?? null)
     const placed = this.coverLandmarks(raw, video.videoWidth, video.videoHeight, view.width, view.height)
     const blends: BlendshapeMap = {}
     for (const category of faceResult.faceBlendshapes?.[0]?.categories ?? []) {
@@ -394,9 +399,9 @@ export class MirrorEngine {
       reveal: this.reveal,
       cut: this.cut,
       feather: this.feather,
-      skin: this.skin,
+      real: this.real,
+      brightness: this.brightness,
       fit: this.fit,
-      time,
     })
     this.paintHud(view.width, view.height)
     this.publish(time, placed, Boolean(finger), region, muscle, view)
@@ -434,9 +439,9 @@ export class MirrorEngine {
       reveal: this.reveal,
       cut: this.cut,
       feather: this.feather,
-      skin: this.skin,
+      real: this.real,
+      brightness: this.brightness,
       fit: this.fit,
-      time,
     })
     this.paintHud(view.width, view.height)
     if (time - this.snapAt < 200) return
@@ -453,6 +458,25 @@ export class MirrorEngine {
       faceTooClose: false,
       lowFps: false,
     })
+  }
+
+  private smoothLandmarks(raw: RawPoint[] | null): RawPoint[] | null {
+    if (!raw) {
+      this.smoothMarks = null
+      return null
+    }
+    if (!this.smoothMarks || this.smoothMarks.length !== raw.length) {
+      this.smoothMarks = raw.map((point) => ({ x: point.x, y: point.y, z: point.z }))
+      return this.smoothMarks
+    }
+    for (let i = 0; i < raw.length; i += 1) {
+      const next = raw[i]!
+      const held = this.smoothMarks[i]!
+      held.x += (next.x - held.x) * 0.65
+      held.y += (next.y - held.y) * 0.65
+      held.z += (next.z - held.z) * 0.65
+    }
+    return this.smoothMarks
   }
 
   private coverLandmarks(
@@ -517,21 +541,14 @@ export class MirrorEngine {
     if (!hud || !ctx || !scene) return
     const dpr = hud.width / Math.max(viewW, 1)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    const labels = this.showLabels ? scene.projectedLabels(this.layers, this.highlight) : []
+    const labels = this.showLabels
+      ? scene.projectedLabels(this.layers, this.look, this.reveal, this.cut).map((item) => ({ ...item, x: viewW - item.x }))
+      : []
     const nose = scene.noseLocal
     const centerX = nose ? viewW - nose.x : viewW / 2
-    paintCallouts(
-      ctx,
-      viewW,
-      viewH,
-      labels.map((item) => ({
-        text: structure(item.id).everyday,
-        color: labelColor(item.id),
-        x: viewW - item.x,
-        y: item.y,
-      })),
-      centerX,
-    )
+    const xs = labels.map((item) => item.x)
+    const spread = xs.length > 1 ? (Math.max(...xs) - Math.min(...xs)) / 2 : 120
+    paintCallouts(ctx, viewW, viewH, labels, centerX, Math.max(110, spread), this.labelColumns)
     this.applyMask()
     if (this.reveal !== 'lens') return
     const lens = this.lensPin ?? nose ?? { x: viewW / 2, y: viewH * 0.42 }
@@ -627,12 +644,6 @@ function closestFinger(hands: Vec3[][], face: Vec3[] | null): Vec3 | null {
     }
   }
   return best
-}
-
-function labelColor(id: StructureId): string {
-  if (id === 'brain') return '#ffc4d6'
-  if (MUSCLE_IDS.includes(id as MuscleId)) return '#ffb3aa'
-  return '#d7ecff'
 }
 
 function previewHand(viewW: number, viewH: number): Vec3[] {

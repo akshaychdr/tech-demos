@@ -20,7 +20,7 @@ bun run build
 
 ## What you can do
 
-Welcome, then Explore. The skull, eyes, and outline start on; muscles, brain, and labels start off. Touch and tell, Make a face, and a five-question quiz are still there. Open Adjust for the look, the reveal, and the fit sliders. A link with `?beat=8` shows a challenge on the welcome screen.
+Welcome, then Explore. Skull, muscles, brain, eyes, the head outline, and labels start on. Touch and tell, Make a face, and a five-question quiz are still there. The panel has layer presets, X-ray or Solid, brightness, how much of you shows through, edge feather, and the fit sliders. Reveal can show the whole head, one half, or a lens. A link with `?beat=8` shows a challenge on the welcome screen.
 
 ## Licences
 

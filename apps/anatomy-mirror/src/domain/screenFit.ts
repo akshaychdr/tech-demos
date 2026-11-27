@@ -44,7 +44,7 @@ export function solveFaceFit(from: PlanePoint[], to: PlanePoint[], anchorCount =
   return { sx, sy, x: targetX - sx * anchorX, y: targetY - sy * anchorY }
 }
 
-/** MediaPipe face-oval loop, used to feather the glow to the skin. */
+/** MediaPipe face-oval indices. Layers are not clipped to this loop. */
 export const FACE_OVAL = [
   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149,
   150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
@@ -121,6 +121,61 @@ export function solveWeightedScreenFit(from: PlanePoint[], to: PlanePoint[], wei
   const scale = match / spread
   if (!Number.isFinite(scale)) return null
   return { scale, x: targetX - scale * meanX, y: targetY - scale * meanY }
+}
+
+/**
+ * Uniform scale and shift that puts the orbit centers on the eyes and the
+ * chin on the chin. The bony orbits sit closer together than the eyes, so
+ * scaling up to the eye spacing makes the sockets huge and the cranium wide.
+ * The chin-to-eye span is the scale. Eye spacing only pulls the scale down
+ * when the skull is already wider than the face.
+ */
+export function solveOrbitFit(
+  fromRight: PlanePoint,
+  fromLeft: PlanePoint,
+  fromChin: PlanePoint,
+  toRight: PlanePoint,
+  toLeft: PlanePoint,
+  toChin: PlanePoint,
+): ScreenFit | null {
+  const fromMidX = (fromRight.x + fromLeft.x) / 2
+  const fromMidY = (fromRight.y + fromLeft.y) / 2
+  const toMidX = (toRight.x + toLeft.x) / 2
+  const toMidY = (toRight.y + toLeft.y) / 2
+  const fromDrop = Math.abs(fromChin.y - fromMidY)
+  const toDrop = Math.abs(toChin.y - toMidY)
+  const fromIpd = Math.hypot(fromLeft.x - fromRight.x, fromLeft.y - fromRight.y)
+  const toIpd = Math.hypot(toLeft.x - toRight.x, toLeft.y - toRight.y)
+  if (fromDrop < 1e-4 || toDrop < 1e-4 || fromIpd < 1e-4 || toIpd < 1e-4) return null
+  const dropScale = toDrop / fromDrop
+  const ipdScale = toIpd / fromIpd
+  let scale = dropScale
+  if (ipdScale < dropScale) scale = dropScale * 0.72 + ipdScale * 0.28
+  if (!Number.isFinite(scale)) return null
+  scale = clampScreenScale(scale)
+  return { scale, x: toMidX - scale * fromMidX, y: toMidY - scale * fromMidY }
+}
+
+/**
+ * How directly an anchor faces the camera. Negative means the point is on
+ * the far side of the head and its label should stay hidden.
+ * `origin` and `point` are in camera space. The camera sits at the origin.
+ */
+export function anchorFacing(
+  origin: { x: number; y: number; z: number },
+  point: { x: number; y: number; z: number },
+  camera: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 },
+): number {
+  const ox = point.x - origin.x
+  const oy = point.y - origin.y
+  const oz = point.z - origin.z
+  const tx = camera.x - point.x
+  const ty = camera.y - point.y
+  const tz = camera.z - point.z
+  const olen = Math.hypot(ox, oy, oz)
+  const tlen = Math.hypot(tx, ty, tz)
+  if (olen < 1e-4 || tlen < 1e-4) return 1
+  return (ox * tx + oy * ty + oz * tz) / (olen * tlen)
 }
 
 /** Keep the on-screen correction inside the range the sliders can also reach. */

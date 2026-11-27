@@ -1304,16 +1304,13 @@ def fit_anchors(meshes: dict[str, trimesh.Trimesh], orbits: list[dict]) -> list[
     """Skull points paired with MediaPipe landmark ids. The mesh itself stays put."""
     right = np.array(orbits[0]["center"])
     left = np.array(orbits[1]["center"])
-    bones = trimesh.util.concatenate([meshes[name] for name in ("frontal", "zygomatic", "maxilla", "nasal")])
-    verts = bones.vertices
 
-    def on_rim(center: np.ndarray, toward: float) -> np.ndarray:
-        flat = np.hypot(verts[:, 0] - center[0], verts[:, 1] - center[1])
-        band = verts[(flat > 0.7) & (flat < 2.3) & (np.abs(verts[:, 1] - center[1]) < 0.9)]
-        if len(band) < 8:
-            band = verts[flat < 2.6]
-        score = band[:, 0] * toward
-        return band[int(np.argmax(score))]
+    def on_rim(center: np.ndarray, toward: float, radius: float) -> np.ndarray:
+        # Searching the bone for the inner corner landed on the nasal bridge,
+        # and the screen fit then scaled the whole skull up to reach the eye.
+        direction = np.array([toward, -0.05, 0.22], dtype=np.float64)
+        direction /= np.linalg.norm(direction)
+        return np.asarray(center, dtype=np.float64) + direction * float(radius) * 0.82
 
     frontal = meshes["frontal"].vertices
     bridge = frontal[(np.abs(frontal[:, 0]) < 0.9) & (frontal[:, 1] > 1.2) & (frontal[:, 1] < 5.2)]
@@ -1330,10 +1327,10 @@ def fit_anchors(meshes: dict[str, trimesh.Trimesh], orbits: list[dict]) -> list[
     pairs = [
         (468, right),
         (473, left),
-        (33, on_rim(right, -1.0)),
-        (133, on_rim(right, 1.0)),
-        (263, on_rim(left, 1.0)),
-        (362, on_rim(left, -1.0)),
+        (33, on_rim(right, -1.0, float(orbits[0]["radius"]))),
+        (133, on_rim(right, 1.0, float(orbits[0]["radius"]))),
+        (263, on_rim(left, 1.0, float(orbits[1]["radius"]))),
+        (362, on_rim(left, -1.0, float(orbits[1]["radius"]))),
         (168, nasion),
         (116, cheek_r),
         (345, cheek_l),
