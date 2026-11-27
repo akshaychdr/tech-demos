@@ -2543,5 +2543,9 @@ if __name__ == "__main__":
         from canonical_space import main as place_canonical
 
         place_canonical()
+    elif "--hug-face" in sys.argv:
+        from canonical_space import retouch
+
+        retouch()
     else:
         main()

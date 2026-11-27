@@ -11,10 +11,12 @@ import { classifyTouch, matchesBone } from '../domain/regions.ts'
 import { MUSCLE_IDS, matchesMuscle, muscleMotion, scoreMuscles } from '../domain/expressions.ts'
 import type { BlendshapeMap, BoneId, MuscleId, StructureId, Vec3 } from '../domain/types.ts'
 import { LabelColumns, paintCallouts } from '../scene/callouts.ts'
+import { ANATOMY_REVISION } from '../scene/anatomyRevision.ts'
 import {
   AnatomyScene,
   DEFAULT_FIT,
   DEFAULT_LAYERS,
+  type FitDebug,
   type LookMode,
   type ManualFit,
   type RevealMode,
@@ -65,8 +67,29 @@ type Watch = { kind: 'touch'; id: BoneId } | { kind: 'show'; id: MuscleId } | nu
 
 type RawPoint = { x: number; y: number; z: number }
 
+declare global {
+  interface Window {
+    __anatomy?: {
+      fitS: number
+      fitX: number
+      fitY: number
+      meanPx: number
+      maxPx: number
+      markerCount: number
+      marks: { index: number; err: number; dx: number; dy: number }[]
+      aspectDelta: number
+      view: { w: number; h: number }
+      video: { w: number; h: number }
+      canvases: string[]
+      graph: FitDebug['graph']
+    }
+  }
+}
+
 export class MirrorEngine {
   private container: HTMLElement | null = null
+  private mirrorRoot: HTMLElement | null = null
+  private observer: ResizeObserver | null = null
   private video: HTMLVideoElement | null = null
   private headCanvas: HTMLCanvasElement | null = null
   private hud: HTMLCanvasElement | null = null
@@ -86,6 +109,8 @@ export class MirrorEngine {
   private mode: EngineMode = 'explore'
   private layers: SceneLayers = { ...DEFAULT_LAYERS }
   private showLabels = true
+  private showTracking = false
+  private rawMarks: RawPoint[] | null = null
   private fit: ManualFit = { ...DEFAULT_FIT }
   private look: LookMode = 'xray'
   private reveal: RevealMode = 'whole'
@@ -119,23 +144,37 @@ export class MirrorEngine {
     this.container = container
     this.preview = preview
     this.mount(container)
+    if (this.disposed) return
     if (preview) {
       onProgress(0.35, 'Loading the anatomy')
       await this.loadAnatomy()
+      if (this.disposed) return
       onProgress(1, 'Ready')
       this.resize()
       this.raf = requestAnimationFrame((time) => this.frame(time))
       return
     }
     onProgress(0.08, 'Asking for the camera')
-    this.stream = await this.openCamera()
+    const stream = await this.openCamera()
+    if (this.disposed) {
+      stream.getTracks().forEach((track) => track.stop())
+      return
+    }
+    this.stream = stream
     onProgress(0.22, 'Starting the camera')
     if (this.video) this.video.srcObject = this.stream
     await this.playVideo()
+    if (this.disposed) return
     onProgress(0.4, 'Loading face tracking')
     const vision = await FilesetResolver.forVisionTasks(WASM)
+    if (this.disposed) return
     onProgress(0.62, 'Reading the anatomy')
     const [, face, hand] = await Promise.all([this.loadAnatomy(), this.makeFace(vision), this.makeHand(vision)])
+    if (this.disposed) {
+      face.close()
+      hand.close()
+      return
+    }
     this.face = face
     this.hand = hand
     onProgress(1, 'Ready')
@@ -153,6 +192,10 @@ export class MirrorEngine {
   setLayers(layers: SceneLayers, labels: boolean): void {
     this.layers = layers
     this.showLabels = labels
+  }
+
+  setTracking(on: boolean): void {
+    this.showTracking = on
   }
 
   setAppearance(appearance: Appearance): void {
@@ -186,17 +229,32 @@ export class MirrorEngine {
   dispose(): void {
     this.disposed = true
     cancelAnimationFrame(this.raf)
+    this.raf = 0
+    this.observer?.disconnect()
+    this.observer = null
     this.stream?.getTracks().forEach((track) => track.stop())
+    this.stream = null
     this.face?.close()
     this.hand?.close()
+    this.face = null
+    this.hand = null
     this.scene?.dispose()
-    this.container?.replaceChildren()
+    this.scene = null
+    if (this.mirrorRoot?.isConnected) this.mirrorRoot.remove()
+    this.mirrorRoot = null
+    this.video = null
+    this.headCanvas = null
+    this.hud = null
   }
 
   private async loadAnatomy(): Promise<void> {
     const base = import.meta.env.BASE_URL
+    const rev = `h=${ANATOMY_REVISION}`
     try {
-      await this.scene?.load(`${base}anatomy/bodyparts3d/anatomy.glb`, `${base}anatomy/bodyparts3d/anchors.json`)
+      await this.scene?.load(
+        `${base}anatomy/bodyparts3d/anatomy.glb?${rev}`,
+        `${base}anatomy/bodyparts3d/anchors.json?${rev}`,
+      )
     } catch {
       throw new CameraError('unknown', 'The anatomy model did not load. Check your connection and try again.')
     }
@@ -241,6 +299,7 @@ export class MirrorEngine {
     if (!this.preview) mirror.append(video)
     mirror.append(headCanvas, handCanvas, hud)
     container.append(mirror)
+    this.mirrorRoot = mirror
     this.video = video
     this.headCanvas = headCanvas
     this.hud = hud
@@ -253,7 +312,9 @@ export class MirrorEngine {
     mirror.addEventListener('pointercancel', () => {
       this.dragging = false
     })
-    new ResizeObserver(() => this.resize()).observe(container)
+    this.observer?.disconnect()
+    this.observer = new ResizeObserver(() => this.resize())
+    this.observer.observe(container)
   }
 
   private onPointerDown(event: PointerEvent): void {
@@ -329,7 +390,7 @@ export class MirrorEngine {
   private resize(): void {
     const container = this.container
     const scene = this.scene
-    if (!container || !scene) return
+    if (this.disposed || !container || !scene) return
     const coarse = window.matchMedia('(pointer: coarse)').matches
     const dpr = Math.min(window.devicePixelRatio || 1, coarse ? 1.25 : 1.6)
     const videoW = this.preview ? 0 : this.video?.videoWidth || 0
@@ -365,6 +426,7 @@ export class MirrorEngine {
 
     const faceResult = this.face.detectForVideo(video, time)
     const raw = this.smoothLandmarks(faceResult.faceLandmarks[0] ?? null)
+    this.rawMarks = raw
     const placed = this.coverLandmarks(raw, video.videoWidth, video.videoHeight, view.width, view.height)
     const blends: BlendshapeMap = {}
     for (const category of faceResult.faceBlendshapes?.[0]?.categories ?? []) {
@@ -405,6 +467,7 @@ export class MirrorEngine {
       fit: this.fit,
       now: time,
     })
+    this.publishDebug(view.width, view.height, video.videoWidth, video.videoHeight)
     this.paintHud(view.width, view.height)
     this.publish(time, placed, Boolean(finger), region, muscle, view)
   }
@@ -552,6 +615,7 @@ export class MirrorEngine {
     const xs = labels.map((item) => item.x)
     const spread = xs.length > 1 ? (Math.max(...xs) - Math.min(...xs)) / 2 : 120
     paintCallouts(ctx, viewW, viewH, labels, centerX, Math.max(110, spread), this.labelColumns)
+    if (this.showTracking) this.paintTracking(ctx, viewW, viewH)
     this.applyMask()
     if (this.reveal !== 'lens') return
     const lens = this.lensPin ?? nose ?? { x: viewW / 2, y: viewH * 0.42 }
@@ -561,6 +625,61 @@ export class MirrorEngine {
     ctx.beginPath()
     ctx.arc(viewW - lens.x, lens.y, radius, 0, Math.PI * 2)
     ctx.stroke()
+  }
+
+  private paintTracking(ctx: CanvasRenderingContext2D, viewW: number, viewH: number): void {
+    const scene = this.scene
+    if (!scene) return
+    const debug = scene.fitDebug
+    ctx.save()
+    ctx.fillStyle = 'rgba(120, 220, 255, 0.9)'
+    for (const point of this.rawMarks ?? []) {
+      const at = scene.screenFromNorm(point.x, point.y)
+      ctx.fillRect(viewW - at.x - 1.2, at.y - 1.2, 2.4, 2.4)
+    }
+    ctx.strokeStyle = '#ffe38a'
+    ctx.lineWidth = 1.5
+    for (const mark of debug.markers) {
+      ctx.beginPath()
+      ctx.arc(viewW - mark.x, mark.y, 5, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    ctx.fillStyle = 'rgba(8, 12, 18, 0.72)'
+    ctx.fillRect(8, viewH - 36, 420, 26)
+    ctx.fillStyle = '#f4f7fb'
+    ctx.font = '13px Outfit, sans-serif'
+    ctx.fillText(
+      `fitS ${debug.fitS.toFixed(3)}  fitX ${debug.fitX.toFixed(3)}  fitY ${debug.fitY.toFixed(3)}  err ${debug.meanPx.toFixed(1)} px`,
+      16,
+      viewH - 18,
+    )
+    ctx.restore()
+  }
+
+  private publishDebug(viewW: number, viewH: number, videoW: number, videoH: number): void {
+    const scene = this.scene
+    if (!scene) return
+    const debug: FitDebug = scene.fitDebug
+    const canvases = [...document.querySelectorAll('canvas')].map((canvas) => canvas.className)
+    window.__anatomy = {
+      fitS: debug.fitS,
+      fitX: debug.fitX,
+      fitY: debug.fitY,
+      meanPx: debug.meanPx,
+      maxPx: debug.maxPx,
+      markerCount: debug.markers.length,
+      marks: debug.markers.map((mark) => ({
+        index: mark.index,
+        err: Math.round(mark.err * 10) / 10,
+        dx: Math.round(mark.dx * 10) / 10,
+        dy: Math.round(mark.dy * 10) / 10,
+      })),
+      aspectDelta: debug.aspectDelta,
+      view: { w: viewW, h: viewH },
+      video: { w: videoW, h: videoH },
+      canvases,
+      graph: debug.graph,
+    }
   }
 
   private applyMask(): void {

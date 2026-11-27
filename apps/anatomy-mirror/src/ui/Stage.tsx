@@ -65,6 +65,7 @@ export default function Stage() {
   const [mode, setMode] = useState<EngineMode>('explore')
   const [layers, setLayers] = useState<SceneLayers>({ ...DEFAULT_LAYERS })
   const [labelsOn, setLabelsOn] = useState(true)
+  const [tracking, setTracking] = useState(false)
   const [fit, setFit] = useState<ManualFit>(loadFit)
   const [look, setLook] = useState<LookMode>('xray')
   const [reveal, setReveal] = useState<RevealMode>('whole')
@@ -151,6 +152,7 @@ export default function Stage() {
     if (!eng) return
     eng.setMode(mode)
     eng.setLayers(layers, labelsOn)
+    eng.setTracking(tracking)
     if (mode === 'faces') {
       const prompt = FACE_PROMPTS[faceStep]
       eng.setWatch(prompt ? { kind: 'show', id: prompt.id } : null)
@@ -163,7 +165,7 @@ export default function Stage() {
       return
     }
     eng.setWatch(null)
-  }, [mode, layers, labelsOn, faceStep, quiz])
+  }, [mode, layers, labelsOn, tracking, faceStep, quiz])
 
   useEffect(() => {
     const appearance: Appearance = { look, reveal, cut, feather, real, brightness, fit }
@@ -491,6 +493,9 @@ export default function Stage() {
               </Check>
               <Check on={labelsOn} onChange={setLabelsOn}>
                 Show labels
+              </Check>
+              <Check on={tracking} onChange={setTracking}>
+                Show tracking data
               </Check>
             </div>
             {layers.hand && <p>Hand bones follow the joints the camera can see.</p>}

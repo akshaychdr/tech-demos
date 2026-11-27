@@ -10,8 +10,10 @@ muscles keep the cranium's scale so they stay on the face. Hands stay put.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +25,18 @@ ANCHORS = ROOT / "public/anatomy/bodyparts3d/anchors.json"
 MUSCLES = ROOT / "public/anatomy/bodyparts3d/muscle-attrs.json"
 NODES = ROOT / "public/anatomy/bodyparts3d/nodes.json"
 LABELS = ROOT / "src/domain/headLabels.ts"
+REVISION = ROOT / "src/scene/anatomyRevision.ts"
+# Nose, chin, tragi, forehead. The outline has to pass through these.
+SKIN_LANDMARKS = np.array(
+    [
+        [0.0, -1.126865, 7.475604],
+        [0.0, -9.403378, 4.264492],
+        [-7.664182, 0.673132, -2.435867],
+        [7.664182, 0.673132, -2.435867],
+        [0.0, 8.261778, 4.481535],
+    ],
+    dtype=np.float64,
+)
 
 HEAD = ("cranium", "jaw", "eyes", "cerebrum", "hindbrain", "skin", "muscles")
 BOX = {
@@ -718,10 +732,100 @@ def rewrite_moves(frames: dict[str, Frame], blend: np.ndarray) -> None:
     MUSCLES.write_text(json.dumps(attrs))
 
 
+def skin_landmark_error(vertices: np.ndarray) -> list[float]:
+    errors = []
+    for point in SKIN_LANDMARKS:
+        errors.append(float(np.linalg.norm(vertices - point, axis=1).min()))
+    return errors
+
+
+def hug_skin(vertices: np.ndarray, faces: np.ndarray) -> trimesh.Trimesh:
+    """Pull the skin onto the nose, chin, tragi, and forehead.
+
+    A wide axis-fitted shell sits about 1.4× outside the skull. Moving a
+    neighbourhood of each landmark onto that point brings the surface through
+    it without leaving a spike.
+    """
+    verts = np.array(vertices, dtype=np.float64, copy=True)
+    for _ in range(4):
+        if max(skin_landmark_error(verts)) < 0.05:
+            break
+        disp = np.zeros_like(verts)
+        weight = np.zeros(len(verts))
+        for point in SKIN_LANDMARKS:
+            distances = np.linalg.norm(verts - point, axis=1)
+            index = int(np.argmin(distances))
+            delta = point - verts[index]
+            radius = np.linalg.norm(verts - verts[index], axis=1)
+            influence = np.exp(-0.5 * (radius / 3.2) ** 2)
+            disp += influence[:, None] * delta
+            weight += influence
+        verts += disp / np.maximum(weight, 1e-6)[:, None] * 0.85
+    mesh = trimesh.Trimesh(vertices=verts, faces=np.asarray(faces), process=False)
+    errors = skin_landmark_error(np.asarray(mesh.vertices))
+    print("skin landmark cm", " ".join(f"{err:.3f}" for err in errors), flush=True)
+    if max(errors) > 0.5:
+        raise SystemExit(f"skin misses a face landmark by {max(errors):.2f} cm")
+    return mesh
+
+
+def closed_eyes(vertices: np.ndarray) -> trimesh.Trimesh:
+    """Two closed spheres. An open shell drawn double-sided reads as a ring."""
+    points = np.asarray(vertices, dtype=np.float64)
+    right = points[points[:, 0] < 0]
+    if len(right) < 20:
+        right = points
+    center = right.mean(0)
+    radius = float(np.median(np.linalg.norm(right - center, axis=1)))
+    radius = float(np.clip(radius, 0.9, 1.6))
+    sphere = trimesh.creation.icosphere(subdivisions=3, radius=radius)
+    local = np.asarray(sphere.vertices, dtype=np.float64)
+    faces = np.asarray(sphere.faces, dtype=np.int64)
+    owned = [local + EYE_R, local + EYE_L]
+    verts = np.vstack(owned)
+    both = np.vstack([faces, faces + len(local)])
+    print(f"closed eyes radius {radius:.3f} centres (±2.90, 2.85, 3.80)", flush=True)
+    return trimesh.Trimesh(vertices=verts, faces=both, process=False)
+
+
+def write_revision(size: int) -> str:
+    digest = hashlib.sha256(GLB.read_bytes()).hexdigest()[:12]
+    REVISION.write_text(f"export const ANATOMY_REVISION = '{digest}'\n")
+    nodes = json.loads(NODES.read_text()) if NODES.exists() else {"nodes": list(HEAD)}
+    nodes["bytes"] = size
+    nodes["hash"] = digest
+    NODES.write_text(json.dumps(nodes, indent=2) + "\n")
+    if ANCHORS.exists():
+        anchors = json.loads(ANCHORS.read_text())
+        anchors["bytes"] = size
+        ANCHORS.write_text(json.dumps(anchors, separators=(",", ":")))
+    return digest
+
+
+def retouch() -> None:
+    """Hug the skin and close the eyes on the GLB that is already canonical."""
+    scene = trimesh.load(GLB, force="scene")
+    out = trimesh.Scene()
+    for name, geom in scene.geometry.items():
+        if name == "skin":
+            mesh = hug_skin(np.asarray(geom.vertices), np.asarray(geom.faces))
+        elif name == "eyes":
+            mesh = closed_eyes(np.asarray(geom.vertices))
+        else:
+            mesh = geom
+        out.add_geometry(mesh, node_name=name, geom_name=name)
+    out.export(GLB)
+    size = GLB.stat().st_size
+    digest = write_revision(size)
+    print("wrote", GLB, size, digest, flush=True)
+
+
 def main() -> None:
     scene = trimesh.load(GLB, force="scene")
     source = {name: scene.geometry[name] for name in scene.geometry}
     placed, frames, _table = place(source)
+    placed["skin"] = hug_skin(np.asarray(placed["skin"].vertices), np.asarray(placed["skin"].faces))
+    placed["eyes"] = closed_eyes(np.asarray(placed["eyes"].vertices))
     out = trimesh.Scene()
     for name, geom in source.items():
         mesh = placed.get(name, geom)
@@ -731,22 +835,22 @@ def main() -> None:
     rewrite_moves(frames, np.asarray(placed["muscles"].metadata["jawBlend"], dtype=np.float64))
     rewrite_anchors(placed, frames, size)
     rewrite_labels(placed, frames)
-    nodes = json.loads(NODES.read_text()) if NODES.exists() else {"nodes": sorted(placed)}
-    nodes["bytes"] = size
-    NODES.write_text(json.dumps(nodes, indent=2) + "\n")
     eyes = np.asarray(placed["eyes"].vertices)
     right, left = eye_centers(eyes)
     print("eye centres", np.round(right, 2), np.round(left, 2), flush=True)
     print("jaw pivot", jaw_pivot(np.asarray(placed["jaw"].vertices)), flush=True)
-    print("wrote", GLB, size, flush=True)
-    # Hard check for the boxes we fit directly.
-    for name in ("cranium", "jaw", "cerebrum", "skin"):
+    for name in ("cranium", "jaw", "cerebrum"):
         lo, hi = bounds_of(np.asarray(placed[name].vertices))
         delta = np.concatenate([lo - BOX[name][0], hi - BOX[name][1]])
         worst = float(np.max(np.abs(delta)))
         if worst > 0.5:
             raise SystemExit(f"{name} bound error {worst:.2f} cm exceeds 0.5")
+    digest = write_revision(size)
+    print("wrote", GLB, size, digest, flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    if "--hug-face" in sys.argv:
+        retouch()
+    else:
+        main()

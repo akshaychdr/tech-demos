@@ -328,7 +328,7 @@ h2,
 }
 
 .mirror-video video {
-  object-fit: cover;
+  object-fit: fill;
 }
 
 .top-chip {
