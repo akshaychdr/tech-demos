@@ -7,7 +7,14 @@ import { emptyHold, stepHold } from '../src/domain/hold.ts'
 import { drawQuiz, pointsFor, startQuiz, answerQuestion, advanceQuiz } from '../src/domain/quiz.ts'
 import { applySimilarity, umeyama, umeyama2 } from '../src/domain/fit.ts'
 import { parseBeat, formatScore, shareMessage } from '../src/domain/share.ts'
-import { clampScreenScale, solveFaceFit, solveScreenFit, solveWeightedScreenFit } from '../src/domain/screenFit.ts'
+import {
+  clampScreenScale,
+  solveFaceFit,
+  solveOrbitFit,
+  solveScreenFit,
+  solveWeightedScreenFit,
+} from '../src/domain/screenFit.ts'
+import { HEAD_LABELS, LabelColumns, anchorFacingAmount, labelVisible } from '../src/domain/headLabels.ts'
 import { OneEuroFilter } from '../src/domain/oneEuro.ts'
 import type { BlendshapeMap, BoneId, MuscleId, Vec3 } from '../src/domain/types.ts'
 
@@ -355,6 +362,57 @@ describe('screen fit', () => {
     expect(fit!.scale).toBeCloseTo(1.4, 4)
     expect(fit!.x).toBeCloseTo(0.25, 4)
     expect(fit!.y).toBeCloseTo(-0.1, 4)
+  })
+
+  test('orbit fit pins the eyes and the chin without widening to a tight eye spacing', () => {
+    const fromRight = { x: -1, y: 1 }
+    const fromLeft = { x: 1, y: 1 }
+    const fromChin = { x: 0, y: -3 }
+    const toRight = { x: -2, y: 2 }
+    const toLeft = { x: 2, y: 2 }
+    const toChin = { x: 0.1, y: -2 }
+    const fit = solveOrbitFit(fromRight, fromLeft, fromChin, toRight, toLeft, toChin)
+    expect(fit).not.toBeNull()
+    expect(fit!.scale).toBeCloseTo(1, 4)
+    const eyeY = fit!.scale * 1 + fit!.y
+    const chinY = fit!.scale * fromChin.y + fit!.y
+    expect(eyeY).toBeCloseTo(2, 4)
+    expect(chinY).toBeCloseTo(-2, 4)
+    expect(fit!.scale * 0 + fit!.x).toBeCloseTo(0, 4)
+  })
+
+  test('a back-of-head anchor faces away and the forehead faces the camera', () => {
+    const toCamera = { x: 0, y: 0, z: 1 }
+    const occipital = anchorFacingAmount({ x: -0.54, y: 5.04, z: -12.86 }, { x: 0, y: 0, z: -1 }, toCamera)
+    const frontal = anchorFacingAmount({ x: -1.63, y: 5.05, z: 5.94 }, { x: -0.02, y: 0.21, z: 0.98 }, toCamera)
+    expect(occipital).toBeLessThan(0)
+    expect(labelVisible(occipital, false)).toBe(false)
+    expect(frontal).toBeGreaterThan(0.12)
+    expect(labelVisible(0.05, true)).toBe(false)
+    expect(labelVisible(0.05, false)).toBe(true)
+  })
+
+  test('head labels are the 26 named structures and columns keep an 18px gap', () => {
+    expect(HEAD_LABELS).toHaveLength(26)
+    expect(new Set(HEAD_LABELS.map((label) => label.text)).size).toBe(26)
+    const columns = new LabelColumns()
+    const placed = columns.layout(
+      [
+        { id: 'a', text: 'A', color: '#fff', x: 20, y: 40 },
+        { id: 'b', text: 'B', color: '#fff', x: 30, y: 48 },
+        { id: 'c', text: 'C', color: '#fff', x: 200, y: 80 },
+        { id: 'd', text: 'D', color: '#fff', x: 400, y: 90 },
+      ],
+      640,
+      480,
+      320,
+      140,
+    )
+    const left = placed.filter((row) => row.side === 'left').sort((a, b) => a.ty - b.ty)
+    expect(left).toHaveLength(2)
+    expect(left[1]!.ty - left[0]!.ty).toBeGreaterThanOrEqual(18)
+    expect(placed.find((row) => row.id === 'c')?.side).toBe('right')
+    expect(placed.find((row) => row.id === 'a')?.tx).toBeLessThan(320)
   })
 
   test('screen scale stays inside 0.6 and 1.6', () => {

@@ -1,18 +1,35 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { OneEuroFilter } from '../domain/oneEuro.ts'
-import { FACE_OVAL, clampScreenScale, solveWeightedScreenFit } from '../domain/screenFit.ts'
+import {
+  HEAD_LABELS,
+  LABEL_COLOR,
+  anchorFacingAmount,
+  labelVisible,
+  type ScreenLabel,
+} from '../domain/headLabels.ts'
+import { FACE_OVAL, clampScreenScale, solveOrbitFit, solveWeightedScreenFit } from '../domain/screenFit.ts'
 import type { MuscleId, StructureId, Vec3 } from '../domain/types.ts'
 import { applyLook, createShadeMaterial, type ShadeRole, type XrayMaterial } from './materials.ts'
 
 export type LookMode = 'xray' | 'solid'
-export type RevealMode = 'lens' | 'whole' | 'left' | 'right' | 'top' | 'bottom'
+export type RevealMode = 'whole' | 'half' | 'lens'
 
 export type SceneLayers = {
   skull: boolean
   muscles: boolean
   brain: boolean
   hand: boolean
+  outline: boolean
+  eyes: boolean
+}
+
+export const DEFAULT_LAYERS: SceneLayers = {
+  skull: true,
+  muscles: true,
+  brain: true,
+  hand: false,
+  outline: true,
+  eyes: true,
 }
 
 export type ManualFit = {
@@ -95,6 +112,7 @@ export class AnatomyScene {
   private readonly rigs: HandRig[] = []
   private readonly baseProjection = new THREE.Matrix4()
   private readonly fitProjection = new THREE.Matrix4()
+  private readonly poseMatrix = new THREE.Matrix4()
   private viewW = 2
   private viewH = 2
   private videoW = 2
@@ -110,21 +128,7 @@ export class AnatomyScene {
   private fitMarks: { index: number; at: [number, number, number] }[] = []
   private poseReady = false
   private readonly orbits = [new THREE.Vector4(), new THREE.Vector4()]
-  private readonly euro = {
-    x: new OneEuroFilter(1.35, 0.045),
-    y: new OneEuroFilter(1.35, 0.045),
-    z: new OneEuroFilter(1.35, 0.045),
-    rx: new OneEuroFilter(1.15, 0.03),
-    ry: new OneEuroFilter(1.15, 0.03),
-    rz: new OneEuroFilter(1.15, 0.03),
-    sx: new OneEuroFilter(0.8, 0.02),
-    sy: new OneEuroFilter(0.8, 0.02),
-    sz: new OneEuroFilter(0.8, 0.02),
-    fitSx: new OneEuroFilter(0.7, 0.012),
-    fitSy: new OneEuroFilter(0.7, 0.012),
-    fitX: new OneEuroFilter(0.9, 0.02),
-    fitY: new OneEuroFilter(0.9, 0.02),
-  }
+  private havePose = false
   private readonly displayPos = new THREE.Vector3()
   private readonly displayQuat = new THREE.Quaternion()
   private readonly displayScale = new THREE.Vector3(1, 1, 1)
@@ -136,7 +140,8 @@ export class AnatomyScene {
     point: new THREE.Vector3(),
     clip: new THREE.Vector4(),
     handSample: new THREE.Vector3(),
-    euler: new THREE.Euler(0, 0, 0, 'YXZ'),
+    normal: new THREE.Vector3(),
+    cam: new THREE.Vector3(),
   }
 
   constructor(headCanvas: HTMLCanvasElement, handCanvas: HTMLCanvasElement) {
@@ -167,6 +172,7 @@ export class AnatomyScene {
     this.ortho.position.set(0, 0, 800)
     this.ortho.lookAt(0, 0, 0)
     this.head.matrixAutoUpdate = false
+    this.jawPivot.matrixAutoUpdate = false
     this.head.add(this.jawPivot)
     this.headScene.add(this.head)
   }
@@ -215,6 +221,7 @@ export class AnatomyScene {
       }
       mesh.material = material
       mesh.frustumCulled = false
+      mesh.matrixAutoUpdate = false
       mesh.position.set(0, 0, 0)
       mesh.quaternion.identity()
       mesh.scale.set(1, 1, 1)
@@ -224,6 +231,7 @@ export class AnatomyScene {
       } else {
         this.head.add(mesh)
       }
+      mesh.updateMatrix()
       this.parts.push({ id, role, mesh, material, jaw, gain, accepts })
       return true
     }
@@ -240,11 +248,11 @@ export class AnatomyScene {
     if (!mergedMuscles) {
       for (const id of MUSCLES) add(id, id, 'muscle', false, 0.5, (highlight) => highlight === id)
     }
-    if (!add('cerebrum', 'brain', 'brain', false, 0.36, (id) => id === 'brain')) {
-      add('brain', 'brain', 'brain', false, 0.36, (id) => id === 'brain')
+    if (!add('cerebrum', 'brain', 'brain', false, 0.8, (id) => id === 'brain')) {
+      add('brain', 'brain', 'brain', false, 0.8, (id) => id === 'brain')
     }
-    add('hindbrain', 'brain', 'hindbrain', false, 0.6, (id) => id === 'brain')
-    if (!add('eyes', 'frontal', 'eye', false, 0.9, () => false)) this.addEyes(anchorFile)
+    add('hindbrain', 'brain', 'hindbrain', false, 0.85, (id) => id === 'brain')
+    if (!add('eyes', 'frontal', 'eye', false, 0.42, () => false)) this.addEyes(anchorFile)
     const skin = findMesh(gltf.scene, 'skin') ?? findMesh(gltf.scene, 'shell')
     if (skin) {
       ensureNormals(skin.geometry)
@@ -260,6 +268,10 @@ export class AnatomyScene {
       }
       veil.frustumCulled = false
       outline.frustumCulled = false
+      veil.matrixAutoUpdate = false
+      outline.matrixAutoUpdate = false
+      veil.updateMatrix()
+      outline.updateMatrix()
       this.head.add(veil)
       this.head.add(outline)
       this.parts.push({
@@ -277,7 +289,7 @@ export class AnatomyScene {
         mesh: outline,
         material: outline.material as XrayMaterial,
         jaw: false,
-        gain: 0.55,
+        gain: 0.22,
         accepts: () => false,
       })
     }
@@ -369,12 +381,12 @@ export class AnatomyScene {
     reveal: RevealMode
     cut: number
     feather: number
-    skin: number
+    real: number
+    brightness: number
     fit: ManualFit
-    time: number
   }): void {
     this.manual = frame.fit
-    this.poseHead(frame.matrix, frame.landmarks, frame.jaw, frame.time)
+    this.poseHead(frame.matrix, frame.landmarks, frame.jaw)
     this.jawPivot.rotation.x = this.jawAngle
     this.jawPivot.updateMatrix()
     this.head.updateMatrixWorld(true)
@@ -384,85 +396,100 @@ export class AnatomyScene {
       (frame.layers.skull ? 2 : 0) +
       (frame.layers.muscles ? 1 : 0) +
       (frame.layers.brain ? 1 : 0) +
-      (frame.look === 'xray' ? 1 : 0)
-    const share = 1 / (0.4 + 0.6 * Math.max(1, layersOn))
+      (frame.layers.eyes ? 1 : 0) +
+      (frame.look === 'xray' && frame.layers.outline ? 1 : 0)
+    const share = 1 / (0.75 + 0.2 * Math.max(1, layersOn))
     const showingHead =
-      frame.layers.skull || frame.layers.muscles || frame.layers.brain || frame.highlight != null
+      frame.layers.skull ||
+      frame.layers.muscles ||
+      frame.layers.brain ||
+      frame.layers.outline ||
+      frame.layers.eyes ||
+      frame.highlight != null
     const lens = this.lensLayout(frame.lensPin, frame.lensRadius, frame.landmarks)
     this.paintMask(frame.landmarks, lens, frame.feather, frame.reveal === 'lens')
     for (const part of this.parts) {
       const layerOn =
         (part.role === 'bone' && frame.layers.skull) ||
-        (part.role === 'eye' && frame.layers.skull) ||
+        (part.role === 'eye' && frame.layers.eyes) ||
         (part.role === 'muscle' && frame.layers.muscles) ||
         ((part.role === 'brain' || part.role === 'hindbrain') && frame.layers.brain) ||
         part.role === 'veil' ||
-        part.role === 'outline'
+        (part.role === 'outline' && frame.layers.outline)
       const hot = part.accepts(frame.highlight)
       part.mesh.visible = showingHead && (part.role === 'veil' || part.role === 'outline' ? layerOn : layerOn || hot)
-      if (part.role === 'outline') part.mesh.visible = showingHead && frame.look === 'xray'
+      if (part.role === 'outline') part.mesh.visible = showingHead && frame.layers.outline && frame.look === 'xray'
       applyLook(part.material, solid)
       const shared = part.role === 'outline' ? 1 : share
-      part.material.uniforms.uGain!.value = solid ? 1 : part.gain * shared
+      part.material.uniforms.uGain!.value = (solid ? 1 : part.gain * shared) * frame.brightness
       // The merged muscle mesh stores the jaw-open travel in aMove. Expression
       // still lights a selected muscle through uBoost.
       part.material.uniforms.uAction!.value = part.role === 'muscle' ? frame.jaw : 0
       part.material.uniforms.uStrap!.value = RINGS.has(part.id) ? 0 : 1
       part.material.uniforms.uBoost!.value = hot ? 1 : 0
-      part.material.uniforms.uCover!.value = part.role === 'veil' ? 1 - frame.skin : solid ? 0.9 : 1
+      part.material.uniforms.uCover!.value = part.role === 'veil' ? (1 - frame.real) * 0.22 : solid ? 0.9 : 1
       part.material.uniforms.uClip!.value = plane ? 1 : 0
       if (plane) part.material.uniforms.uPlane!.value.copy(plane)
-      part.material.uniforms.uSoft!.value = 0.45 + frame.feather * 3.4
-      const rim = part.role === 'outline' ? 0.35 : 0.08
-      part.material.uniforms.uSilhouette!.value = solid ? 0.015 : rim + frame.feather * 0.45
+      part.material.uniforms.uSoft!.value = frame.feather * 5
+      part.material.uniforms.uFeather!.value = frame.feather * 0.75
+      part.material.uniforms.uFade!.value = 1
+      part.material.uniforms.uSilhouette!.value = part.role === 'outline' ? 0.17 : 0.08
       if (part.jaw) {
         part.material.uniforms.uHead!.value.copy(this.jawPivot.matrix).multiply(part.mesh.matrix)
       } else {
         part.material.uniforms.uHead!.value.identity()
       }
     }
-    this.poseHands(frame.hands, frame.layers.hand, solid, frame.feather)
+    this.poseHands(frame.hands, frame.layers.hand, solid, frame.feather, frame.brightness)
     this.camera.projectionMatrix.copy(this.fitProjection)
     this.camera.projectionMatrixInverse.copy(this.fitProjection).invert()
     this.headRenderer.render(this.headScene, this.camera)
     this.handRenderer.render(this.handScene, this.ortho)
   }
 
-  projectedLabels(layers: SceneLayers, highlight: StructureId | null): { id: StructureId; x: number; y: number }[] {
+  projectedLabels(layers: SceneLayers, look: LookMode, reveal: RevealMode, cut: number): ScreenLabel[] {
     if (!this.poseReady) return []
-    const grouped = new Map<StructureId, { x: number; y: number; depth: number }>()
-    for (const anchor of this.anchors) {
-      const role = roleOf(anchor.id)
-      const layerOn =
-        (role === 'bone' && layers.skull) || (role === 'muscle' && layers.muscles) || (role === 'brain' && layers.brain)
-      if (!layerOn && anchor.id !== highlight) continue
-      const point = anchor.point.clone()
-      if (anchor.jaw) {
-        point.sub(this.jawPivot.position).applyMatrix4(this.jawPivot.matrix)
+    const solid = look === 'solid'
+    this.scratch.matrix.copy(this.poseMatrix).invert()
+    this.scratch.cam.set(0, 0, 0).applyMatrix4(this.scratch.matrix)
+    const labels: ScreenLabel[] = []
+    for (const label of HEAD_LABELS) {
+      const on =
+        (label.layer === 'skull' && layers.skull) ||
+        (label.layer === 'brain' && layers.brain) ||
+        (label.layer === 'muscle' && layers.muscles) ||
+        (label.layer === 'eye' && layers.eyes)
+      if (!on) continue
+      let best: { facing: number; x: number; y: number } | null = null
+      for (const at of label.at) {
+        this.scratch.point.set(at.p[0], at.p[1], at.p[2])
+        this.scratch.normal.set(at.n[0], at.n[1], at.n[2])
+        if (label.jaw) {
+          this.scratch.point.sub(this.jawPivot.position).applyMatrix4(this.jawPivot.matrix)
+          this.scratch.normal.transformDirection(this.jawPivot.matrix)
+        }
+        if (reveal === 'half' && this.scratch.point.x - (8 - 16 * cut) <= 0.4) continue
+        const toCamera = {
+          x: this.scratch.cam.x - this.scratch.point.x,
+          y: this.scratch.cam.y - this.scratch.point.y,
+          z: this.scratch.cam.z - this.scratch.point.z,
+        }
+        const facing = anchorFacingAmount(this.scratch.point, this.scratch.normal, toCamera)
+        if (!labelVisible(facing, solid)) continue
+        this.scratch.point.applyMatrix4(this.head.matrix)
+        this.scratch.clip.set(this.scratch.point.x, this.scratch.point.y, this.scratch.point.z, 1).applyMatrix4(this.fitProjection)
+        if (this.scratch.clip.w <= 0) continue
+        const ndcX = this.scratch.clip.x / this.scratch.clip.w
+        const ndcY = this.scratch.clip.y / this.scratch.clip.w
+        if (ndcX < -1.2 || ndcX > 1.2 || ndcY < -1.2 || ndcY > 1.2) continue
+        const x = ((ndcX + 1) / 2) * this.viewW
+        const y = ((1 - ndcY) / 2) * this.viewH
+        if (!best || facing > best.facing) best = { facing, x, y }
       }
-      point.applyMatrix4(this.head.matrix)
-      const depth = point.z
-      this.scratch.clip.set(point.x, point.y, point.z, 1).applyMatrix4(this.fitProjection)
-      if (this.scratch.clip.w === 0) continue
-      const ndcX = this.scratch.clip.x / this.scratch.clip.w
-      const ndcY = this.scratch.clip.y / this.scratch.clip.w
-      if (ndcX < -1.2 || ndcX > 1.2 || ndcY < -1.2 || ndcY > 1.2) continue
-      const x = ((ndcX + 1) / 2) * this.viewW
-      const y = ((1 - ndcY) / 2) * this.viewH
-      const prev = grouped.get(anchor.id)
-      if (!prev || depth > prev.depth) grouped.set(anchor.id, { x, y, depth })
+      if (!best) continue
+      labels.push({ id: label.id, text: label.text, color: LABEL_COLOR[label.layer], x: best.x, y: best.y })
     }
-    const labels = [...grouped.entries()].map(([id, at]) => ({ id, x: at.x, y: at.y }))
-    const centerX = this.viewW / 2
-    const centerY = this.viewH / 2
-    labels.sort((a, b) => {
-      if (a.id === highlight) return -1
-      if (b.id === highlight) return 1
-      const da = (a.x - centerX) ** 2 + (a.y - centerY) ** 2
-      const db = (b.x - centerX) ** 2 + (b.y - centerY) ** 2
-      return da - db
-    })
-    return labels.slice(0, 4)
+    return labels
   }
 
   dispose(): void {
@@ -480,14 +507,13 @@ export class AnatomyScene {
     matrix: number[] | null,
     landmarks: { x: number; y: number; z: number }[] | null,
     jaw: number,
-    time: number,
   ): void {
     if (!matrix) {
       this.poseReady = false
       this.fitReady = false
+      this.havePose = false
       this.head.visible = false
       this.noseLocal = null
-      for (const filter of Object.values(this.euro)) filter.reset()
       return
     }
     const raw = this.scratch.matrix.fromArray(matrix)
@@ -499,37 +525,22 @@ export class AnatomyScene {
     if (this.displayQuat.dot(this.scratch.quat) < 0) {
       this.scratch.quat.set(-this.scratch.quat.x, -this.scratch.quat.y, -this.scratch.quat.z, -this.scratch.quat.w)
     }
-    this.scratch.euler.setFromQuaternion(this.scratch.quat, 'YXZ')
-    this.displayPos.set(
-      this.euro.x.filter(this.scratch.pos.x, time),
-      this.euro.y.filter(this.scratch.pos.y, time),
-      this.euro.z.filter(this.scratch.pos.z, time),
-    )
-    this.scratch.euler.set(
-      this.euro.rx.filter(this.scratch.euler.x, time),
-      this.euro.ry.filter(this.scratch.euler.y, time),
-      this.euro.rz.filter(this.scratch.euler.z, time),
-      'YXZ',
-    )
-    this.displayQuat.setFromEuler(this.scratch.euler)
-    this.displayScale.set(
-      this.euro.sx.filter(this.scratch.scale.x, time),
-      this.euro.sy.filter(this.scratch.scale.y, time),
-      this.euro.sz.filter(this.scratch.scale.z, time),
-    )
+    if (!this.havePose) {
+      this.displayPos.copy(this.scratch.pos)
+      this.displayQuat.copy(this.scratch.quat)
+      this.displayScale.copy(this.scratch.scale)
+      this.havePose = true
+    } else {
+      this.displayPos.lerp(this.scratch.pos, 0.6)
+      this.displayQuat.slerp(this.scratch.quat, 0.55)
+      this.displayScale.lerp(this.scratch.scale, 0.5)
+    }
     const jawTarget = Math.max(0, Math.min(1, jaw)) * 0.42
     this.jawAngle += (jawTarget - this.jawAngle) * (this.poseReady ? 0.45 : 1)
     this.poseReady = true
     this.head.visible = true
     this.head.matrix.compose(this.displayPos, this.displayQuat, this.displayScale)
-    this.head.matrixWorldNeedsUpdate = true
-    const fit = this.manual
-    const localFit = new THREE.Matrix4().compose(
-      new THREE.Vector3(-fit.x, fit.y, fit.z),
-      new THREE.Quaternion(),
-      new THREE.Vector3(fit.size * fit.width, fit.size * fit.height, fit.size * fit.depth),
-    )
-    this.head.matrix.multiply(localFit)
+    this.poseMatrix.copy(this.head.matrix)
     this.head.matrixWorldNeedsUpdate = true
     this.fitProjection.copy(this.baseProjection)
     const marks = this.fitMarks.length >= 4 ? this.fitMarks : [...FIT_EYES, ...FIT_SPAN]
@@ -538,18 +549,43 @@ export class AnatomyScene {
       const to: { x: number; y: number }[] = []
       const weights: number[] = []
       const pose = new THREE.Matrix4().copy(this.head.matrix)
+      const project = (at: [number, number, number]) => {
+        this.scratch.clip.set(at[0], at[1], at[2], 1).applyMatrix4(pose).applyMatrix4(this.baseProjection)
+        if (this.scratch.clip.w === 0) return null
+        return { x: this.scratch.clip.x / this.scratch.clip.w, y: this.scratch.clip.y / this.scratch.clip.w }
+      }
+      const seenAt = (index: number) => {
+        const seen = landmarks[index]
+        if (!seen) return null
+        return { x: this.coverX * (seen.x * 2 - 1), y: this.coverY * (1 - seen.y * 2) }
+      }
+      const markAt = (index: number) => marks.find((mark) => mark.index === index)?.at
+      const right = markAt(468)
+      const left = markAt(473)
+      const chin = markAt(152)
+      const fromRight = right ? project(right) : null
+      const fromLeft = left ? project(left) : null
+      const fromChin = chin ? project(chin) : null
+      const toRight = seenAt(468)
+      const toLeft = seenAt(473)
+      const toChin = seenAt(152)
+      const orbitFit =
+        fromRight && fromLeft && fromChin && toRight && toLeft && toChin
+          ? solveOrbitFit(fromRight, fromLeft, fromChin, toRight, toLeft, toChin)
+          : null
       const push = (mark: { index: number; at: [number, number, number] }) => {
-        const seen = landmarks[mark.index]
-        if (!seen) return false
-        this.scratch.clip.set(mark.at[0], mark.at[1], mark.at[2], 1).applyMatrix4(pose).applyMatrix4(this.baseProjection)
-        if (this.scratch.clip.w === 0) return false
-        from.push({ x: this.scratch.clip.x / this.scratch.clip.w, y: this.scratch.clip.y / this.scratch.clip.w })
-        to.push({ x: this.coverX * (seen.x * 2 - 1), y: this.coverY * (1 - seen.y * 2) })
+        const seen = seenAt(mark.index)
+        const projected = project(mark.at)
+        if (!seen || !projected) return false
+        from.push(projected)
+        to.push(seen)
         weights.push(fitWeight(mark.index))
         return true
       }
-      for (const mark of marks) push(mark)
-      const solved = solveWeightedScreenFit(from, to, weights)
+      if (!orbitFit) {
+        for (const mark of marks) push(mark)
+      }
+      const solved = orbitFit ?? solveWeightedScreenFit(from, to, weights)
       if (solved) {
         const scale = clampScreenScale(solved.scale)
         const blendScale = this.fitReady ? 0.5 : 1
@@ -564,6 +600,14 @@ export class AnatomyScene {
         this.fitProjection.premultiply(correction)
       }
     }
+    const fit = this.manual
+    const localFit = new THREE.Matrix4().compose(
+      new THREE.Vector3(-fit.x, fit.y, fit.z),
+      new THREE.Quaternion(),
+      new THREE.Vector3(fit.size * fit.width, fit.size * fit.height, fit.size * fit.depth),
+    )
+    this.head.matrix.multiply(localFit)
+    this.head.matrixWorldNeedsUpdate = true
     const nose = landmarks?.[1]
     this.noseLocal = nose ? this.layoutPoint(nose.x, nose.y) : null
   }
@@ -604,19 +648,6 @@ export class AnatomyScene {
       uniforms.uOrbit1!.value.copy(this.orbits[1]!)
       uniforms.uOvalCount!.value = oval.length
       uniforms.uOvalSoft!.value = 14 + feather * 42
-      if (oval.length > 3) {
-        let top = oval[0]!.y
-        let left = oval[0]!.x
-        let right = oval[0]!.x
-        for (const point of oval) {
-          top = Math.min(top, point.y)
-          left = Math.min(left, point.x)
-          right = Math.max(right, point.x)
-        }
-        uniforms.uCrown!.value.set(top + 8, (left + right) / 2, (right - left) * 0.58)
-      } else {
-        uniforms.uCrown!.value.set(0, 0, 1e6)
-      }
       const points = uniforms.uOval!.value as THREE.Vector2[]
       for (let i = 0; i < points.length; i += 1) {
         const point = oval[i]
@@ -638,6 +669,8 @@ export class AnatomyScene {
       const mesh = new THREE.Mesh(geometry, material)
       mesh.position.set(orbit.center[0], orbit.center[1], orbit.center[2] - radius * 0.5)
       mesh.frustumCulled = false
+      mesh.matrixAutoUpdate = false
+      mesh.updateMatrix()
       this.head.add(mesh)
       this.parts.push({
         id: 'frontal',
@@ -645,13 +678,13 @@ export class AnatomyScene {
         mesh,
         material,
         jaw: false,
-        gain: 0.9,
+        gain: 0.42,
         accepts: () => false,
       })
     }
   }
 
-  private poseHands(hands: Vec3[][], enabled: boolean, solid: boolean, feather: number): void {
+  private poseHands(hands: Vec3[][], enabled: boolean, solid: boolean, feather: number, brightness: number): void {
     this.rigs.forEach((rig, index) => {
       const points = hands[index]
       const show = Boolean(enabled && points && points.length >= 21)
@@ -707,15 +740,19 @@ export class AnatomyScene {
         bone.mesh.matrixWorldNeedsUpdate = true
         const material = bone.mesh.material as XrayMaterial
         applyLook(material, solid)
-        material.uniforms.uGain!.value = solid ? 1 : 0.95
-        material.uniforms.uSilhouette!.value = 0.12 + feather * 0.4
+        material.uniforms.uGain!.value = (solid ? 1 : 0.95) * brightness
+        material.uniforms.uFeather!.value = feather * 0.75
+        material.uniforms.uFade!.value = 0
+        material.uniforms.uSilhouette!.value = 0.12
         material.uniforms.uHead!.value.identity()
         material.uniforms.uClip!.value = 0
       }
       const palmMaterial = rig.palm.material as XrayMaterial
       if (palmMaterial?.uniforms) {
         applyLook(palmMaterial, solid)
-        palmMaterial.uniforms.uGain!.value = solid ? 1 : 0.8
+        palmMaterial.uniforms.uGain!.value = (solid ? 1 : 0.8) * brightness
+        palmMaterial.uniforms.uFeather!.value = feather * 0.75
+        palmMaterial.uniforms.uFade!.value = 0
         palmMaterial.uniforms.uClip!.value = 0
       }
     })
@@ -738,12 +775,6 @@ function fitWeight(index: number): number {
   return 1
 }
 
-function roleOf(id: StructureId): ShadeRole {
-  if (id === 'brain') return 'brain'
-  if (MUSCLES.includes(id)) return 'muscle'
-  return 'bone'
-}
-
 function findMesh(root: THREE.Object3D, name: string): THREE.Mesh | null {
   let found: THREE.Mesh | null = null
   root.traverse((object) => {
@@ -760,10 +791,7 @@ function findMesh(root: THREE.Object3D, name: string): THREE.Mesh | null {
 }
 
 function clipPlane(reveal: RevealMode, cut: number): THREE.Vector4 | null {
-  const sweep = (from: number, to: number) => from + (to - from) * cut
-  if (reveal === 'left') return new THREE.Vector4(1, 0, 0, sweep(7.5, -7.5))
-  if (reveal === 'right') return new THREE.Vector4(-1, 0, 0, sweep(7.5, -7.5))
-  if (reveal === 'top') return new THREE.Vector4(0, 1, 0, sweep(8.5, -8.5))
-  if (reveal === 'bottom') return new THREE.Vector4(0, -1, 0, -sweep(-8.5, 8.5))
-  return null
+  if (reveal !== 'half') return null
+  const w = 8 + (-8 - 8) * cut
+  return new THREE.Vector4(1, 0, 0, w)
 }

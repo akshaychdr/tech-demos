@@ -19,7 +19,7 @@ import {
   type EngineSnapshot,
   type HoldEvent,
 } from '../engine/MirrorEngine.ts'
-import { DEFAULT_FIT, type LookMode, type ManualFit, type RevealMode, type SceneLayers } from '../scene/AnatomyScene.ts'
+import { DEFAULT_FIT, DEFAULT_LAYERS, type LookMode, type ManualFit, type RevealMode, type SceneLayers } from '../scene/AnatomyScene.ts'
 import type { StructureId } from '../domain/types.ts'
 import { Credits } from './Credits.tsx'
 import { drawScoreCard } from './scoreImage.ts'
@@ -41,12 +41,16 @@ const LOOKS: { id: LookMode; label: string }[] = [
 ]
 
 const REVEALS: { id: RevealMode; label: string }[] = [
-  { id: 'lens', label: 'Lens' },
   { id: 'whole', label: 'Whole' },
-  { id: 'left', label: 'Left' },
-  { id: 'right', label: 'Right' },
-  { id: 'top', label: 'Top' },
-  { id: 'bottom', label: 'Lower' },
+  { id: 'half', label: 'Half' },
+  { id: 'lens', label: 'Lens' },
+]
+
+const PRESETS: { label: string; layers: SceneLayers }[] = [
+  { label: 'Skull', layers: { skull: true, muscles: false, brain: false, hand: false, outline: true, eyes: true } },
+  { label: 'Brain', layers: { skull: false, muscles: false, brain: true, hand: false, outline: true, eyes: false } },
+  { label: 'Muscles', layers: { skull: false, muscles: true, brain: false, hand: false, outline: true, eyes: false } },
+  { label: 'Everything', layers: { skull: true, muscles: true, brain: true, hand: true, outline: true, eyes: true } },
 ]
 
 export default function Stage() {
@@ -59,14 +63,15 @@ export default function Stage() {
   const [error, setError] = useState<CameraError | null>(null)
   const [snap, setSnap] = useState<EngineSnapshot>(emptySnap)
   const [mode, setMode] = useState<EngineMode>('explore')
-  const [layers, setLayers] = useState<SceneLayers>({ skull: true, muscles: false, brain: false, hand: false })
-  const [labelsOn, setLabelsOn] = useState(false)
+  const [layers, setLayers] = useState<SceneLayers>({ ...DEFAULT_LAYERS })
+  const [labelsOn, setLabelsOn] = useState(true)
   const [fit, setFit] = useState<ManualFit>(loadFit)
   const [look, setLook] = useState<LookMode>('xray')
-  const [reveal, setReveal] = useState<RevealMode>('lens')
-  const [cut, setCut] = useState(0.42)
-  const [feather, setFeather] = useState(0.22)
-  const [skin, setSkin] = useState(0.32)
+  const [reveal, setReveal] = useState<RevealMode>('whole')
+  const [cut, setCut] = useState(0.5)
+  const [feather, setFeather] = useState(0.2)
+  const [real, setReal] = useState(0.12)
+  const [brightness, setBrightness] = useState(1)
   const [lensPinned, setLensPinned] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(() => !window.matchMedia('(max-width: 800px)').matches)
   const [credits, setCredits] = useState(false)
@@ -161,10 +166,10 @@ export default function Stage() {
   }, [mode, layers, labelsOn, faceStep, quiz])
 
   useEffect(() => {
-    const appearance: Appearance = { look, reveal, cut, feather, skin, fit }
+    const appearance: Appearance = { look, reveal, cut, feather, real, brightness, fit }
     engine.current?.setAppearance(appearance)
     window.localStorage.setItem(FIT_KEY, JSON.stringify(fit))
-  }, [look, reveal, cut, feather, skin, fit, status])
+  }, [look, reveal, cut, feather, real, brightness, fit, status])
 
   useEffect(() => {
     const eng = engine.current
@@ -282,7 +287,7 @@ export default function Stage() {
         challengeUrl(window.location.origin, import.meta.env.BASE_URL, quiz.score),
       )
     : ''
-  const cutLabel = reveal === 'lens' ? 'Lens size' : 'How much to show'
+  const cutLabel = reveal === 'lens' ? 'Lens size' : 'Cut position'
 
   return (
     <div className="stage-shell">
@@ -457,55 +462,76 @@ export default function Stage() {
               </div>
             )}
 
-            <details className="adjust">
-              <summary>Adjust</summary>
-              <Pills label="Look" value={look} options={LOOKS} onChange={setLook} />
-              <Pills label="Reveal" value={reveal} options={REVEALS} onChange={setReveal} />
-              {reveal !== 'whole' && <Slider label={cutLabel} value={cut} onChange={setCut} />}
-              {reveal === 'lens' && (
-                <button
-                  type="button"
-                  className={lensPinned ? 'pill' : 'pill on'}
-                  onClick={() => {
-                    engine.current?.followLens()
-                    setLensPinned(false)
-                  }}
-                >
-                  {lensPinned ? 'Follow face' : 'Following the face'}
+            <p className="fit-heading">Layers</p>
+            <div className="chip-row" role="group" aria-label="Layer presets">
+              {PRESETS.map((preset) => (
+                <button key={preset.label} type="button" className="pill" onClick={() => setLayers(preset.layers)}>
+                  {preset.label}
                 </button>
-              )}
-              <Slider label="Skin" value={skin} onChange={setSkin} />
-              <Slider label="Soft edge" value={feather} onChange={setFeather} />
-              <div className="fit-grid">
-                <p className="fit-heading">Fit</p>
-                <FitSlider label="Size" value={fit.size} min={0.6} max={1.6} onChange={(size) => setFit((value) => ({ ...value, size }))} />
-                <FitSlider label="Width" value={fit.width} min={0.7} max={1.4} onChange={(width) => setFit((value) => ({ ...value, width }))} />
-                <FitSlider label="Height" value={fit.height} min={0.7} max={1.4} onChange={(height) => setFit((value) => ({ ...value, height }))} />
-                <FitSlider label="Depth" value={fit.depth} min={0.7} max={1.4} onChange={(depth) => setFit((value) => ({ ...value, depth }))} />
-                <FitSlider label="X" value={fit.x} min={-4} max={4} onChange={(x) => setFit((value) => ({ ...value, x }))} />
-                <FitSlider label="Y" value={fit.y} min={-4} max={4} onChange={(y) => setFit((value) => ({ ...value, y }))} />
-                <FitSlider label="Z" value={fit.z} min={-4} max={4} onChange={(z) => setFit((value) => ({ ...value, z }))} />
-              </div>
-            </details>
-
-            <div className="chip-row" role="group" aria-label="Layers">
-              <Chip on={layers.skull} onClick={() => setLayers((value) => ({ ...value, skull: !value.skull }))}>
+              ))}
+            </div>
+            <div className="checks">
+              <Check on={layers.skull} onChange={(skull) => setLayers((value) => ({ ...value, skull }))}>
                 Skull
-              </Chip>
-              <Chip on={layers.muscles} onClick={() => setLayers((value) => ({ ...value, muscles: !value.muscles }))}>
+              </Check>
+              <Check on={layers.muscles} onChange={(muscles) => setLayers((value) => ({ ...value, muscles }))}>
                 Muscles
-              </Chip>
-              <Chip on={layers.brain} onClick={() => setLayers((value) => ({ ...value, brain: !value.brain }))}>
+              </Check>
+              <Check on={layers.outline} onChange={(outline) => setLayers((value) => ({ ...value, outline }))}>
+                Head outline
+              </Check>
+              <Check on={layers.brain} onChange={(brain) => setLayers((value) => ({ ...value, brain }))}>
                 Brain
-              </Chip>
-              <Chip on={layers.hand} onClick={() => setLayers((value) => ({ ...value, hand: !value.hand }))}>
+              </Check>
+              <Check on={layers.eyes} onChange={(eyes) => setLayers((value) => ({ ...value, eyes }))}>
+                Eyes
+              </Check>
+              <Check on={layers.hand} onChange={(hand) => setLayers((value) => ({ ...value, hand }))}>
                 Hand bones
-              </Chip>
-              <Chip on={labelsOn} onClick={() => setLabelsOn((value) => !value)}>
-                Labels
-              </Chip>
+              </Check>
+              <Check on={labelsOn} onChange={setLabelsOn}>
+                Show labels
+              </Check>
             </div>
             {layers.hand && <p>Hand bones follow the joints the camera can see.</p>}
+
+            <p className="fit-heading">Look</p>
+            <Pills label="Look" value={look} options={LOOKS} onChange={setLook} />
+            <Range label="Brightness" value={brightness} min={0.3} max={2.2} onChange={setBrightness} />
+
+            <p className="fit-heading">Reveal</p>
+            <Pills label="Reveal" value={reveal} options={REVEALS} onChange={setReveal} />
+            {reveal !== 'whole' && <Slider label={cutLabel} value={cut} onChange={setCut} />}
+            {reveal === 'lens' && (
+              <button
+                type="button"
+                className={lensPinned ? 'pill' : 'pill on'}
+                onClick={() => {
+                  engine.current?.followLens()
+                  setLensPinned(false)
+                }}
+              >
+                {lensPinned ? 'Follow face' : 'Following the face'}
+              </button>
+            )}
+
+            <p className="fit-heading">Mixed reality</p>
+            <Slider label="Real me showing through" value={real} onChange={setReal} />
+            <Slider label="Edge feather" value={feather} onChange={setFeather} />
+
+            <div className="fit-grid">
+              <p className="fit-heading">Fit to my head</p>
+              <FitSlider label="Overall size" value={fit.size} min={0.7} max={1.4} onChange={(size) => setFit((value) => ({ ...value, size }))} />
+              <FitSlider label="Width" value={fit.width} min={0.8} max={1.25} onChange={(width) => setFit((value) => ({ ...value, width }))} />
+              <FitSlider label="Height" value={fit.height} min={0.8} max={1.25} onChange={(height) => setFit((value) => ({ ...value, height }))} />
+              <FitSlider label="Depth" value={fit.depth} min={0.8} max={1.25} onChange={(depth) => setFit((value) => ({ ...value, depth }))} />
+              <FitSlider label="Left/right" value={fit.x} min={-3} max={3} onChange={(x) => setFit((value) => ({ ...value, x }))} />
+              <FitSlider label="Up/down" value={fit.y} min={-4} max={4} onChange={(y) => setFit((value) => ({ ...value, y }))} />
+              <FitSlider label="Forward/back" value={fit.z} min={-4} max={4} onChange={(z) => setFit((value) => ({ ...value, z }))} />
+              <button type="button" className="pill" onClick={() => setFit({ ...DEFAULT_FIT })}>
+                Reset fit
+              </button>
+            </div>
           </div>
           <div className="panel-bar">
             <button type="button" className="sheet-toggle" aria-expanded={sheetOpen} onClick={() => setSheetOpen((value) => !value)}>
@@ -566,7 +592,7 @@ function Pills<T extends string>({
   )
 }
 
-const FIT_KEY = 'anatomy-mirror-fit-v1'
+const FIT_KEY = 'anatomy-mirror-fit-v2'
 
 function loadFit(): ManualFit {
   try {
@@ -591,7 +617,7 @@ function FitSlider({
   max: number
   onChange: (value: number) => void
 }) {
-  const id = `fit-${label.toLowerCase()}`
+  const id = `fit-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   return (
     <label className="slider" htmlFor={id}>
       <span>
@@ -620,11 +646,37 @@ function Slider({ label, value, onChange }: { label: string; value: number; onCh
   )
 }
 
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: string }) {
+function Check({ on, onChange, children }: { on: boolean; onChange: (value: boolean) => void; children: string }) {
+  const id = `layer-${children.replace(/\s+/g, '-').toLowerCase()}`
   return (
-    <button type="button" className={on ? 'pill on' : 'pill'} aria-pressed={on} onClick={onClick}>
-      {children}
-    </button>
+    <label className="check" htmlFor={id}>
+      <input id={id} type="checkbox" checked={on} onChange={(event) => onChange(event.target.checked)} />
+      <span>{children}</span>
+    </label>
+  )
+}
+
+function Range({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  onChange: (value: number) => void
+}) {
+  const id = `range-${label.replace(/\s+/g, '-').toLowerCase()}`
+  return (
+    <label className="slider" htmlFor={id}>
+      <span>
+        {label} {value.toFixed(2)}
+      </span>
+      <input id={id} type="range" min={min} max={max} step={0.01} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
   )
 }
 
