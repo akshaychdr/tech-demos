@@ -16,6 +16,8 @@ import {
   AnatomyScene,
   DEFAULT_FIT,
   DEFAULT_LAYERS,
+  FIT_STORAGE_KEY,
+  layersFromQuery,
   type FitDebug,
   type LookMode,
   type ManualFit,
@@ -82,6 +84,8 @@ declare global {
       video: { w: number; h: number }
       canvases: string[]
       graph: FitDebug['graph']
+      silhouette: { skin: number; oval: number; ratio: number } | null
+      fitKey: string
     }
   }
 }
@@ -107,9 +111,12 @@ export class MirrorEngine {
   private noFingerSince = 0
   private snapAt = 0
   private mode: EngineMode = 'explore'
-  private layers: SceneLayers = { ...DEFAULT_LAYERS }
-  private showLabels = true
-  private showTracking = false
+  private layers: SceneLayers = layersFromQuery(window.location.search) ?? { ...DEFAULT_LAYERS }
+  private stillW = 0
+  private stillH = 0
+  private frozen: { matrix: number[] | null; landmarks: RawPoint[] | null; jaw: number } | null = null
+  private showLabels = false
+  private showTracking = new URLSearchParams(window.location.search).get('track') === '1'
   private rawMarks: RawPoint[] | null = null
   private fit: ManualFit = { ...DEFAULT_FIT }
   private look: LookMode = 'xray'
@@ -145,6 +152,11 @@ export class MirrorEngine {
     this.preview = preview
     this.mount(container)
     if (this.disposed) return
+    const faceShot = new URLSearchParams(window.location.search).get('face')
+    if (faceShot && !preview) {
+      await this.startStill(faceShot, onProgress)
+      return
+    }
     if (preview) {
       onProgress(0.35, 'Loading the anatomy')
       await this.loadAnatomy()
@@ -169,7 +181,7 @@ export class MirrorEngine {
     const vision = await FilesetResolver.forVisionTasks(WASM)
     if (this.disposed) return
     onProgress(0.62, 'Reading the anatomy')
-    const [, face, hand] = await Promise.all([this.loadAnatomy(), this.makeFace(vision), this.makeHand(vision)])
+    const [, face, hand] = await Promise.all([this.loadAnatomy(), this.makeFace(vision, 'VIDEO'), this.makeHand(vision)])
     if (this.disposed) {
       face.close()
       hand.close()
@@ -353,10 +365,48 @@ export class MirrorEngine {
     })
   }
 
-  private async makeFace(vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>) {
+  private async startStill(face: string, onProgress: (value: number, label: string) => void): Promise<void> {
+    onProgress(0.2, 'Loading the photograph')
+    const img = document.createElement('img')
+    img.alt = ''
+    img.crossOrigin = 'anonymous'
+    const base = import.meta.env.BASE_URL
+    img.src = face.startsWith('http') || face.startsWith('/') ? face : `${base}${face.replace(/^\//, '')}`
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new CameraError('unknown', 'The face photograph did not load.'))
+    })
+    if (this.disposed) return
+    this.stillW = img.naturalWidth
+    this.stillH = img.naturalHeight
+    this.mirrorRoot?.prepend(img)
+    onProgress(0.45, 'Loading face tracking')
+    const vision = await FilesetResolver.forVisionTasks(WASM)
+    if (this.disposed) return
+    onProgress(0.7, 'Reading the anatomy')
+    const [, landmarker] = await Promise.all([this.loadAnatomy(), this.makeFace(vision, 'IMAGE')])
+    if (this.disposed) {
+      landmarker.close()
+      return
+    }
+    this.face = landmarker
+    const result = landmarker.detect(img)
+    const raw = (result.faceLandmarks[0] as RawPoint[] | undefined) ?? null
+    this.rawMarks = raw
+    let jaw = 0
+    for (const category of result.faceBlendshapes?.[0]?.categories ?? []) {
+      if ((category.categoryName ?? '') === 'jawOpen') jaw = category.score ?? 0
+    }
+    this.frozen = { matrix: readMatrix(result.facialTransformationMatrixes?.[0]), landmarks: raw, jaw }
+    onProgress(1, 'Ready')
+    this.resize()
+    this.raf = requestAnimationFrame((time) => this.frame(time))
+  }
+
+  private async makeFace(vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>, mode: 'VIDEO' | 'IMAGE') {
     const options = {
       baseOptions: { modelAssetPath: FACE_MODEL, delegate: 'GPU' as const },
-      runningMode: 'VIDEO' as const,
+      runningMode: mode,
       numFaces: 1,
       outputFaceBlendshapes: true,
       outputFacialTransformationMatrixes: true,
@@ -391,10 +441,9 @@ export class MirrorEngine {
     const container = this.container
     const scene = this.scene
     if (this.disposed || !container || !scene) return
-    const coarse = window.matchMedia('(pointer: coarse)').matches
-    const dpr = Math.min(window.devicePixelRatio || 1, coarse ? 1.25 : 1.6)
-    const videoW = this.preview ? 0 : this.video?.videoWidth || 0
-    const videoH = this.preview ? 0 : this.video?.videoHeight || 0
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const videoW = this.stillW || (this.preview ? 0 : this.video?.videoWidth || 0)
+    const videoH = this.stillH || (this.preview ? 0 : this.video?.videoHeight || 0)
     if (videoW > 0 && videoH > 0) container.style.setProperty('--ar', String(videoW / videoH))
     const rect = container.getBoundingClientRect()
     scene.setSize(rect.width, rect.height, videoW || rect.width, videoH || rect.height, dpr)
@@ -412,6 +461,10 @@ export class MirrorEngine {
   private frame(time: number): void {
     if (this.disposed) return
     this.raf = requestAnimationFrame((next) => this.frame(next))
+    if (this.frozen) {
+      this.renderFrozen(time)
+      return
+    }
     if (this.preview) {
       this.previewFrame(time)
       return
@@ -679,7 +732,44 @@ export class MirrorEngine {
       video: { w: videoW, h: videoH },
       canvases,
       graph: debug.graph,
+      silhouette: debug.silhouette,
+      fitKey: FIT_STORAGE_KEY,
     }
+  }
+
+  private renderFrozen(time: number): void {
+    const scene = this.scene
+    const view = this.container?.getBoundingClientRect()
+    const frozen = this.frozen
+    if (!scene || !view || view.width < 2 || !frozen) return
+    if (time <= this.lastTime) return
+    this.lastTime = time
+    const raw = this.smoothLandmarks(frozen.landmarks)
+    this.rawMarks = raw
+    const lensRadius = (0.18 + this.cut * 0.5) * Math.min(view.width, view.height)
+    scene.update({
+      matrix: frozen.matrix,
+      landmarks: raw,
+      jaw: frozen.jaw,
+      motion: {},
+      lensPin: this.reveal === 'lens' ? this.lensPin : null,
+      lensRadius,
+      hands: [],
+      layers: this.layers,
+      highlight: this.highlight,
+      look: this.look,
+      reveal: this.reveal,
+      cut: this.cut,
+      feather: this.feather,
+      real: this.real,
+      brightness: this.brightness,
+      fit: this.fit,
+      now: time,
+    })
+    this.publishDebug(view.width, view.height, this.stillW, this.stillH)
+    this.paintHud(view.width, view.height)
+    const placed = this.coverLandmarks(raw, this.stillW, this.stillH, view.width, view.height)
+    this.publish(time, placed, false, null, null, view)
   }
 
   private applyMask(): void {

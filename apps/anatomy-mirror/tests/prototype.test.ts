@@ -17,7 +17,9 @@ import {
 } from '../src/domain/screenFit.ts'
 import { HEAD_LABELS, LabelColumns, anchorFacingAmount, labelVisible } from '../src/domain/headLabels.ts'
 import { OneEuroFilter } from '../src/domain/oneEuro.ts'
-import { RENDER_ORDER, veilOpacity, xrayLayerGain } from '../src/scene/materials.ts'
+import { RENDER_ORDER, createShadeMaterial, solidLayerGain, veilOpacity, xrayLayerGain } from '../src/scene/materials.ts'
+import { DEFAULT_LAYERS, FIT_STORAGE_KEY } from '../src/scene/AnatomyScene.ts'
+import * as THREE from 'three'
 import type { BlendshapeMap, BoneId, MuscleId, Vec3 } from '../src/domain/types.ts'
 
 function loadFace(): Vec3[] {
@@ -483,3 +485,88 @@ describe('screen fit', () => {
     ).toBeNull()
   })
 })
+
+describe('hashem fidelity', () => {
+  test('x-ray fresnel uses the normal matrix and stays see-through', () => {
+    const bone = createShadeMaterial('bone')
+    const veil = createShadeMaterial('veil')
+    const outline = createShadeMaterial('outline')
+    expect(bone.vertexShader).toContain('normalize(normalMatrix * normal)')
+    expect(bone.vertexShader).not.toContain('mat3(modelViewMatrix)')
+    expect(bone.fragmentShader).toContain('(0.035 + 0.95 * rim)')
+    expect(bone.fragmentShader).toContain('pow(1.0 - ndv, 2.1)')
+    expect(bone.depthTest).toBe(false)
+    expect(bone.depthWrite).toBe(false)
+    expect(bone.side).toBe(THREE.DoubleSide)
+    expect(bone.blending).toBe(THREE.AdditiveBlending)
+    expect(bone.uniforms.uMode!.value).toBe(0)
+    expect(veil.blending).toBe(THREE.NormalBlending)
+    expect(veil.side).toBe(THREE.FrontSide)
+    expect(veil.uniforms.uMode!.value).toBe(2)
+    expect(veil.uniforms.uFade!.value).toBe(1)
+    expect(outline.uniforms.uFade!.value).toBe(1)
+    expect(outline.blending).toBe(THREE.AdditiveBlending)
+    expect(solidLayerGain(1)).toBeCloseTo(1, 5)
+    expect(xrayLayerGain('muscle', 1, 1)).toBeCloseTo(0.5, 5)
+    expect(xrayLayerGain('brain', 1, 1)).toBeCloseTo(0.36, 5)
+    expect(xrayLayerGain('hindbrain', 1, 1)).toBeCloseTo(0.6, 5)
+  })
+
+  test('defaults match the x-ray mirror and ignore the old fit key', () => {
+    expect(DEFAULT_LAYERS).toEqual({
+      skull: true,
+      muscles: false,
+      brain: false,
+      hand: false,
+      outline: true,
+      eyes: true,
+    })
+    expect(FIT_STORAGE_KEY).toBe('anatomy-mirror-fit-v3')
+    const scene = readFileSync(new URL('../src/scene/AnatomyScene.ts', import.meta.url), 'utf8')
+    expect(scene).not.toContain('DEPTH_RELIEF')
+  })
+
+  test('shipped meshes sit on the reference boxes', () => {
+    const boxes = glbBoxes()
+    expect(near(boxes.skin!.min, [-10.8, -12.59, -16.04])).toBe(true)
+    expect(near(boxes.skin!.size, [21.02, 27.14, 23.99])).toBe(true)
+    expect(near(boxes.hindbrain!.min, [-5.6, -3.6, -12.36])).toBe(true)
+    expect(near(boxes.hindbrain!.size, [10.98, 8.57, 8.84])).toBe(true)
+    expect(near(boxes.cranium!.min, [-7.89, -6.32, -15.59])).toBe(true)
+    expect(near(boxes.cerebrum!.min, [-7.33, -0.86, -14.84])).toBe(true)
+    expect(boxes.muscles!.min[2]!).toBeLessThan(-15.5)
+    expect(boxes.cranium!.normals).toBe(true)
+    expect(boxes.skin!.normals).toBe(true)
+    expect(boxes.muscles!.normals).toBe(true)
+    expect(boxes.hindbrain!.normals).toBe(true)
+  })
+})
+
+function near(value: number[], target: number[], tol = 0.08): boolean {
+  return value.every((item, index) => Math.abs(item - target[index]!) <= tol)
+}
+
+function glbBoxes(): Record<string, { min: number[]; size: number[]; normals: boolean }> {
+  const data = readFileSync(new URL('../public/anatomy/bodyparts3d/anatomy.glb', import.meta.url))
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  const jsonLength = view.getUint32(12, true)
+  const doc = JSON.parse(new TextDecoder().decode(data.subarray(20, 20 + jsonLength))) as {
+    nodes: { name?: string; mesh?: number }[]
+    meshes: { primitives: { attributes: { POSITION: number; NORMAL?: number } }[] }[]
+    accessors: { min?: number[]; max?: number[] }[]
+  }
+  const boxes: Record<string, { min: number[]; size: number[]; normals: boolean }> = {}
+  for (const node of doc.nodes) {
+    if (node.mesh == null || !node.name) continue
+    const attributes = doc.meshes[node.mesh]!.primitives[0]!.attributes
+    const accessor = doc.accessors[attributes.POSITION]!
+    const min = accessor.min ?? [0, 0, 0]
+    const max = accessor.max ?? [0, 0, 0]
+    boxes[node.name] = {
+      min,
+      size: max.map((item, index) => item - min[index]!),
+      normals: attributes.NORMAL != null,
+    }
+  }
+  return boxes
+}

@@ -10,7 +10,7 @@ const XRAY: Record<ShadeRole, string> = {
   muscle: '#ff6b5e',
   brain: '#ff9fc0',
   hindbrain: '#ffc37a',
-  hand: '#bfe3ff',
+  hand: '#d9f0ff',
   eye: '#fff3a8',
 }
 
@@ -21,7 +21,7 @@ const SOLID: Record<ShadeRole, string> = {
   muscle: '#b5453c',
   brain: '#e2a39d',
   hindbrain: '#d6ad84',
-  hand: '#efe6d8',
+  hand: '#e9e2cf',
   eye: '#f4f4ee',
 }
 
@@ -64,6 +64,11 @@ export function veilOpacity(real: number): number {
   return 1 - real
 }
 
+/** Solid style brightens filled layers. The outline stays on the x-ray gain. */
+export function solidLayerGain(bright: number): number {
+  return Math.min(1.25, 0.6 + 0.4 * bright)
+}
+
 const VERT = `
 attribute vec3 aMove;
 uniform float uAction;
@@ -78,7 +83,7 @@ void main() {
   vec3 posed = position + aMove * uAction;
   vec4 viewPos = modelViewMatrix * vec4(posed, 1.0);
   vHeadPos = (uHead * vec4(posed, 1.0)).xyz;
-  vNormalView = normalize(mat3(modelViewMatrix) * normal);
+  vNormalView = normalize(normalMatrix * normal);
   vTowardEye = uOrtho > 0.5 ? vec3(0.0, 0.0, 1.0) : normalize(-viewPos.xyz);
   vUv = uv;
   vClip = projectionMatrix * viewPos;
@@ -110,13 +115,15 @@ void main() {
   vec3 n = normalize(vNormalView);
   vec3 v = normalize(vTowardEye);
   float ndv = abs(dot(n, v));
-  float soft = uFeather > 0.001 ? smoothstep(0.0, uFeather, ndv) : 1.0;
+  float soft = 1.0;
+  if (uClip > 0.5) {
+    float dcut = dot(uPlane.xyz, vHeadPos) - uPlane.w;
+    if (dcut < 0.0) discard;
+    if (uSoft > 0.001) soft *= smoothstep(0.0, uSoft, dcut);
+  }
+  if (uFeather > 0.001) soft *= smoothstep(0.0, uFeather, ndv);
   float fade = uFade > 0.5 ? smoothstep(-12.4, -9.2, vHeadPos.y) : 1.0;
   float keep = 1.0;
-  if (uClip > 0.5) {
-    float side = dot(uPlane.xyz, vHeadPos) - uPlane.w;
-    keep *= smoothstep(0.0, max(uSoft, 0.001), side);
-  }
   vec2 ndc = vClip.xy / max(abs(vClip.w), 1e-4);
   vec2 pixel = vec2((ndc.x + 1.0) * 0.5 * uView.x, (1.0 - ndc.y) * 0.5 * uView.y);
   if (uLensOn > 0.5) {
@@ -124,22 +131,21 @@ void main() {
     keep *= 1.0 - smoothstep(-uLensSoft, uLensSoft * 0.22, lensDist);
   }
   if (uMode > 1.5) {
-    float veilA = clamp(uOpacity * fade * soft * keep, 0.0, 1.0);
-    gl_FragColor = vec4(uColor, veilA);
+    gl_FragColor = vec4(uColor, uOpacity * fade * soft * keep);
     return;
   }
   if (uMode > 0.5) {
-    float light = clamp(dot(n, normalize(vec3(0.22, 0.72, 0.66))) * 0.5 + 0.55, 0.0, 1.0);
-    vec3 color = mix(uColor, vec3(1.0), 0.22 * uPick) * light;
-    float solidA = clamp(uOpacity * fade * soft * keep, 0.0, 1.0);
-    gl_FragColor = vec4(color, solidA);
+    vec3 fn = gl_FrontFacing ? n : -n;
+    float d = max(dot(fn, normalize(vec3(0.35, 0.55, 0.76))), 0.0);
+    float rim = pow(1.0 - ndv, 2.5);
+    vec3 color = uColor * (0.28 + 0.78 * d) * uGain + vec3(0.25) * rim;
+    color = mix(color, vec3(1.0), 0.15 * uPick);
+    gl_FragColor = vec4(color, uOpacity * soft * keep);
     return;
   }
   float rim = pow(1.0 - ndv, 2.1);
   float a = clamp((0.035 + 0.95 * rim) * uGain * uOpacity * fade, 0.0, 1.0);
-  a *= soft;
-  a *= keep;
-  gl_FragColor = vec4(uColor, a);
+  gl_FragColor = vec4(uColor, a * soft * keep);
 }
 `
 
@@ -160,7 +166,7 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
       uPlane: { value: new THREE.Vector4(1, 0, 0, 0) },
       uSoft: { value: 1.2 },
       uFeather: { value: 0.15 },
-      uFade: { value: role === 'hand' ? 0 : 1 },
+      uFade: { value: role === 'veil' || role === 'outline' ? 1 : 0 },
       uView: { value: new THREE.Vector2(1, 1) },
       uLensOn: { value: 0 },
       uLens: { value: new THREE.Vector3() },
@@ -169,7 +175,7 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
     },
     vertexShader: VERT,
     fragmentShader: FRAG,
-    side: THREE.DoubleSide,
+    side: veil ? THREE.FrontSide : THREE.DoubleSide,
     transparent: true,
     depthTest: false,
     depthWrite: false,
@@ -183,8 +189,9 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
 
 export function applyLook(material: XrayMaterial, solid: boolean): void {
   const role = material.userData.role
-  const veil = role === 'veil'
-  const mode = veil ? 2 : solid ? 1 : 0
+  // The veil and the outline keep their own look in both styles.
+  if (role === 'veil' || role === 'outline') return
+  const mode = solid ? 1 : 0
   const previous = material.uniforms.uMode!.value as number
   material.uniforms.uMode!.value = mode
   ;(material.uniforms.uColor!.value as THREE.Color).set(mode === 1 ? SOLID[role] : XRAY[role])
@@ -194,18 +201,14 @@ export function applyLook(material: XrayMaterial, solid: boolean): void {
   material.transparent = true
   material.toneMapped = false
   material.side = THREE.DoubleSide
-  material.depthWrite = false
   if (mode === 0) {
     material.blending = THREE.AdditiveBlending
     material.depthTest = false
-  } else if (mode === 2) {
-    material.blending = THREE.NormalBlending
-    material.depthTest = false
+    material.depthWrite = false
   } else {
-    const filled = role !== 'outline'
-    material.blending = filled ? THREE.NormalBlending : THREE.AdditiveBlending
-    material.depthTest = filled
-    material.depthWrite = filled
+    material.blending = THREE.NormalBlending
+    material.depthTest = true
+    material.depthWrite = true
   }
   material.needsUpdate = true
 }

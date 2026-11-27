@@ -26,17 +26,6 @@ MUSCLES = ROOT / "public/anatomy/bodyparts3d/muscle-attrs.json"
 NODES = ROOT / "public/anatomy/bodyparts3d/nodes.json"
 LABELS = ROOT / "src/domain/headLabels.ts"
 REVISION = ROOT / "src/scene/anatomyRevision.ts"
-# Nose, chin, tragi, forehead. The outline has to pass through these.
-SKIN_LANDMARKS = np.array(
-    [
-        [0.0, -1.126865, 7.475604],
-        [0.0, -9.403378, 4.264492],
-        [-7.664182, 0.673132, -2.435867],
-        [7.664182, 0.673132, -2.435867],
-        [0.0, 8.261778, 4.481535],
-    ],
-    dtype=np.float64,
-)
 
 HEAD = ("cranium", "jaw", "eyes", "cerebrum", "hindbrain", "skin", "muscles")
 BOX = {
@@ -46,7 +35,11 @@ BOX = {
     "skin": np.array([[-10.80, -12.59, -16.04], [10.21, 14.55, 7.95]]),
     "muscles": np.array([[-8.54, -7.44, -15.81], [8.48, 14.41, 6.08]]),
     "jaw": np.array([[-5.57, -7.58, -4.30], [5.39, 0.90, 5.09]]),
+    "hindbrain": np.array([[-5.59772, -3.60263, -12.35683], [5.38373, 4.96661, -3.51977]]),
 }
+# Posterior temporalis, behind the ears. The face of the muscle sheet stays put.
+MUSCLE_Z_CUT = -4.0
+MUSCLE_Z_BACK = -15.80511
 EYE_L = np.array([2.9, 2.85, 3.8])
 EYE_R = np.array([-2.9, 2.85, 3.8])
 # id -> (mesh, canonical points). Missing labels are carried by the mesh affine.
@@ -512,19 +505,18 @@ def place(meshes: dict[str, trimesh.Trimesh]) -> tuple[dict[str, trimesh.Trimesh
     mirrored_flag["muscles"] = False
     print(f"mirror eyes       faces {len(eye_f)}", flush=True)
 
-    # Muscles and the hindbrain share the cranium and cerebrum scales so they
-    # stay attached. Their own boxes describe a fuller muscle sheet than the
-    # expression layer we ship.
+    # Muscles share the cranium and jaw scales so the eye rings stay on the eyes.
+    # The hindbrain has its own box, at the back of the skull.
     fit_owner = {
         "cranium": "cranium",
         "jaw": "jaw",
         "cerebrum": "cerebrum",
-        "hindbrain": "cerebrum",
+        "hindbrain": "hindbrain",
         "skin": "skin",
         "muscles": "cranium",
     }
     axis: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-    for owner in ("cranium", "jaw", "cerebrum", "skin"):
+    for owner in ("cranium", "jaw", "cerebrum", "skin", "hindbrain"):
         axis[owner] = axis_fit(centered[owner][0], BOX[owner])
         print(f"axis {owner:10} scale {np.round(axis[owner][0], 3)} shift {np.round(axis[owner][1], 2)}", flush=True)
 
@@ -547,6 +539,12 @@ def place(meshes: dict[str, trimesh.Trimesh]) -> tuple[dict[str, trimesh.Trimesh
             blend = np.clip((high - source_v[:, 1]) / span, 0.0, 1.0)
             blend = blend * blend * (3.0 - 2.0 * blend)
             verts = upper * (1.0 - blend)[:, None] + lower * blend[:, None]
+            back = verts[:, 2] < MUSCLE_Z_CUT
+            if np.any(back):
+                zmin = float(verts[:, 2].min())
+                stretch = (MUSCLE_Z_BACK - MUSCLE_Z_CUT) / (zmin - MUSCLE_Z_CUT)
+                verts = np.array(verts, copy=True)
+                verts[back, 2] = MUSCLE_Z_CUT + (verts[back, 2] - MUSCLE_Z_CUT) * stretch
             mesh = trimesh.Trimesh(vertices=verts, faces=centered["muscles"][1], process=False)
             mesh.metadata = {"jawBlend": blend.astype(np.float64)}
             axis_s, axis_t = axis["cranium"]
@@ -732,43 +730,6 @@ def rewrite_moves(frames: dict[str, Frame], blend: np.ndarray) -> None:
     MUSCLES.write_text(json.dumps(attrs))
 
 
-def skin_landmark_error(vertices: np.ndarray) -> list[float]:
-    errors = []
-    for point in SKIN_LANDMARKS:
-        errors.append(float(np.linalg.norm(vertices - point, axis=1).min()))
-    return errors
-
-
-def hug_skin(vertices: np.ndarray, faces: np.ndarray) -> trimesh.Trimesh:
-    """Pull the skin onto the nose, chin, tragi, and forehead.
-
-    A wide axis-fitted shell sits about 1.4× outside the skull. Moving a
-    neighbourhood of each landmark onto that point brings the surface through
-    it without leaving a spike.
-    """
-    verts = np.array(vertices, dtype=np.float64, copy=True)
-    for _ in range(4):
-        if max(skin_landmark_error(verts)) < 0.05:
-            break
-        disp = np.zeros_like(verts)
-        weight = np.zeros(len(verts))
-        for point in SKIN_LANDMARKS:
-            distances = np.linalg.norm(verts - point, axis=1)
-            index = int(np.argmin(distances))
-            delta = point - verts[index]
-            radius = np.linalg.norm(verts - verts[index], axis=1)
-            influence = np.exp(-0.5 * (radius / 3.2) ** 2)
-            disp += influence[:, None] * delta
-            weight += influence
-        verts += disp / np.maximum(weight, 1e-6)[:, None] * 0.85
-    mesh = trimesh.Trimesh(vertices=verts, faces=np.asarray(faces), process=False)
-    errors = skin_landmark_error(np.asarray(mesh.vertices))
-    print("skin landmark cm", " ".join(f"{err:.3f}" for err in errors), flush=True)
-    if max(errors) > 0.5:
-        raise SystemExit(f"skin misses a face landmark by {max(errors):.2f} cm")
-    return mesh
-
-
 def closed_eyes(vertices: np.ndarray) -> trimesh.Trimesh:
     """Two closed spheres. An open shell drawn double-sided reads as a ring."""
     points = np.asarray(vertices, dtype=np.float64)
@@ -803,13 +764,11 @@ def write_revision(size: int) -> str:
 
 
 def retouch() -> None:
-    """Hug the skin and close the eyes on the GLB that is already canonical."""
+    """Close the eyes on a GLB that is already canonical. The skin shell is not pulled."""
     scene = trimesh.load(GLB, force="scene")
     out = trimesh.Scene()
     for name, geom in scene.geometry.items():
-        if name == "skin":
-            mesh = hug_skin(np.asarray(geom.vertices), np.asarray(geom.faces))
-        elif name == "eyes":
+        if name == "eyes":
             mesh = closed_eyes(np.asarray(geom.vertices))
         else:
             mesh = geom
@@ -824,7 +783,6 @@ def main() -> None:
     scene = trimesh.load(GLB, force="scene")
     source = {name: scene.geometry[name] for name in scene.geometry}
     placed, frames, _table = place(source)
-    placed["skin"] = hug_skin(np.asarray(placed["skin"].vertices), np.asarray(placed["skin"].faces))
     placed["eyes"] = closed_eyes(np.asarray(placed["eyes"].vertices))
     out = trimesh.Scene()
     for name, geom in source.items():
@@ -839,7 +797,7 @@ def main() -> None:
     right, left = eye_centers(eyes)
     print("eye centres", np.round(right, 2), np.round(left, 2), flush=True)
     print("jaw pivot", jaw_pivot(np.asarray(placed["jaw"].vertices)), flush=True)
-    for name in ("cranium", "jaw", "cerebrum"):
+    for name in ("cranium", "jaw", "cerebrum", "skin", "hindbrain"):
         lo, hi = bounds_of(np.asarray(placed[name].vertices))
         delta = np.concatenate([lo - BOX[name][0], hi - BOX[name][1]])
         worst = float(np.max(np.abs(delta)))
@@ -851,6 +809,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     if "--hug-face" in sys.argv:
-        retouch()
-    else:
-        main()
+        raise SystemExit("the skin hug was removed; it pulled the shell off the canonical box")
+    main()

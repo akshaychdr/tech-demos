@@ -19,7 +19,16 @@ import {
   type EngineSnapshot,
   type HoldEvent,
 } from '../engine/MirrorEngine.ts'
-import { DEFAULT_FIT, DEFAULT_LAYERS, type LookMode, type ManualFit, type RevealMode, type SceneLayers } from '../scene/AnatomyScene.ts'
+import {
+  DEFAULT_FIT,
+  DEFAULT_LAYERS,
+  FIT_STORAGE_KEY,
+  layersFromQuery,
+  type LookMode,
+  type ManualFit,
+  type RevealMode,
+  type SceneLayers,
+} from '../scene/AnatomyScene.ts'
 import type { StructureId } from '../domain/types.ts'
 import { Credits } from './Credits.tsx'
 import { drawScoreCard } from './scoreImage.ts'
@@ -49,7 +58,7 @@ const REVEALS: { id: RevealMode; label: string }[] = [
 const PRESETS: { label: string; layers: SceneLayers }[] = [
   { label: 'Skull', layers: { skull: true, muscles: false, brain: false, hand: false, outline: true, eyes: true } },
   { label: 'Brain', layers: { skull: false, muscles: false, brain: true, hand: false, outline: true, eyes: false } },
-  { label: 'Muscles', layers: { skull: false, muscles: true, brain: false, hand: false, outline: true, eyes: false } },
+  { label: 'Muscles', layers: { skull: false, muscles: true, brain: false, hand: false, outline: true, eyes: true } },
   { label: 'Everything', layers: { skull: true, muscles: true, brain: true, hand: true, outline: true, eyes: true } },
 ]
 
@@ -63,9 +72,9 @@ export default function Stage() {
   const [error, setError] = useState<CameraError | null>(null)
   const [snap, setSnap] = useState<EngineSnapshot>(emptySnap)
   const [mode, setMode] = useState<EngineMode>('explore')
-  const [layers, setLayers] = useState<SceneLayers>({ ...DEFAULT_LAYERS })
-  const [labelsOn, setLabelsOn] = useState(true)
-  const [tracking, setTracking] = useState(false)
+  const [layers, setLayers] = useState<SceneLayers>(() => layersFromQuery(window.location.search) ?? { ...DEFAULT_LAYERS })
+  const [labelsOn, setLabelsOn] = useState(false)
+  const [tracking, setTracking] = useState(() => new URLSearchParams(window.location.search).get('track') === '1')
   const [fit, setFit] = useState<ManualFit>(loadFit)
   const [look, setLook] = useState<LookMode>('xray')
   const [reveal, setReveal] = useState<RevealMode>('whole')
@@ -74,7 +83,10 @@ export default function Stage() {
   const [real, setReal] = useState(0.12)
   const [brightness, setBrightness] = useState(1)
   const [lensPinned, setLensPinned] = useState(false)
-  const [sheetOpen, setSheetOpen] = useState(() => !window.matchMedia('(max-width: 800px)').matches)
+  const [sheetOpen, setSheetOpen] = useState(() => {
+    if (new URLSearchParams(window.location.search).get('panel') === '0') return false
+    return !window.matchMedia('(max-width: 800px)').matches
+  })
   const [credits, setCredits] = useState(false)
   const [card, setCard] = useState<StructureId | null>(null)
   const [faceStep, setFaceStep] = useState(0)
@@ -170,7 +182,7 @@ export default function Stage() {
   useEffect(() => {
     const appearance: Appearance = { look, reveal, cut, feather, real, brightness, fit }
     engine.current?.setAppearance(appearance)
-    window.localStorage.setItem(FIT_KEY, JSON.stringify(fit))
+    window.localStorage.setItem(FIT_STORAGE_KEY, JSON.stringify(fit))
   }, [look, reveal, cut, feather, real, brightness, fit, status])
 
   useEffect(() => {
@@ -533,7 +545,7 @@ export default function Stage() {
               <FitSlider label="Left/right" value={fit.x} min={-3} max={3} onChange={(x) => setFit((value) => ({ ...value, x }))} />
               <FitSlider label="Up/down" value={fit.y} min={-4} max={4} onChange={(y) => setFit((value) => ({ ...value, y }))} />
               <FitSlider label="Forward/back" value={fit.z} min={-4} max={4} onChange={(z) => setFit((value) => ({ ...value, z }))} />
-              <button type="button" className="pill" onClick={() => setFit({ ...DEFAULT_FIT })}>
+              <button type="button" className="pill reset-fit" onClick={() => setFit({ ...DEFAULT_FIT })}>
                 Reset fit
               </button>
             </div>
@@ -597,11 +609,9 @@ function Pills<T extends string>({
   )
 }
 
-const FIT_KEY = 'anatomy-mirror-fit-v2'
-
 function loadFit(): ManualFit {
   try {
-    const raw = window.localStorage.getItem(FIT_KEY)
+    const raw = window.localStorage.getItem(FIT_STORAGE_KEY)
     if (!raw) return { ...DEFAULT_FIT }
     return { ...DEFAULT_FIT, ...(JSON.parse(raw) as Partial<ManualFit>) }
   } catch {
