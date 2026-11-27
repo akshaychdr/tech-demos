@@ -16,6 +16,7 @@ const allFaces = [
   ['obama-640x480.jpg', 640, 480],
   ['michelle-720x1280.jpg', 720, 1280],
   ['turned-1280x720.jpg', 1280, 720],
+  ['beard-1280x720.jpg', 1280, 720],
 ]
 const faces = process.env.ONLY
   ? allFaces.filter(([name]) => process.env.ONLY.split(',').some((part) => name.includes(part)))
@@ -170,7 +171,8 @@ async function runCase(session, face, width, height, layer) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  const url = `${BASE}?live=1&panel=0&track=1&layer=${layer}&face=fixtures/faces/${face}`
+  const track = process.env.TRACK === '0' ? '0' : '1'
+  const url = `${BASE}?live=1&panel=0&track=${track}&layer=${layer}&face=fixtures/faces/${face}`
   await session.send('Page.navigate', { url })
   const fit = await settle(session)
   const name = `${face.replace('.jpg', '')}-${layer}.png`
@@ -189,7 +191,8 @@ try {
   const { session } = await openSession(browser)
   const report = []
   for (const [face, width, height] of faces) {
-    for (const layer of face.startsWith('near') ? layers : ['all']) {
+    const layerList = process.env.LAYERS || face.startsWith('near') ? layers : ['all']
+    for (const layer of layerList) {
       const row = await runCase(session, face, width, height, layer)
       report.push(row)
       const fit = row.fit
