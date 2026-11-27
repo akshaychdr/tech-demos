@@ -330,12 +330,13 @@ export class MirrorEngine {
     const container = this.container
     const scene = this.scene
     if (!container || !scene) return
-    const rect = container.getBoundingClientRect()
     const coarse = window.matchMedia('(pointer: coarse)').matches
     const dpr = Math.min(window.devicePixelRatio || 1, coarse ? 1.25 : 1.6)
-    const videoW = this.preview ? rect.width : this.video?.videoWidth || rect.width
-    const videoH = this.preview ? rect.height : this.video?.videoHeight || rect.height
-    scene.setSize(rect.width, rect.height, videoW, videoH, dpr)
+    const videoW = this.preview ? 0 : this.video?.videoWidth || 0
+    const videoH = this.preview ? 0 : this.video?.videoHeight || 0
+    if (videoW > 0 && videoH > 0) container.style.setProperty('--ar', String(videoW / videoH))
+    const rect = container.getBoundingClientRect()
+    scene.setSize(rect.width, rect.height, videoW || rect.width, videoH || rect.height, dpr)
     const hud = this.hud
     if (hud) {
       hud.width = Math.max(2, Math.round(rect.width * dpr))

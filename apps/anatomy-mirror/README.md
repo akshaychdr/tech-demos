@@ -1,6 +1,6 @@
 # Anatomy Mirror
 
-A phone-first mirror that teaches the skull and the muscles that move the face. The camera never leaves the device. MediaPipe places one BodyParts3D cranium, jaw, and the expression muscles on your face. A dark veil (one minus how much of you shows through) keeps the face dim, and the bones are a thin additive rim.
+A phone-first mirror that teaches the skull and the muscles that move the face. The camera never leaves the device and stays in its natural color. MediaPipe places one BodyParts3D cranium, jaw, and the expression muscles on your face. A dark veil, shaped like the head, is the only thing that dims the face. The bones are a thin additive rim. The stage matches the video's aspect, so the picture is not cropped.
 
 Hosted at [https://akshaychdr.github.io/tech-demos/anatomy-mirror/](https://akshaychdr.github.io/tech-demos/anatomy-mirror/).
 
