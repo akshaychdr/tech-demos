@@ -107,6 +107,7 @@ uniform vec3 uLens;
 uniform float uLensSoft;
 uniform float uPick;
 uniform float uRimPow;
+uniform float uFill;
 varying vec3 vNormalView;
 varying vec3 vTowardEye;
 varying vec3 vHeadPos;
@@ -145,7 +146,7 @@ void main() {
     return;
   }
   float rim = pow(1.0 - ndv, uRimPow);
-  float a = clamp((0.035 + 0.95 * rim) * uGain * uOpacity * fade, 0.0, 1.0);
+  float a = clamp((uFill + (1.0 - uFill) * rim) * uGain * uOpacity * fade, 0.0, 1.0);
   gl_FragColor = vec4(uColor, a * soft * keep);
 }
 `
@@ -174,6 +175,7 @@ export function createShadeMaterial(role: ShadeRole): XrayMaterial {
       uLensSoft: { value: 28 },
       uPick: { value: 0 },
       uRimPow: { value: role === 'eye' ? 6.0 : role === 'outline' ? 5.5 : 2.1 },
+      uFill: { value: role === 'bone' ? 0.12 : role === 'eye' ? 0.02 : 0.035 },
     },
     vertexShader: VERT,
     fragmentShader: FRAG,

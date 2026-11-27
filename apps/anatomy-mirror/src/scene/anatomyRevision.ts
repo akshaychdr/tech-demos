@@ -1,1 +1,1 @@
-export const ANATOMY_REVISION = '00247f680ee0'
+export const ANATOMY_REVISION = '4f12824ec068'

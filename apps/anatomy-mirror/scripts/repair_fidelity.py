@@ -111,16 +111,14 @@ def cap_face_openings(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
 
 
 def fit_skin_to_face(vertices: np.ndarray) -> np.ndarray:
-    """Pull the shell onto the face. His recording's rim sits just outside the ears, not in the hair."""
+    """Widen the shell onto the temples and keep the crown up at the hairline."""
     out = np.array(vertices, dtype=np.float64, copy=True)
     band = (np.abs(out[:, 1] - 1.2) < 2.4) & (out[:, 2] > 0.4)
     half = float(np.max(np.abs(out[band, 0]))) if np.any(band) else 0.0
-    # Ear landmarks sit at x = ±7.66. A rim 5% outside that stays on the head.
-    target = 8.05
-    if half > target:
+    # Ear landmarks sit at x = ±7.66. The rim needs the temples, which sit outside that.
+    target = 9.4
+    if half > 1:
         out[:, 0] *= target / half
-    crown = out[:, 1] > 9.0
-    out[crown, 1] = 9.0 + (out[crown, 1] - 9.0) * 0.42
     return out
 
 
@@ -195,10 +193,7 @@ def main() -> None:
     hind_vertices = axis_fit(np.asarray(hind.vertices, dtype=np.float64), HINDBRAIN)
     hind = trimesh.Trimesh(vertices=hind_vertices, faces=np.asarray(hind.faces), process=False)
     hind = bake(hind)
-    muscles = current.geometry["muscles"]
-    muscle_vertices = extend_posterior(np.asarray(muscles.vertices, dtype=np.float64))
-    muscles = trimesh.Trimesh(vertices=muscle_vertices, faces=np.asarray(muscles.faces), process=False)
-    muscles = bake(muscles)
+    muscles = bake(current.geometry["muscles"])
     out = trimesh.Scene()
     for name in current.geometry:
         if name == "skin":

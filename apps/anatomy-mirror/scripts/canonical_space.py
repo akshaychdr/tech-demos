@@ -3,9 +3,11 @@
 
 One similarity, solved on the eyeballs, nasion, menton, zygomatic arches,
 tragi, and the labelled bone points, is applied to every head mesh. The
-skull is then mirrored across the midline. A residual axis-aligned scale
-(no shear) lands each structure's box on the reference box. Expression
-muscles keep the cranium's scale so they stay on the face. Hands stay put.
+skull and the expression muscles are mirrored across the same midline.
+A residual axis-aligned scale (no shear) lands each bone box on its
+reference box. Muscles then take the cranium's scale and shift, and no
+other one: not the jaw box, and not a separate posterior stretch. Hands
+stay put.
 """
 
 from __future__ import annotations
@@ -492,7 +494,7 @@ def place(meshes: dict[str, trimesh.Trimesh]) -> tuple[dict[str, trimesh.Trimesh
         centered[name] = (shifted, faces)
 
     mirrored_flag: dict[str, bool] = {}
-    mirror_names = ("cranium", "jaw", "cerebrum", "hindbrain", "skin")
+    mirror_names = ("cranium", "jaw", "cerebrum", "hindbrain", "skin", "muscles")
     keep_positive: bool | None = None
     for name in mirror_names:
         verts, faces = centered[name]
@@ -502,7 +504,6 @@ def place(meshes: dict[str, trimesh.Trimesh]) -> tuple[dict[str, trimesh.Trimesh
         print(f"mirror {name:10} faces {len(mf)} keep+ {keep_positive}", flush=True)
     eye_v, eye_f = place_globes(*centered["eyes"])
     mirrored_flag["eyes"] = True
-    mirrored_flag["muscles"] = False
     print(f"mirror eyes       faces {len(eye_f)}", flush=True)
 
     # Muscles share the cranium and jaw scales so the eye rings stay on the eyes.
@@ -529,22 +530,15 @@ def place(meshes: dict[str, trimesh.Trimesh]) -> tuple[dict[str, trimesh.Trimesh
             mesh = as_mesh(eye_v, eye_f)
             axis_s, axis_t = identity
         elif name == "muscles":
-            source_v = centered["muscles"][0]
-            upper = apply_axis(source_v, *axis["cranium"])
-            lower = apply_axis(source_v, *axis["jaw"])
-            jaw_y = centered["jaw"][0][:, 1]
-            high = float(np.quantile(jaw_y, 0.8))
-            low = float(np.quantile(jaw_y, 0.3))
+            # Same axis as the cranium. The jaw blend and the posterior
+            # stretch pulled the eye rings and the masseter off the bone.
+            verts = apply_axis(centered["muscles"][0], *axis["cranium"])
+            jaw_y = np.asarray(out["jaw"].vertices)[:, 1]
+            high = float(np.quantile(jaw_y, 0.85))
+            low = float(np.quantile(jaw_y, 0.25))
             span = max(high - low, 1e-6)
-            blend = np.clip((high - source_v[:, 1]) / span, 0.0, 1.0)
+            blend = np.clip((high - verts[:, 1]) / span, 0.0, 1.0)
             blend = blend * blend * (3.0 - 2.0 * blend)
-            verts = upper * (1.0 - blend)[:, None] + lower * blend[:, None]
-            back = verts[:, 2] < MUSCLE_Z_CUT
-            if np.any(back):
-                zmin = float(verts[:, 2].min())
-                stretch = (MUSCLE_Z_BACK - MUSCLE_Z_CUT) / (zmin - MUSCLE_Z_CUT)
-                verts = np.array(verts, copy=True)
-                verts[back, 2] = MUSCLE_Z_CUT + (verts[back, 2] - MUSCLE_Z_CUT) * stretch
             mesh = trimesh.Trimesh(vertices=verts, faces=centered["muscles"][1], process=False)
             mesh.metadata = {"jawBlend": blend.astype(np.float64)}
             axis_s, axis_t = axis["cranium"]

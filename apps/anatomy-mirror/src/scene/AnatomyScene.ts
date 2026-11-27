@@ -39,6 +39,7 @@ export function layersFromQuery(search: string): SceneLayers | null {
   const layer = new URLSearchParams(search).get('layer')
   if (layer === 'skull') return { skull: true, muscles: false, brain: false, hand: false, outline: false, eyes: false }
   if (layer === 'muscles') return { skull: false, muscles: true, brain: false, hand: false, outline: false, eyes: false }
+  if (layer === 'skullmuscles') return { skull: true, muscles: true, brain: false, hand: false, outline: false, eyes: false }
   if (layer === 'brain') return { skull: false, muscles: false, brain: true, hand: false, outline: false, eyes: false }
   if (layer === 'outline') return { skull: false, muscles: false, brain: false, hand: false, outline: true, eyes: false }
   if (layer === 'all') return { skull: true, muscles: true, brain: true, hand: false, outline: true, eyes: true }

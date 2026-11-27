@@ -80,7 +80,7 @@ export default function Stage() {
   const [reveal, setReveal] = useState<RevealMode>('whole')
   const [cut, setCut] = useState(0.5)
   const [feather, setFeather] = useState(() => queryNumber('feather', 0.2))
-  const [real, setReal] = useState(() => queryNumber('real', 0.55))
+  const [real, setReal] = useState(() => queryNumber('real', 0.35))
   const [brightness, setBrightness] = useState(1)
   const [lensPinned, setLensPinned] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(() => {
