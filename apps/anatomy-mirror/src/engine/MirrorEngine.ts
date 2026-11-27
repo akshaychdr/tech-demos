@@ -123,7 +123,7 @@ export class MirrorEngine {
   private reveal: RevealMode = 'whole'
   private cut = 0.5
   private feather = 0.2
-  private real = 0.12
+  private real = 0.35
   private brightness = 1
   private smoothMarks: RawPoint[] | null = null
   private readonly labelColumns = new LabelColumns()
