@@ -7,9 +7,9 @@ import {
   labelVisible,
   type ScreenLabel,
 } from '../domain/headLabels.ts'
-import { POSE_LANDMARKS, stepCanonicalFit } from '../domain/screenFit.ts'
+import { FACE_OVAL, POSE_LANDMARKS, stepCanonicalFit } from '../domain/screenFit.ts'
 import type { MuscleId, StructureId, Vec3 } from '../domain/types.ts'
-import { RENDER_ORDER, applyLook, createShadeMaterial, veilOpacity, xrayLayerGain, type ShadeRole, type XrayMaterial } from './materials.ts'
+import { RENDER_ORDER, applyLook, createShadeMaterial, solidLayerGain, veilOpacity, xrayLayerGain, type ShadeRole, type XrayMaterial } from './materials.ts'
 
 export type LookMode = 'xray' | 'solid'
 export type RevealMode = 'whole' | 'half' | 'lens'
@@ -25,11 +25,24 @@ export type SceneLayers = {
 
 export const DEFAULT_LAYERS: SceneLayers = {
   skull: true,
-  muscles: true,
-  brain: true,
+  muscles: false,
+  brain: false,
   hand: false,
   outline: true,
   eyes: true,
+}
+
+/** Drop values saved before the pose matched Hashem. A 1.4 size from v2 must not apply. */
+export const FIT_STORAGE_KEY = 'anatomy-mirror-fit-v3'
+
+export function layersFromQuery(search: string): SceneLayers | null {
+  const layer = new URLSearchParams(search).get('layer')
+  if (layer === 'skull') return { skull: true, muscles: false, brain: false, hand: false, outline: false, eyes: false }
+  if (layer === 'muscles') return { skull: false, muscles: true, brain: false, hand: false, outline: false, eyes: false }
+  if (layer === 'brain') return { skull: false, muscles: false, brain: true, hand: false, outline: false, eyes: false }
+  if (layer === 'outline') return { skull: false, muscles: false, brain: false, hand: false, outline: true, eyes: false }
+  if (layer === 'all') return { skull: true, muscles: true, brain: true, hand: false, outline: true, eyes: true }
+  return null
 }
 
 export type ManualFit = {
@@ -66,6 +79,7 @@ export type FitDebug = {
   aspectDelta: number
   markers: { index: number; x: number; y: number; err: number; dx: number; dy: number }[]
   graph: SceneNode[]
+  silhouette: { skin: number; oval: number; ratio: number } | null
 }
 
 export type AnchorFile = {
@@ -99,14 +113,6 @@ type HandRig = {
 const BONES: StructureId[] = ['frontal', 'parietal', 'temporal', 'occipital', 'nasal', 'zygomatic', 'maxilla', 'mandible']
 const MUSCLES: StructureId[] = ['frontalis', 'corrugator', 'orbicularis', 'oris', 'zygomaticus', 'masseter', 'temporalis']
 const VERTICAL_FOV = 63
-/**
- * The pose is solved for MediaPipe's 63° virtual camera. On a close webcam that
- * depth is stronger than the picture: the ears sit about 10 cm behind the nose,
- * so they collapse inward and the forehead rides high. Keeping a quarter of the
- * camera-space depth leaves the rigid pose and the 2D scale-and-shift, and the
- * 13 fit points land on the face with fitS near 1.
- */
-const DEPTH_RELIEF = 0.25
 
 export class AnatomyScene {
   readonly headCanvas: HTMLCanvasElement
@@ -139,6 +145,7 @@ export class AnatomyScene {
     aspectDelta: 0,
     markers: [],
     graph: [],
+    silhouette: null,
   }
   private jawAngle = 0
   private fitScale = 1
@@ -187,7 +194,7 @@ export class AnatomyScene {
       renderer.outputColorSpace = THREE.SRGBColorSpace
       renderer.toneMapping = THREE.NoToneMapping
     }
-    this.camera = new THREE.PerspectiveCamera(VERTICAL_FOV, 1, 0.5, 5000)
+    this.camera = new THREE.PerspectiveCamera(VERTICAL_FOV, 1, 1, 10000)
     this.ortho = new THREE.OrthographicCamera(0, 1, 1, 0, -4000, 4000)
     this.ortho.position.set(0, 0, 800)
     this.ortho.lookAt(0, 0, 0)
@@ -271,18 +278,35 @@ export class AnatomyScene {
     if (skin) {
       ensureNormals(skin.geometry)
       ensureShadeAttrs(skin.geometry)
-      skin.name = skin.name || 'skin'
-      skin.material = createShadeMaterial('outline')
-      skin.frustumCulled = false
-      skin.matrixAutoUpdate = false
-      skin.renderOrder = RENDER_ORDER.outline
-      skin.updateMatrix()
-      this.head.add(skin)
+      const veil = skin
+      const outline = skin.clone()
+      veil.name = 'veil'
+      outline.name = 'outline'
+      veil.material = createShadeMaterial('veil')
+      outline.material = createShadeMaterial('outline')
+      veil.frustumCulled = false
+      outline.frustumCulled = false
+      veil.matrixAutoUpdate = false
+      outline.matrixAutoUpdate = false
+      veil.renderOrder = RENDER_ORDER.veil
+      outline.renderOrder = RENDER_ORDER.outline
+      veil.updateMatrix()
+      outline.updateMatrix()
+      this.head.add(veil)
+      this.head.add(outline)
+      this.parts.push({
+        id: 'brain',
+        role: 'veil',
+        mesh: veil,
+        material: veil.material as XrayMaterial,
+        jaw: false,
+        accepts: () => false,
+      })
       this.parts.push({
         id: 'brain',
         role: 'outline',
-        mesh: skin,
-        material: skin.material as XrayMaterial,
+        mesh: outline,
+        material: outline.material as XrayMaterial,
         jaw: false,
         accepts: () => false,
       })
@@ -400,13 +424,14 @@ export class AnatomyScene {
         part.role === 'veil' ||
         (part.role === 'outline' && frame.layers.outline)
       const hot = part.accepts(frame.highlight)
-      part.mesh.visible = showingHead && (part.role === 'veil' || part.role === 'outline' ? layerOn : layerOn || hot)
-      if (part.role === 'veil') part.mesh.visible = showingHead && !solid
-      if (part.role === 'outline') part.mesh.visible = showingHead && frame.layers.outline && frame.look === 'xray'
+      if (part.role === 'veil') part.mesh.visible = showingHead
+      else if (part.role === 'outline') part.mesh.visible = showingHead && frame.layers.outline
+      else part.mesh.visible = showingHead && (layerOn || hot)
       applyLook(part.material, solid)
-      const gain = xrayLayerGain(part.role, heavy, frame.brightness)
-      part.material.uniforms.uGain!.value = solid ? 1 : gain * (hot ? 1.35 : 1)
-      part.material.uniforms.uOpacity!.value = part.role === 'veil' ? veilOpacity(frame.real) : solid ? 0.94 : 1
+      const xray = xrayLayerGain(part.role, heavy, frame.brightness)
+      const gain = solid && part.role !== 'outline' && part.role !== 'veil' ? solidLayerGain(frame.brightness) : xray
+      part.material.uniforms.uGain!.value = gain
+      part.material.uniforms.uOpacity!.value = part.role === 'veil' ? veilOpacity(frame.real) : 1
       part.material.uniforms.uPick!.value = hot ? 1 : 0
       // The merged muscle mesh stores the jaw-open travel in aMove.
       part.material.uniforms.uAction!.value = part.role === 'muscle' ? frame.jaw : 0
@@ -414,7 +439,7 @@ export class AnatomyScene {
       if (plane) part.material.uniforms.uPlane!.value.copy(plane)
       part.material.uniforms.uSoft!.value = frame.feather * 5
       part.material.uniforms.uFeather!.value = frame.feather * 0.75
-      part.material.uniforms.uFade!.value = 1
+      part.material.uniforms.uFade!.value = part.role === 'veil' || part.role === 'outline' ? 1 : 0
       if (part.jaw) {
         part.material.uniforms.uHead!.value.copy(this.jawPivot.matrix).multiply(part.mesh.matrix)
       } else {
@@ -539,15 +564,6 @@ export class AnatomyScene {
     this.poseReady = true
     this.head.visible = true
     this.head.matrix.compose(this.displayPos, this.displayQuat, this.displayScale)
-    let depth = 0
-    for (const mark of POSE_LANDMARKS) {
-      this.scratch.clip.set(mark.at[0], mark.at[1], mark.at[2], 1).applyMatrix4(this.head.matrix)
-      depth += this.scratch.clip.z
-    }
-    const center = depth / POSE_LANDMARKS.length
-    const flat = new THREE.Matrix4().makeScale(1, 1, DEPTH_RELIEF)
-    flat.elements[14] = (1 - DEPTH_RELIEF) * center
-    this.head.matrix.premultiply(flat)
     this.poseMatrix.copy(this.head.matrix)
     this.head.matrixWorldNeedsUpdate = true
     this.fitProjection.copy(this.baseProjection)
@@ -619,7 +635,46 @@ export class AnatomyScene {
       aspectDelta: this.aspectDelta,
       markers,
       graph: this.inventory(),
+      silhouette: this.measureSilhouette(landmarks),
     }
+  }
+
+  private measureSilhouette(
+    landmarks: { x: number; y: number; z: number }[] | null,
+  ): { skin: number; oval: number; ratio: number } | null {
+    const outline = this.parts.find((part) => part.role === 'outline')
+    const position = (outline?.mesh as THREE.Mesh | undefined)?.geometry?.getAttribute('position')
+    if (!landmarks || landmarks.length < 454 || !position) return null
+    let ovalMinX = Infinity
+    let ovalMaxX = -Infinity
+    let ovalMinY = Infinity
+    let ovalMaxY = -Infinity
+    for (const index of FACE_OVAL) {
+      const point = landmarks[index]
+      if (!point) continue
+      const at = this.screenFromNorm(point.x, point.y)
+      ovalMinX = Math.min(ovalMinX, at.x)
+      ovalMaxX = Math.max(ovalMaxX, at.x)
+      ovalMinY = Math.min(ovalMinY, at.y)
+      ovalMaxY = Math.max(ovalMaxY, at.y)
+    }
+    const oval = ovalMaxX - ovalMinX
+    if (!(oval > 1)) return null
+    let skinMin = Infinity
+    let skinMax = -Infinity
+    for (let index = 0; index < position.count; index += 1) {
+      this.scratch.clip.set(position.getX(index), position.getY(index), position.getZ(index), 1)
+      this.scratch.clip.applyMatrix4(this.head.matrix).applyMatrix4(this.fitProjection)
+      if (this.scratch.clip.w <= 0) continue
+      const x = ((this.scratch.clip.x / this.scratch.clip.w + 1) / 2) * this.viewW
+      const y = ((1 - this.scratch.clip.y / this.scratch.clip.w) / 2) * this.viewH
+      if (y < ovalMinY || y > ovalMaxY) continue
+      skinMin = Math.min(skinMin, x)
+      skinMax = Math.max(skinMax, x)
+    }
+    if (!(skinMax > skinMin)) return null
+    const skin = skinMax - skinMin
+    return { skin, oval, ratio: skin / oval }
   }
 
   inventory(): SceneNode[] {
@@ -750,8 +805,8 @@ export class AnatomyScene {
         bone.mesh.matrixWorldNeedsUpdate = true
         const material = bone.mesh.material as XrayMaterial
         applyLook(material, solid)
-        material.uniforms.uGain!.value = solid ? 1 : xrayLayerGain('hand', heavy, brightness)
-        material.uniforms.uOpacity!.value = solid ? 0.94 : 1
+        material.uniforms.uGain!.value = solid ? solidLayerGain(brightness) : xrayLayerGain('hand', heavy, brightness)
+        material.uniforms.uOpacity!.value = 1
         material.uniforms.uFeather!.value = feather * 0.75
         material.uniforms.uFade!.value = 0
         material.uniforms.uHead!.value.identity()
@@ -760,8 +815,8 @@ export class AnatomyScene {
       const palmMaterial = rig.palm.material as XrayMaterial
       if (palmMaterial?.uniforms) {
         applyLook(palmMaterial, solid)
-        palmMaterial.uniforms.uGain!.value = solid ? 1 : xrayLayerGain('hand', heavy, brightness)
-        palmMaterial.uniforms.uOpacity!.value = solid ? 0.94 : 1
+        palmMaterial.uniforms.uGain!.value = solid ? solidLayerGain(brightness) : xrayLayerGain('hand', heavy, brightness)
+        palmMaterial.uniforms.uOpacity!.value = 1
         palmMaterial.uniforms.uFeather!.value = feather * 0.75
         palmMaterial.uniforms.uFade!.value = 0
         palmMaterial.uniforms.uClip!.value = 0
@@ -771,7 +826,10 @@ export class AnatomyScene {
 }
 
 function ensureNormals(geometry: THREE.BufferGeometry): void {
-  if (!geometry.getAttribute('normal')) geometry.computeVertexNormals()
+  const normals = geometry.getAttribute('normal')
+  const positions = geometry.getAttribute('position')
+  if (normals && positions && normals.count === positions.count) return
+  geometry.computeVertexNormals()
 }
 
 function ensureShadeAttrs(geometry: THREE.BufferGeometry): void {

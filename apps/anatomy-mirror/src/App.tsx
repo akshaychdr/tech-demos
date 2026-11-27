@@ -8,7 +8,9 @@ const Stage = lazy(() => import('./ui/Stage.tsx'))
 type Screen = 'welcome' | 'live'
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('welcome')
+  const [screen, setScreen] = useState<Screen>(() =>
+    new URLSearchParams(window.location.search).get('live') === '1' ? 'live' : 'welcome',
+  )
   const [credits, setCredits] = useState(false)
   const beat = parseBeat(window.location.search)
 

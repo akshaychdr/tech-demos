@@ -312,6 +312,7 @@ h2,
 }
 
 .mirror-video video,
+.mirror-video img,
 .mirror-video canvas {
   position: absolute;
   inset: 0;
@@ -322,12 +323,14 @@ h2,
 }
 
 .mirror-video video,
+.mirror-video img,
 .mirror-head,
 .mirror-hands {
   transform: scaleX(-1);
 }
 
-.mirror-video video {
+.mirror-video video,
+.mirror-video img {
   object-fit: fill;
 }
 
@@ -481,10 +484,12 @@ h2,
   cursor: pointer;
 }
 
-.pill.on {
+.pill.on,
+.reset-fit {
   background: rgba(159, 208, 255, 0.92);
   color: #102033;
   border-color: transparent;
+  font-weight: 600;
 }
 
 .slider {
@@ -592,6 +597,12 @@ h2,
 
 .credits-card a {
   color: #9fd0ff;
+}
+
+@media (min-width: 801px) {
+  .panel.collapsed {
+    display: none;
+  }
 }
 
 @media (max-width: 800px) {
